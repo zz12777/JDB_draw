@@ -63,3 +63,17 @@ export const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
+
+/** 中文場次轉數字（一、十一、二一、六五、一〇一、一二七） */
+export function cnToNum(s) {
+  const t = String(s || '').trim().replace(/零/g, '〇');
+  if (!/^[〇一二三四五六七八九十]+$/.test(t)) return null;
+  const d = ch => DIGITS.indexOf(ch);
+  if (t.length >= 3 && !t.includes('十')) return Number([...t].map(d).join(''));
+  if (t === '十') return 10;
+  if (t.startsWith('十')) return 10 + d(t[1]);
+  if (t.endsWith('十') && t.length === 2) return d(t[0]) * 10;
+  if (t.length === 1) return d(t);
+  if (t.length === 2) return d(t[0]) * 10 + d(t[1]);
+  return null;
+}

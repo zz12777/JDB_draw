@@ -1,10 +1,12 @@
 // 交大盃抽籤系統：介面
 import { parseResponses, buildEntries, EVENTS, ALL_EVENTS, EVENT_TYPE, KIND_LABEL } from './parse.js';
-import { readFormFile } from './reader.js';
+import { readFormFile, readWorkbookValues } from './reader.js';
+import { parseFinalBracket } from './finalparse.js';
+import { scoresheetDocx, DEFAULT_TITLE } from './scoresheet.js';
 import { looseKey } from './schools.js';
 import * as B from './bracket.js';
 import { runDraw, checkDraw, swapPositions } from './draw.js';
-import { bracketWorkbook, orderWorkbook, workbookBlob, sortForOrder } from './excel.js';
+import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrder } from './excel.js';
 import { newSeed, uid, toCn } from './util.js';
 
 // ---------------- 圖示（線條） ----------------
@@ -27,13 +29,14 @@ const icon = n => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${IC
 
 // ---------------- 狀態 ----------------
 const KEY = 'jdb-draw-v1';
-const blank = () => ({ version: 1, aliases: {}, sources: {}, events: {}, step: 0, event: '男團' });
+const blank = () => ({ version: 1, aliases: {}, sources: {}, events: {}, step: 0, event: '男團',
+  sheetSettings: { title: DEFAULT_TITLE, blanks: 3, withFinal: true }, sheetUploads: {} });
 let S = load();
 
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.version === 1) return { ...blank(), ...s, step: 0 }; // 每次打開都從步驟 1 開始
+    if (s && s.version === 1) { const b = blank(); return { ...b, ...s, sheetSettings: { ...b.sheetSettings, ...(s.sheetSettings || {}) }, sheetUploads: s.sheetUploads || {}, step: 0 }; } // 每次打開都從步驟 1 開始
   } catch { /* 無法讀取就從頭開始 */ }
   return blank();
 }
@@ -108,15 +111,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 5 ? `<span class="n">${i + 1}</span>` : icon('help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 6 ? `<span class="n">${i + 1}</span>` : icon('help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -482,7 +485,8 @@ function stepExport() {
   <section class="panel">
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
-    <p class="small muted">完成籤表包含預賽籤表、決賽頁與「抽籤結果」工作表，抽籤結果附上學校、選手出現次數供核對。</p>
+    <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名、種子與籤位，必要時手動調整，再公告或列印。</div>
+    <p class="small muted">完成籤表比照第十屆最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
@@ -490,8 +494,9 @@ function stepExport() {
 async function dlFinal(name) {
   const e = ev(name);
   const { st } = structureOf(name);
-  const wb = bracketWorkbook(name, st, e.entries, e.draw.assign);
+  const wb = finalWorkbook(name, st, e.entries, e.draw.assign);
   download(await workbookBlob(wb), `${name}_完成籤表.xlsx`);
+  toast(`已下載${name}完成籤表，需再經人工檢查`);
 }
 async function dlBlank(name) {
   const { st, err } = structureOf(name);
@@ -500,6 +505,83 @@ async function dlBlank(name) {
 }
 async function dlOrder(name) {
   download(await workbookBlob(orderWorkbook(name, ev(name).entries)), `${name}_抽籤順序表.xlsx`);
+}
+
+// ---------------- 步驟 6：點單 ----------------
+function drawnSource(name) {
+  const e = S.events[name];
+  if (!e || !e.draw || e.draw.sig !== sig(e.entries)) return null;
+  const { st, err } = structureOf(name);
+  if (err) return null;
+  const byPos = new Map(e.entries.map(x => [e.draw.assign[x.id], { school: x.school, name: x.name }]));
+  return { st, byPos, matches: null, label: '抽籤結果' };
+}
+function uploadSource(name) {
+  const u = S.sheetUploads[name];
+  if (!u) return null;
+  const st = B.buildStructure({ kind: u.kind, sizes: u.sizes });
+  return { st, byPos: new Map(u.people.map(([p, school, nm]) => [p, { school, name: nm }])), matches: u.matches, label: `上傳：${u.fileName}（${u.info}）`, warnings: u.warnings };
+}
+const sheetSource = name => uploadSource(name) || drawnSource(name);
+
+function stepSheets() {
+  const st0 = S.sheetSettings;
+  const rows = ALL_EVENTS.map(name => {
+    const src = sheetSource(name);
+    const up = S.sheetUploads[name];
+    return `<tr><td>${name}</td>
+      <td>${src ? esc(src.label) : '<span class="muted">尚無籤表</span>'}${src && src.warnings && src.warnings.length ? src.warnings.map(w => `<br><span class="tag">${esc(w)}</span>`).join('') : ''}</td>
+      <td><div class="row">
+        <label class="btn ghost sm">${icon('upload')}上傳最終籤表<input type="file" accept=".xlsx" hidden data-sheetup="${name}"></label>
+        ${up && drawnSource(name) ? `<button class="btn ghost sm" data-sheetclear="${name}">${icon('reset')}改用抽籤結果</button>` : ''}
+        <button class="btn sm" data-dlsheet="${name}" ${src ? '' : 'disabled'}>${icon('download')}下載點單</button>
+      </div></td></tr>`;
+  }).join('');
+  $('#main').innerHTML = `
+  <section class="panel">
+    <h2>產生點單</h2>
+    <div class="note warn"><b>點單需再經人工檢查</b>：下載後請核對場次、籤號、校名與姓名，再列印。</div>
+    <p class="small muted">每個項目可以直接使用步驟 4 的抽籤結果，或上傳人工調整後的最終籤表 Excel（本系統下載的完成籤表，或第十屆格式）。上傳的籤表會依線條與場次位置讀出實際對戰。</p>
+    <div class="row">
+      <label class="field grow">賽事名稱（點單標題）<input type="text" value="${esc(st0.title)}" data-sset="title"></label>
+      <label class="field">空白點單張數<input type="number" min="0" value="${st0.blanks}" data-sset="blanks"></label>
+      <label class="field" style="flex-direction:row;align-items:center;gap:6px;margin-top:18px"><input type="checkbox" ${st0.withFinal ? 'checked' : ''} data-sset="withFinal">團體賽附決賽點單（每組取前二）</label>
+    </div>
+    <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>項目</th><th>籤表來源</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h3>格式</h3>
+    <ul class="small">
+      <li>個人賽：一頁兩張，上半是前半場次、下半是後半場次（例如 130 張時，第 1 頁是第一場和第六六場），整疊對半裁切後疊起來就是場次順序。第一場顯示籤號、校名、姓名，之後的場次顯示「X勝」。</li>
+      <li>團體賽：一場一頁，五點（單單雙單單）。預賽場次為「(一)」、籤位為「A1」；決賽場次為「決(一)」，籤位為決賽籤號。</li>
+      <li>最後會多附幾張空白點單，張數可在上方設定。</li>
+    </ul>
+  </section>`;
+}
+
+async function dlSheet(name) {
+  const src = sheetSource(name);
+  if (!src) return toast('這個項目還沒有籤表');
+  const s = S.sheetSettings;
+  try {
+    const blob = await scoresheetDocx({ event: name, st: src.st, byPos: src.byPos, matches: src.matches,
+      title: s.title || DEFAULT_TITLE, blanks: Math.max(0, +s.blanks || 0), withFinal: !!s.withFinal });
+    download(blob, `${name}點單.docx`);
+    toast(`已下載${name}點單，需再經人工檢查`);
+  } catch (e) { toast('產生失敗：' + e.message); }
+}
+
+async function handleSheetUpload(file, name) {
+  try {
+    const sheets = await readWorkbookValues(await file.arrayBuffer());
+    const r = parseFinalBracket(sheets, name);
+    S.sheetUploads[name] = {
+      fileName: file.name, info: r.info, warnings: r.warnings, kind: r.st.kind,
+      sizes: r.st.kind === 'ko' ? r.st.sections.map(x => x.size) : r.st.groups.map(g => g.size),
+      people: [...r.byPos.entries()].map(([p, x]) => [p, x.school, x.name]),
+      matches: r.matches || null,
+    };
+    toast(`${name}：已讀取 ${r.info}`);
+  } catch (e) { toast(`${name} 讀取失敗：${e.message}`); }
+  render();
 }
 
 // ---------------- 使用說明 ----------------
@@ -521,23 +603,59 @@ function stepHelp() {
     <p>建議抽籤由一個人操作，抽完後匯出專案檔，連同完成籤表一起放進共用資料夾存檔。</p>
   </section>
   <section class="panel">
+    <h2>籤表規劃</h2>
+    <ul>
+      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設 16 人以下 1 區，否則 4 區（每區超過 32 人再加倍）。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
+      <li><b>X 單敗的資格賽位置</b>：沿用「(個賽)4-32單敗」範本。人數不是 2 的次方時，部分籤位是資格賽（兩人先打一場）。範本的 21、23 單敗少一個籤位，已依前後規律補正。</li>
+      <li><b>個人賽場次編號</b>：整個項目一起編，從最深的一輪開始（資格賽最先），同一輪由上往下、跨分區連續編；各分區冠軍再進決賽頁。</li>
+      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。每區取前二晉級，決賽籤表另外處理。</li>
+      <li><b>團體賽場次編號</b>：一輪一輪編，每輪由 A 組到最後一組。4 隊組：第一輪 1-3、2-4，第二輪 2-3、1-4，第三輪 1-2、3-4；3 隊組：1-2、1-3、2-3。</li>
+      <li><b>中文場次</b>：1 到 9 寫一到九，10 到 19 寫十、十一…，20 到 99 寫二十、二一…九九，100 以上逐位寫（一〇一、一二七）。</li>
+    </ul>
+  </section>
+  <section class="panel">
+    <h2>抽籤邏輯</h2>
+    <p class="small muted">以舊的「同校分開抽籤」程式為基礎，保留它的規則，並補上它沒處理的地方。</p>
+    <h3>沿用舊程式的重點</h3>
+    <ul>
+      <li><b>同校分開</b>：同一學校（社團為同一單位）的選手或隊伍盡量分散。</li>
+      <li><b>人多的學校先抽</b>：學校依報名人數由多到少處理，人多的學校最難分開，先安排。</li>
+      <li><b>上下半區平均</b>：同校 2 人時一定分在上下半區，決賽前不會相遇。</li>
+      <li><b>四分之一區平均</b>：同校人數平均分到四個四分之一區，奇數時多的那一個給空位較多的區，一樣多就隨機。</li>
+      <li><b>同籤區不重複</b>：同校 3 人以上時，同一個籤區（舊程式手打的「1 9 17…」那組號碼）不會有兩個同校。</li>
+      <li><b>種子固定</b>：種子欄填了籤號的，直接放在那個位置，不參與抽籤。</li>
+    </ul>
+    <h3>新版改進</h3>
+    <ul>
+      <li><b>沿著籤表一路往下分</b>：不只分到四分之一區，而是半區、四分之一區、八分之一區…一路平均分到每個籤位，同校越晚相遇越好。籤區由籤表結構自動決定，不用再手打號碼。</li>
+      <li><b>種子也算進同校分布</b>：已固定的種子會先佔位，同校其他人會避開種子所在的區域。</li>
+      <li><b>不會抽不下去</b>：舊程式沒有空位時會直接留空且不報錯；新版每一步都確認空位足夠，一定能抽完。</li>
+      <li><b>抽完自動檢查</b>：每人都有籤號且不重複；各區同校人數超過理想值、第一場就同校對戰、學校隊數比區數多（一定同區）都會列出提醒。</li>
+      <li><b>可重現、可微調</b>：每次抽籤記錄亂數代碼，輸入同一代碼可重抽出同一結果；抽完可點兩列對調籤位，對調後重新檢查。</li>
+      <li><b>團體賽</b>：組與組之間同樣分上下半區平均，同校隊伍盡量不同組，組內 1 到 4 號位置隨機。</li>
+    </ul>
+  </section>
+  <section class="panel">
     <h2>流程</h2>
     <ol>
       <li><b>上傳表單回應</b>：Google 試算表「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，男子組、女子組、社會組各一份。整列劃掉的回應預設不採用，格子裡劃掉的名字直接排除。</li>
       <li><b>名單校正</b>：檢查名單、統一校名、加入保留名額、設定種子籤號。</li>
       <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
-      <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果。</li>
+      <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
+      <li><b>點單</b>：用抽籤結果或上傳人工調整後的最終籤表，產生 Word 點單，需再經人工檢查。</li>
     </ol>
   </section>`;
 }
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
-  if (d.step !== undefined) { S.step = +d.step; pick = null; render(); }
+  if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }
+  else if (d.dlsheet) dlSheet(d.dlsheet);
+  else if (d.step !== undefined) { S.step = +d.step; pick = null; render(); }
   else if (d.ev) { S.event = d.ev; pick = null; render(); }
   else if (d.build) buildFromSource(d.build);
   else if (d.del) {
@@ -588,6 +706,13 @@ document.addEventListener('change', ev0 => {
   const t = ev0.target;
   const d = t.dataset;
   if (d.file) { if (t.files[0]) handleFile(t.files[0], d.file); return; }
+  if (d.sheetup) { if (t.files[0]) handleSheetUpload(t.files[0], d.sheetup); t.value = ''; return; }
+  if (d.sset) {
+    const k = d.sset;
+    S.sheetSettings[k] = k === 'withFinal' ? t.checked : k === 'blanks' ? Math.max(0, +t.value || 0) : t.value.trim();
+    save();
+    return;
+  }
   if (d.inc) {
     const [k, i] = d.inc.split(':');
     S.sources[k].responses[+i].include = t.checked;
@@ -660,7 +785,8 @@ $('#file-import').onchange = async e => {
   try {
     const s = JSON.parse(await f.text());
     if (s.version !== 1) throw new Error('版本不符');
-    S = { ...blank(), ...s };
+    const b = blank();
+    S = { ...b, ...s, sheetSettings: { ...b.sheetSettings, ...(s.sheetSettings || {}) }, sheetUploads: s.sheetUploads || {} };
     toast('已匯入');
     render();
   } catch (err) { toast('匯入失敗：' + err.message); }

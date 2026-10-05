@@ -1,5 +1,6 @@
 // Excel 輸出（ExcelJS），版面比照「2_空白籤表」範本
 import { EVENT_TYPE } from './parse.js';
+import { toCn } from './util.js';
 
 export const EVENT_TITLE = {
   男單: '大專組男子單打', 女單: '大專組女子單打', 男雙: '大專組男子雙打', 女雙: '大專組女子雙打',
@@ -199,13 +200,154 @@ function rrSheet(wb, event, st, entries, assign) {
   a4(ws);
 }
 
+// ---------------- 完成籤表（比照「2_最終excel檔」） ----------------
+// 個人賽：每個分區一個分頁（男單A、男單B…），第 1 列標題「大專組男子單打(一)」，
+// 籤表從第 4 列開始；另有「決賽」分頁。團體賽：標題「大專組男子團體 預賽」，A組、B組…，
+// 每頁 4 組（3 隊組每頁 5 組），隊名字級全部一致（以最長的隊名能放下的字級為準）。
+
+function finalKoSheets(wb, event, st, entries, assign) {
+  const byPos = posIndex(entries, assign);
+  const multi = st.sections.length > 1;
+  const isDouble = EVENT_TYPE[event] === 'double';
+  st.sections.forEach((s, i) => {
+    const ws = wb.addWorksheet(event + (s.letter || ''));
+    const ops = makeOps();
+    const rel = n => n.depth - s.root.depth;
+    let H = 0;
+    (function f(n) { if (n.kind === 'match') { H = Math.max(H, rel(n) + 1); n.children.forEach(f); } })(s.root);
+    // 欄寬：A 學校、B 姓名、C 籤號、D 起為籤表（直線欄較寬放場次，連接欄較窄）
+    const widths = [11.6, isDouble ? 17.5 : 10, 5, 4.5];
+    for (let h = 1; h <= H + 1; h++) widths.push(6.5, 3.6);
+    setWidths(ws, widths);
+    ops.texts.push({ r: 1, c: 1, v: EVENT_TITLE[event] + (multi ? `(${toCn(i + 1)})` : ''), size: 20, h: 'left' });
+    const per = s.hasPairs ? 4 : 2;
+    const top = 4;
+    const rowOf = new Map();
+    s.slots.forEach((slot, j) => {
+      const base = top + per * j;
+      if (slot.kind === 'leaf') rowOf.set(slot, base);
+      else { rowOf.set(slot.children[0], base); rowOf.set(slot.children[1], base + 2); }
+    });
+    for (const [lf, r] of rowOf) {
+      const e = byPos.get(lf.pos);
+      const put = (col, v) => {
+        ops.merges.push([r, col, r + 1, col]);
+        ops.texts.push({ r, c: col, v, h: 'center', shrink: col < 3 });
+      };
+      put(3, lf.pos);
+      put(1, e ? e.school : '');
+      put(2, e ? e.name : '');
+    }
+    drawTree(ops, s.root, n => n.kind === 'leaf', rowOf, n => H - rel(n), h => 3 + 2 * h, 4);
+    applyOps(ws, ops);
+    ws.getCell(1, 1).font = { name: KAI, size: 20, bold: true };
+    ws.getRow(1).height = 27.5;
+    ws.getRow(2).height = 17;
+    ws.getRow(3).height = 17;
+    const last = top + per * s.slots.length;
+    for (let r = top; r < last; r++) ws.getRow(r).height = per === 4 ? 11.25 : 15;
+    ws.views = [{ showGridLines: false }];
+    ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
+  });
+  if (multi) finalKoFinal(wb, event, st);
+}
+
+function finalKoFinal(wb, event, st) {
+  const ws = wb.addWorksheet(event + '決賽');
+  const k = st.sections.length;
+  const levels = Math.log2(k);
+  setWidths(ws, [8.7, 8.7, 11.3, ...Array(14).fill(8.7)]);
+  const ops = makeOps();
+  ops.texts.push({ r: 1, c: 1, v: `${EVENT_TITLE[event]} ${k === 2 ? '決賽' : k === 4 ? '四強' : '八強'}`, size: 24, h: 'left' });
+  const roots = new Set(st.sections.map(s => s.root));
+  const rowOf = new Map();
+  st.sections.forEach((s, i) => {
+    const r = 6 + 8 * i;
+    rowOf.set(s.root, r);
+    ops.merges.push([r, 3, r + 1, 3]);
+    ops.texts.push({ r, c: 3, v: `${s.root.label}勝`, size: 16, h: 'center' });
+  });
+  drawTree(ops, st.root, n => roots.has(n), rowOf, n => levels - n.depth, h => 5 + 2 * h, 4);
+  const pc = Math.max(9, 5 + 2 * levels + 2);
+  ops.texts.push({ r: 4, c: pc, v: '冠軍-\n亞軍-\n季軍-\n季軍-', size: 16, h: 'left' });
+  applyOps(ws, ops);
+  ws.getCell(1, 1).font = { name: KAI, size: 24, bold: true };
+  ws.getCell(4, pc).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  ws.getRow(1).height = 33.5;
+  ws.getRow(4).height = 86;
+  for (let r = 6; r < 6 + 8 * k; r++) ws.getRow(r).height = 25;
+  ws.views = [{ showGridLines: false }];
+  ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
+}
+
+/** 依欄寬估算能放下最長名稱的字級（中文字算 1，英數算 0.55） */
+export function fitFontSize(names, colWidth, max = 14, min = 8) {
+  const units = t => [...String(t || '')].reduce((a, ch) => a + (/[\u0000-ÿ]/.test(ch) ? 0.55 : 1), 0);
+  const longest = Math.max(1, ...names.map(units));
+  const px = colWidth * 7 + 5 - 10;
+  const size = Math.floor((px / (longest * 96 / 72)) * 2) / 2;
+  return Math.max(min, Math.min(max, size));
+}
+
+function finalRrSheet(wb, event, st, entries, assign) {
+  const byPos = posIndex(entries, assign);
+  const ws = wb.addWorksheet(event);
+  const maxSize = Math.max(...st.groups.map(g => g.size));
+  const nameW = maxSize >= 4 ? 14.5 : 13;
+  setWidths(ws, [7.4, 15, ...Array(maxSize).fill(nameW), 7.4, 7.4]);
+  const allNames = [...byPos.values()].map(e => e.name);
+  const nameSize = fitFontSize(allNames, Math.min(15, nameW));
+  const box = (r, c, v, size = 14) => {
+    const cell = ws.getCell(r, c);
+    if (v !== undefined) cell.value = v;
+    cell.font = { name: KAI, size };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = { top: MED, left: MED, bottom: MED, right: MED };
+  };
+  const t = ws.getCell(2, 1);
+  t.value = EVENT_TITLE[event] + ' 預賽';
+  t.font = { name: KAI, size: 24, bold: true };
+  const sub = ws.getCell(2, 5);
+  sub.value = '(預賽各組取前二晉級)';
+  sub.font = { name: KAI, size: 16 };
+  ws.getRow(2).height = 31;
+  const perPage = maxSize >= 4 ? 4 : 5;
+  let r = 5;
+  st.groups.forEach((g, gi) => {
+    if (gi > 0 && gi % perPage === 0) ws.getRow(r - 1).addPageBreak();
+    const n = g.size;
+    const names = Array.from({ length: n }, (_, j) => {
+      const e = byPos.get(g.startPos + j);
+      return e ? e.name : '';
+    });
+    ws.mergeCells(r, 1, r + 1, 2);
+    box(r, 1, `${g.letter}組`);
+    for (let j = 0; j < n; j++) { box(r, 3 + j, j + 1); box(r + 1, 3 + j, names[j], nameSize); }
+    ws.mergeCells(r, 3 + n, r + 1, 3 + n); box(r, 3 + n, '勝場');
+    ws.mergeCells(r, 4 + n, r + 1, 4 + n); box(r, 4 + n, '名次');
+    const label = new Map(g.matches.map(m => [`${Math.min(m.a, m.b)}-${Math.max(m.a, m.b)}`, m.label]));
+    for (let i = 1; i <= n; i++) {
+      const rr = r + 1 + i;
+      box(rr, 1, i);
+      box(rr, 2, names[i - 1], nameSize);
+      for (let j = 1; j <= n; j++) box(rr, 2 + j, j < i ? (label.get(`${j}-${i}`) || '') : '');
+      box(rr, 3 + n, '');
+      box(rr, 4 + n, '');
+    }
+    for (let x = r; x <= r + 2 + n; x++) ws.getRow(x).height = 23;
+    r += n + 3;
+  });
+  ws.views = [{ showGridLines: false }];
+  ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+}
+
 // ---------------- 名單類 ----------------
 
 function whereOf(st, pos) {
   if (!pos) return '';
   if (st.kind === 'rr') {
     const g = st.groups.find(x => pos >= x.startPos && pos < x.startPos + x.size);
-    return g ? `${g.letter}區 ${pos - g.startPos + 1}號` : '';
+    return g ? `${g.letter}組 ${pos - g.startPos + 1}號` : '';
   }
   const s = st.sections.find(x => pos >= x.startPos && pos < x.startPos + x.size);
   return s && s.letter ? `${s.letter}區` : '';
@@ -257,6 +399,17 @@ export function bracketWorkbook(event, st, entries, assign, ExcelJSLib) {
     const sorted = entries.slice().sort((a, b) => (assign[a.id] || 1e9) - (assign[b.id] || 1e9));
     addListSheet(wb, event + '抽籤結果', event, sorted, assign, st);
   }
+  return wb;
+}
+
+/** 完成籤表（最終格式） */
+export function finalWorkbook(event, st, entries, assign, ExcelJSLib) {
+  const wb = new (lib(ExcelJSLib).Workbook)();
+  wb.creator = '交大盃抽籤系統';
+  if (st.kind === 'ko') finalKoSheets(wb, event, st, entries, assign);
+  else finalRrSheet(wb, event, st, entries, assign);
+  const sorted = entries.slice().sort((a, b) => (assign[a.id] || 1e9) - (assign[b.id] || 1e9));
+  addListSheet(wb, event + '抽籤結果', event, sorted, assign, st);
   return wb;
 }
 

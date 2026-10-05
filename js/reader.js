@@ -71,3 +71,28 @@ export async function readFormFile(file) {
   if (/\.xlsx$/i.test(file.name)) return readXlsx(buf);
   throw new Error('只接受 .xlsx 或 .csv');
 }
+
+/** 讀出活頁簿所有工作表的值（合併儲存格只在左上角有值） */
+export async function readWorkbookValues(buffer, ExcelJSLib = globalThis.ExcelJS) {
+  const wb = new ExcelJSLib.Workbook();
+  await wb.xlsx.load(buffer);
+  return wb.worksheets.map(ws => {
+    const rows = [];
+    ws.eachRow({ includeEmpty: false }, (row, r) => {
+      const arr = [];
+      for (let c = 1; c <= Math.min(ws.columnCount, 30); c++) {
+        const cell = row.getCell(c);
+        let v = cell.isMerged && cell.master && cell.master.address !== cell.address ? null : cell.value;
+        if (v && typeof v === 'object') {
+          if (Array.isArray(v.richText)) v = v.richText.map(t => t.text).join('');
+          else if ('result' in v) v = v.result;
+          else if ('text' in v) v = v.text;
+          else if (v instanceof Date) v = v.toISOString();
+        }
+        arr.push(v === undefined ? null : v);
+      }
+      rows[r - 1] = arr;
+    });
+    return { name: ws.name, rows };
+  });
+}
