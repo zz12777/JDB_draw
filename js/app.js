@@ -36,9 +36,13 @@ let S = load();
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.version === 1) { const b = blank(); return { ...b, ...s, sheetSettings: { ...b.sheetSettings, ...(s.sheetSettings || {}) }, sheetUploads: s.sheetUploads || {}, step: 0 }; } // 每次打開都從步驟 1 開始
+    if (s && s.version === 1) { const b = blank(); return { ...b, ...s, sheetSettings: fixTitle({ ...b.sheetSettings, ...(s.sheetSettings || {}) }), sheetUploads: s.sheetUploads || {}, step: 0 }; } // 每次打開都從步驟 1 開始
   } catch { /* 無法讀取就從頭開始 */ }
   return blank();
+}
+function fixTitle(st) {
+  if (!st.title || /第十屆/.test(st.title)) st.title = DEFAULT_TITLE;
+  return st;
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { /* 空間不足或無法寫入 */ }
@@ -486,7 +490,7 @@ function stepExport() {
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
     <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名、種子與籤位，必要時手動調整，再公告或列印。</div>
-    <p class="small muted">完成籤表比照第十屆最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
+    <p class="small muted">完成籤表比照往年最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
@@ -541,7 +545,7 @@ function stepSheets() {
   <section class="panel">
     <h2>產生點單</h2>
     <div class="note warn"><b>點單需再經人工檢查</b>：下載後請核對場次、籤號、校名與姓名，再列印。</div>
-    <p class="small muted">每個項目可以直接使用步驟 4 的抽籤結果，或上傳人工調整後的最終籤表 Excel（本系統下載的完成籤表，或第十屆格式）。上傳的籤表會依線條與場次位置讀出實際對戰。</p>
+    <p class="small muted">每個項目可以直接使用步驟 4 的抽籤結果，或上傳人工調整後的最終籤表 Excel（本系統下載的完成籤表，或往年格式）。上傳的籤表會依線條與場次位置讀出實際對戰。</p>
     <div class="row">
       <label class="field grow">賽事名稱（點單標題）<input type="text" value="${esc(st0.title)}" data-sset="title"></label>
       <label class="field">空白點單張數<input type="number" min="0" value="${st0.blanks}" data-sset="blanks"></label>
@@ -786,7 +790,7 @@ $('#file-import').onchange = async e => {
     const s = JSON.parse(await f.text());
     if (s.version !== 1) throw new Error('版本不符');
     const b = blank();
-    S = { ...b, ...s, sheetSettings: { ...b.sheetSettings, ...(s.sheetSettings || {}) }, sheetUploads: s.sheetUploads || {} };
+    S = { ...b, ...s, sheetSettings: fixTitle({ ...b.sheetSettings, ...(s.sheetSettings || {}) }), sheetUploads: s.sheetUploads || {} };
     toast('已匯入');
     render();
   } catch (err) { toast('匯入失敗：' + err.message); }

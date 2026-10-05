@@ -2,7 +2,7 @@
 import { EVENT_TYPE } from './parse.js';
 import { buildKO } from './bracket.js';
 
-export const DEFAULT_TITLE = '第十屆TIBHAR交大盃全國大專校院桌球錦標賽';
+export const DEFAULT_TITLE = '第十三屆TIBHAR交大盃全國大專校院桌球錦標賽';
 const TEAM_SUBTITLE = { 男團: '大專男子團體組 出賽名單', 女團: '大專女子團體組 出賽名單', 社團: '社會團體組 出賽名單' };
 
 // ---------------- 場次資料 ----------------
@@ -57,12 +57,13 @@ function run(text, { size = 22, bold = false, underline = false } = {}) {
   return `<w:r><w:rPr>${FONT}${bold ? '<w:b/>' : ''}${underline ? '<w:u w:val="single"/>' : ''}<w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr><w:t xml:space="preserve">${esc(text)}</w:t></w:r>`;
 }
 
-function para(runs, { align, line, before = 0, after = 0, pageBreakBefore = false, borderBottom = false, keepNext = false } = {}) {
+function para(runs, { align, line, exact = false, before = 0, after = 0, pageBreakBefore = false, borderBottom = false, keepNext = false } = {}) {
   const ppr = [
     keepNext ? '<w:keepNext/>' : '',
     pageBreakBefore ? '<w:pageBreakBefore/>' : '',
     borderBottom ? '<w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="000000"/></w:pBdr>' : '',
-    `<w:spacing w:before="${before}" w:after="${after}"${line ? ` w:line="${line}" w:lineRule="auto"` : ''}/>`,
+    `<w:spacing w:before="${before}" w:after="${after}"${line ? ` w:line="${line}" w:lineRule="${exact ? 'exact' : 'auto'}"` : ''}/>`,
+    '<w:snapToGrid w:val="0"/>',
     align ? `<w:jc w:val="${align}"/>` : '',
   ].join('');
   return `<w:p><w:pPr>${ppr}</w:pPr>${Array.isArray(runs) ? runs.join('') : runs}</w:p>`;
@@ -86,7 +87,7 @@ function table(grid, rows, borderSize = 4) {
       const ps = c.paras && c.paras.length ? c.paras.join('') : para(run(''), { align: 'center' });
       return `<w:tc>${tcPr}${ps}</w:tc>`;
     }).join('');
-    return `<w:tr><w:trPr><w:cantSplit/>${r.h ? `<w:trHeight w:val="${r.h}" w:hRule="${r.exact ? 'exact' : 'atLeast'}"/>` : ''}</w:trPr>${tcs}</w:tr>`;
+    return `<w:tr><w:trPr><w:cantSplit/>${r.h ? `<w:trHeight w:val="${r.h}" w:hRule="exact"/>` : ''}</w:trPr>${tcs}</w:tr>`;
   }).join('');
   return `<w:tbl>${tblPr}${tblGrid}${trs}</w:tbl>`;
 }
@@ -124,13 +125,13 @@ function koHalf(title, event, sheet, { first, divider }) {
   }
   const blank = n => ' '.repeat(n);
   return [
-    para(run(title, { size: 24 }), { align: 'center', pageBreakBefore: first, line: 360, keepNext: true }),
-    para(run('比賽紀錄表', { size: 24 }), { align: 'center', line: 360, keepNext: true }),
-    para([run('項目:( ', { size: 22 }), run(event, { size: 22 }), run(' ) ( ', { size: 22 }), run(s.label || blank(6), { size: 22 }), run(' ) 場次', { size: 22 })], { line: 460, keepNext: true }),
+    para(run(title, { size: 24 }), { align: 'center', pageBreakBefore: first, line: 380, exact: true, keepNext: true }),
+    para(run('比賽紀錄表', { size: 24 }), { align: 'center', line: 380, exact: true, keepNext: true }),
+    para([run('項目:( ', { size: 22 }), run(event, { size: 22 }), run(' ) ( ', { size: 22 }), run(s.label || blank(6), { size: 22 }), run(' ) 場次', { size: 22 })], { line: 440, exact: true, keepNext: true }),
     table(KO_GRID, rows),
-    para([run('比賽結果：', { size: 22 }), run(blank(12), { size: 22, underline: true }), run('。', { size: 22 })], { line: 460, before: 120 }),
-    para([run('勝方選手簽名：', { size: 22 }), run(blank(22), { size: 22, underline: true }), run('。', { size: 22 })], { line: 460 }),
-    para(run('裁判簽名：', { size: 22 }), { line: 460, borderBottom: divider, after: divider ? 240 : 0 }),
+    para([run('比賽結果：', { size: 22 }), run(blank(12), { size: 22, underline: true }), run('。', { size: 22 })], { line: 440, exact: true, before: 120 }),
+    para([run('勝方選手簽名：', { size: 22 }), run(blank(22), { size: 22, underline: true }), run('。', { size: 22 })], { line: 440, exact: true }),
+    para(run('裁判簽名：', { size: 22 }), { line: 440, exact: true, borderBottom: divider, after: divider ? 240 : 0 }),
   ].join('');
 }
 
@@ -169,7 +170,7 @@ function rrPage(title, event, sheet, first) {
       const vm = k === 0 ? 'restart' : 'continue';
       // 雙打：姓名欄上下各一人
       const nameVm = doubles ? (k === 0 || k === 3 ? 'restart' : 'continue') : vm;
-      rows.push({ h: 400, cells: [
+      rows.push({ h: 380, cells: [
         { vm, paras: k === 0 ? vertical(`第${p}點`, 20) : undefined },
         { span: 2, vm: nameVm }, { vm },
         {}, {},
@@ -180,7 +181,7 @@ function rrPage(title, event, sheet, first) {
   });
   rows.push({ h: 480, cells: [{ span: 3, paras: [cp('比賽結果', 24, { bold: true })] }, { span: 4, paras: [cp('：', 24)] }, { span: 3, paras: [cp('比賽結果', 24, { bold: true })] }] });
   rows.push({ h: 600, cells: [{ span: 5, valign: 'top', paras: [cp('裁判簽名：', 24, { align: 'left', bold: true })] }, { span: 5, valign: 'top', paras: [cp('勝隊簽名：', 24, { align: 'left', bold: true })] }] });
-  return (first ? '' : para(run(''), { pageBreakBefore: true })) + table(RR_GRID, rows, 12);
+  return (first ? '' : para(run('', { size: 2 }), { pageBreakBefore: true, line: 20, exact: true })) + table(RR_GRID, rows, 12);
 }
 
 export function rrDocumentBody(title, event, sheets, blanks) {
