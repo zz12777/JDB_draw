@@ -1,0 +1,9 @@
+# 報名資料含個資，一律不進 repo
+*.csv
+*.xlsx
+*.xlsm
+*.xls
+*.json
+!package.json
+node_modules/
+.DS_Store

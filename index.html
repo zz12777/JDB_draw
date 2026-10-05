@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>交大盃抽籤系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>交大盃抽籤系統</h1>
+    <span class="sub">報名表單回應 → 抽籤順序表 → 完成籤表</span>
+  </div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btn-export" title="把目前進度存成檔案"></button>
+    <label class="btn ghost" title="讀回之前存的進度"><span id="lbl-import"></span><input type="file" id="file-import" accept=".json" hidden></label>
+    <button class="btn ghost danger" id="btn-reset"></button>
+  </div>
+</header>
+<nav class="steps" id="steps"></nav>
+<main id="main"></main>
+<footer class="foot">資料只在這台電腦的瀏覽器裡處理，不會上傳到任何伺服器。</footer>
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
