@@ -130,12 +130,16 @@ export function parseResponses(rows, aliases = {}) {
     };
     if (rowStruck) r.notes.push('整列有刪除線，預設不採用');
     partial.forEach(p => r.notes.push(p + '，已拿掉'));
+    const nameHints = []; // 推校名用，包含略過的隊名
     for (const tc of teamCols) {
       const raw = get(tc.name);
       if (!raw || JUNK.test(raw)) continue;
       if (/[\/／]/.test(raw)) { r.notes.push(`隊名欄填了「${raw}」，已略過`); continue; }
-      if (tc.members >= 0 && !get(tc.members)) {
-        r.notes.push(`「${raw}」沒有隊員名單，視為只報個人賽，未列入團體賽`);
+      nameHints.push(raw);
+      // 隊名只填校名、又沒有隊員：多半是只報個人賽，把隊名欄當學校欄填
+      if (kind !== 'social' && tc.members >= 0 && !get(tc.members) &&
+          extractSchool(raw, aliases) === normalizeTeamName(raw, aliases)) {
+        r.notes.push(`「${raw}」只有校名、沒有隊員名單，視為只報個人賽`);
         continue;
       }
       let name = raw;
@@ -148,6 +152,7 @@ export function parseResponses(rows, aliases = {}) {
         name: kind === 'social' ? normalizeText(name) : normalizeTeamName(name, aliases),
         raw, members: get(tc.members), waitlist: tc.waitlist,
       });
+      if (tc.members >= 0 && !get(tc.members)) r.notes.push(`「${name}」沒有隊員名單，請確認`);
     }
     r.singles = splitNames(get(col.single));
     r.singlesWait = splitNames(get(col.singleWait));
@@ -159,7 +164,9 @@ export function parseResponses(rows, aliases = {}) {
       const u = r.unitRaw && !/[,，、]/.test(r.unitRaw) ? r.unitRaw : '';
       r.school = u ? unitFromTeam(u, aliases) : (r.teams[0] ? unitFromTeam(r.teams[0].name, aliases) : '');
     } else {
-      r.school = (r.teams[0] && extractSchool(r.teams[0].name, aliases)) || extractSchool(r.unitRaw, aliases) || '';
+      r.school = (r.teams[0] && extractSchool(r.teams[0].name, aliases)) ||
+        nameHints.map(h => extractSchool(h, aliases)).find(Boolean) ||
+        extractSchool(r.unitRaw, aliases) || '';
       if (!r.school) r.notes.push('抓不到校名，請手動填寫');
     }
     responses.push(r);
@@ -215,6 +222,17 @@ export function buildEntries(kind, responses, aliases = {}) {
         add(doubleEv, events[doubleEv], e, r.school + '|' + [p.a, p.b].sort().join('/'));
       });
     }
+  }
+  // 一校只有一隊時，隊名用校名（第十屆慣例，例如 政治大學X 改為 政治大學）
+  if (kind !== 'social') {
+    const per = new Map();
+    events[teamEv].forEach(e => per.set(e.school, (per.get(e.school) || 0) + 1));
+    events[teamEv].forEach(e => {
+      if (per.get(e.school) === 1 && e.name !== e.school && e.name.startsWith(e.school) && e.name.length - e.school.length <= 2) {
+        e.flags.push(`只有一隊，隊名由「${e.name}」改為校名`);
+        e.name = e.school;
+      }
+    });
   }
   // 同項目同名不同校
   for (const ev of Object.keys(events)) {
