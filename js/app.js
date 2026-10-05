@@ -151,12 +151,12 @@ function stepUpload() {
         const src = S.sources[k];
         return `<label class="drop ${src ? 'done' : ''}" data-drop="${k}">
           <span class="t">${icon(src ? 'check' : 'upload')}${KIND_LABEL[k]}</span>
-          <span class="f">${src ? `${esc(src.fileName)}，${src.responses.length} 筆回應` : '點這裡選檔，或把檔案拖進來'}</span>
+          <span class="f">${src ? `${esc(src.fileName)}，${src.responses.length} 筆回應` : '點這裡選檔案，或把檔案拉進來'}</span>
           <input type="file" accept=".xlsx,.csv" hidden data-file="${k}">
         </label>`;
       }).join('')}
     </div>
-    <p class="small muted">不用三份都有，只上傳其中一份也可以。上傳後檢查下面的回應，再按「產生名單」。</p>
+    <p class="small muted">只上傳一份也可以，上傳後檢查下面的回應，再按「產生名單」。</p>
   </section>
   ${kinds.filter(k => S.sources[k]).map(responsePanel).join('')}`;
 }
@@ -180,7 +180,7 @@ function responsePanel(k) {
   return `<section class="panel">
     <div class="row"><h2>${KIND_LABEL[k]}回應</h2><span class="muted small">${esc(src.fileName)}</span><span class="spacer"></span>
       <button class="btn" data-build="${k}">${icon('check')}${has ? '重新產生名單' : '產生名單'}</button></div>
-    <p class="small muted">採用 ${rs.filter(r => r.include).length} / ${rs.length} 筆。整列劃掉的回應預設不勾選，格子裡劃掉的名字已直接排除。同校的多筆回應在產生名單時會合併，重複的人或隊伍只留一筆。${k === 'social' ? '社會組的「單位」用來做同單位分開，同一個人報的多隊請填相同單位。' : '學校欄可以直接修改。'}</p>
+    <p class="small muted">採用 ${rs.filter(r => r.include).length} / ${rs.length} 筆。同校的多筆回應在產生名單時會合併，重複的人或隊伍只留一筆。${k === 'social' ? '社會組的「單位」用來做同單位分開，同一個人報的多隊請填相同單位。' : '學校欄可以直接修改。'}</p>
     <div class="tbl-wrap scroll"><table>
       <thead><tr><th>採用</th><th class="num">列</th><th>${k === 'social' ? '單位' : '學校'}</th><th>隊伍</th><th class="num">團體</th>${k === 'social' ? '' : '<th class="num">單打</th><th class="num">雙打</th>'}<th>提醒</th></tr></thead>
       <tbody>${rs.map((r, i) => `<tr class="${r.include ? '' : 'off'}">
@@ -509,7 +509,7 @@ function stepHelp() {
     <h2>專案檔</h2>
     <p>網頁不會把資料存到任何伺服器，進度只存在這台電腦的瀏覽器裡。</p>
     <div class="kv">
-      <b>匯出專案檔</b><span>把目前的名單、校名修正、籤表設定和抽籤結果，存成一個 .json 檔。可以當備份，也可以交接給別人或下一屆。</span>
+      <b>匯出專案檔</b><span>把目前的名單、校名修正、籤表設定和抽籤結果，存成一個 .json 檔。可以當備份或交接給別人。</span>
       <b>匯入專案檔</b><span>讀回那個 .json 檔，就能從存檔的地方繼續。</span>
       <b>清除全部</b><span>清掉這台電腦上的所有資料，例如要從頭開始，或用公用電腦做完要清掉個資時。</span>
     </div>
@@ -524,7 +524,7 @@ function stepHelp() {
     <h2>流程</h2>
     <ol>
       <li><b>上傳表單回應</b>：Google 試算表「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，男子組、女子組、社會組各一份。整列劃掉的回應預設不採用，格子裡劃掉的名字直接排除。</li>
-      <li><b>名單校正</b>：檢查名單、統一校名、加入地主隊與保留名額、設定種子籤號。</li>
+      <li><b>名單校正</b>：檢查名單、統一校名、加入保留名額、設定種子籤號。</li>
       <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果。</li>
