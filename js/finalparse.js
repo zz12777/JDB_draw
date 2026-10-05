@@ -45,7 +45,7 @@ function parseKO(sheets, event) {
   const st = buildKO(secSizes);
   const empty = [...byPos.values()].filter(x => !x.name).length;
   if (empty) warnings.push(`有 ${empty} 個籤位沒有名字`);
-  // 從籤表上的線與場次位置還原實際對戰（人工調整過的籤表也能正確對應）
+  // 從籤表上的線與場次位置還原實際對戰（以檔案中實際的對戰為準）
   let matches = null;
   try {
     matches = readMatches(sheets.filter(s => !/結果|BACKUP|backup|名單|順序/.test(s.name)));

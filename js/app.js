@@ -2,7 +2,7 @@
 import { parseResponses, buildEntries, EVENTS, ALL_EVENTS, EVENT_TYPE, KIND_LABEL } from './parse.js';
 import { readFormFile, readWorkbookValues } from './reader.js';
 import { parseFinalBracket } from './finalparse.js';
-import { scoresheetDocx, DEFAULT_TITLE } from './scoresheet.js';
+import { scoresheetDocx, scoresheetHtml, DEFAULT_TITLE } from './scoresheet.js';
 import { looseKey } from './schools.js';
 import * as B from './bracket.js';
 import { runDraw, checkDraw, swapPositions } from './draw.js';
@@ -538,7 +538,8 @@ function stepSheets() {
       <td><div class="row">
         <label class="btn ghost sm">${icon('upload')}上傳最終籤表<input type="file" accept=".xlsx" hidden data-sheetup="${name}"></label>
         ${up && drawnSource(name) ? `<button class="btn ghost sm" data-sheetclear="${name}">${icon('reset')}改用抽籤結果</button>` : ''}
-        <button class="btn sm" data-dlsheet="${name}" ${src ? '' : 'disabled'}>${icon('download')}下載點單</button>
+        <button class="btn sm" data-dlsheet="${name}" ${src ? '' : 'disabled'}>${icon('download')}下載點單 Word</button>
+        <button class="btn ghost sm" data-pdfsheet="${name}" ${src ? '' : 'disabled'}>${icon('file')}PDF</button>
       </div></td></tr>`;
   }).join('');
   $('#main').innerHTML = `
@@ -557,6 +558,7 @@ function stepSheets() {
       <li>個人賽：一頁兩張，上半是前半場次、下半是後半場次（例如 130 張時，第 1 頁是第一場和第六六場），整疊對半裁切後疊起來就是場次順序。</li>
       <li>團體賽：一場一頁，五點（單單雙單單）。</li>
       <li>最後會多附幾張空白點單，張數可在上方設定。</li>
+      <li>PDF：按「PDF」會開啟列印頁，在列印視窗的目的地選「另存為 PDF」（紙張 A4、縮放 100%、取消頁首及頁尾）。若瀏覽器擋住新視窗，請允許此網站開啟彈出視窗。</li>
     </ul>
   </section>`;
 }
@@ -571,6 +573,20 @@ async function dlSheet(name) {
     download(blob, `${name}點單.docx`);
     toast(`已下載${name}點單，需再經人工檢查`);
   } catch (e) { toast('產生失敗：' + e.message); }
+}
+
+function pdfSheet(name) {
+  const src = sheetSource(name);
+  if (!src) return toast('這個項目還沒有籤表');
+  const s = S.sheetSettings;
+  const html = scoresheetHtml({ event: name, st: src.st, byPos: src.byPos, matches: src.matches,
+    title: s.title || DEFAULT_TITLE, blanks: Math.max(0, +s.blanks || 0), withFinal: !!s.withFinal });
+  const w = window.open('', '_blank');
+  if (!w) return toast('瀏覽器擋住了新視窗，請允許此網站開啟彈出視窗');
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  toast(`已開啟${name}點單列印頁，選「另存為 PDF」即可，需再經人工檢查`);
 }
 
 async function handleSheetUpload(file, name) {
@@ -609,7 +625,7 @@ function stepHelp() {
   <section class="panel">
     <h2>籤表規劃</h2>
     <ul>
-      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設 16 人以下 1 區，否則 4 區（每區超過 32 人再加倍）。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
+      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設分區數：16 人以下不分區（1 張籤表）；17 到 128 人分 4 區（A 到 D，每區最多 32 人，剛好一張 A4）；129 人以上分 8 區。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
       <li><b>X 單敗的資格賽位置</b>：沿用「(個賽)4-32單敗」範本。人數不是 2 的次方時，部分籤位是資格賽（兩人先打一場）。範本的 21、23 單敗少一個籤位，已依前後規律補正。</li>
       <li><b>個人賽場次編號</b>：整個項目一起編，從最深的一輪開始（資格賽最先），同一輪由上往下、跨分區連續編；各分區冠軍再進決賽頁。</li>
       <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。每區取前二晉級，決賽籤表另外處理。</li>
@@ -647,18 +663,19 @@ function stepHelp() {
       <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
-      <li><b>點單</b>：用抽籤結果或上傳人工調整後的最終籤表，產生 Word 點單，需再經人工檢查。</li>
+      <li><b>點單</b>：用抽籤結果或上傳最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
     </ol>
   </section>`;
 }
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }
   else if (d.dlsheet) dlSheet(d.dlsheet);
+  else if (d.pdfsheet) pdfSheet(d.pdfsheet);
   else if (d.step !== undefined) { S.step = +d.step; pick = null; render(); }
   else if (d.ev) { S.event = d.ev; pick = null; render(); }
   else if (d.build) buildFromSource(d.build);

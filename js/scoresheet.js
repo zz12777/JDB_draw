@@ -231,3 +231,123 @@ export async function scoresheetDocx({ event, st, byPos, matches, title = DEFAUL
   }
   return buildDocx(rrDocumentBody(title, event, rrSheets(st, byPos, withFinal), blanks), { top: 720, bottom: 720, left: 720, right: 720 }, JSZipLib);
 }
+
+// ---------------- 列印版（存成 PDF） ----------------
+// 與 Word 點單同版面的 HTML，在瀏覽器列印視窗選「另存為 PDF」。
+
+const h = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const vtext = s => [...String(s || '')].map(h).join('<br>');
+
+function koHalfHtml(title, event, s) {
+  s = s || { label: '', a: { num: '', school: '', name: '' }, b: { num: '', school: '', name: '' } };
+  const name = side => {
+    const names = EVENT_TYPE[event] === 'double' && side.name.includes('/') ? side.name.split('/') : [side.name];
+    return `${side.num ? `<div class="num">${h(side.num)}</div>` : ''}${names.map(n => `<div class="nm">${h(n)}</div>`).join('')}`;
+  };
+  let games = '';
+  for (let g = 1; g <= 5; g++) {
+    games += `<tr class="g">${g === 1 ? '<td rowspan="5"></td>' : ''}<td>${g}</td><td>：</td><td>${g}</td>${g === 1 ? '<td rowspan="5"></td>' : ''}</tr>`;
+  }
+  return `<div class="half">
+    <div class="t1">${h(title)}</div><div class="t1">比賽紀錄表</div>
+    <div class="item">項目:( ${h(event)} ) ( ${h(s.label) || '&emsp;&emsp;&emsp;'} ) 場次</div>
+    <table class="ko">
+      <colgroup><col style="width:9.4%"><col style="width:22.7%"><col style="width:5.3%"><col style="width:4.5%"><col style="width:16%"><col style="width:4.5%"><col style="width:5.3%"><col style="width:22.7%"><col style="width:9.4%"></colgroup>
+      <tr class="hd"><td>校名</td><td>姓名</td><td colspan="5">比賽紀錄</td><td>姓名</td><td>校名</td></tr>
+      <tr class="hd2"><td rowspan="6" class="sch">${vtext(s.a.school)}</td><td rowspan="6">${name(s.a)}</td>
+        <td class="sm">勝<br>局</td><td class="sm">局<br>數</td><td>比數</td><td class="sm">局<br>數</td><td class="sm">勝<br>局</td>
+        <td rowspan="6">${name(s.b)}</td><td rowspan="6" class="sch">${vtext(s.b.school)}</td></tr>
+      ${games}
+    </table>
+    <div class="line">比賽結果：<u>&emsp;&emsp;&emsp;&emsp;&emsp;</u>。</div>
+    <div class="line">勝方選手簽名：<u>&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;</u>。</div>
+    <div class="line">裁判簽名：</div>
+  </div>`;
+}
+
+function rrPageHtml(title, event, s) {
+  s = s || { label: '', a: { slot: '', team: '' }, b: { slot: '', team: '' } };
+  const team = x => h([x.slot, x.team].filter(Boolean).join(' '));
+  let pts = '';
+  POINTS.forEach((p, pi) => {
+    const n = pi === 2 ? 6 : 5;
+    for (let k = 0; k < n; k++) {
+      let row = '';
+      if (k === 0) row += `<td rowspan="${n}" class="pt">第<br>${p}<br>點</td>`;
+      if (pi === 2) { if (k === 0 || k === 3) row += '<td colspan="2" rowspan="3"></td>'; }
+      else if (k === 0) row += `<td colspan="2" rowspan="${n}"></td>`;
+      if (k === 0) row += `<td rowspan="${n}"></td>`;
+      row += '<td></td><td></td>';
+      if (k === 0) row += `<td rowspan="${n}"></td>`;
+      if (pi === 2) { if (k === 0 || k === 3) row += '<td colspan="2" rowspan="3"></td>'; }
+      else if (k === 0) row += `<td colspan="2" rowspan="${n}"></td>`;
+      if (k === 0) row += `<td rowspan="${n}" class="pt">第<br>${p}<br>點</td>`;
+      pts += `<tr class="p">${row}</tr>`;
+    }
+  });
+  return `<div class="page">
+    <table class="rr">
+      <colgroup>${RR_GRID.map(w => `<col style="width:${(w / RR_GRID.reduce((a, x) => a + x, 0) * 100).toFixed(2)}%">`).join('')}</colgroup>
+      <tr class="tt"><td colspan="10">${h(title)}</td></tr>
+      <tr class="st"><td colspan="10">${h(TEAM_SUBTITLE[event] || `${event} 出賽名單`)}</td></tr>
+      <tr class="r"><td colspan="2"><b>場次</b></td><td colspan="3">${h(s.label)}</td><td colspan="3">${h(s.label)}</td><td colspan="2"><b>場次</b></td></tr>
+      <tr class="r"><td colspan="2"><b>出賽隊伍</b></td><td colspan="3">${team(s.a)}</td><td colspan="3">${team(s.b)}</td><td colspan="2"><b>出賽隊伍</b></td></tr>
+      <tr class="r"><td colspan="2">對戰隊伍</td><td colspan="3">${team(s.b)}</td><td colspan="3">${team(s.a)}</td><td colspan="2">對戰隊伍</td></tr>
+      <tr class="hd"><td>點</td><td colspan="2">姓名</td><td>勝局數</td><td>比分</td><td>比分</td><td>勝局數</td><td colspan="2">姓名</td><td>點</td></tr>
+      ${pts}
+      <tr class="r"><td colspan="3"><b>比賽結果</b></td><td colspan="4">：</td><td colspan="3"><b>比賽結果</b></td></tr>
+      <tr class="sg"><td colspan="5"><b>裁判簽名：</b></td><td colspan="5"><b>勝隊簽名：</b></td></tr>
+    </table>
+  </div>`;
+}
+
+const PRINT_CSS = `
+@page { size: A4; margin: 10mm; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "DFKai-SB", "BiauKai", "標楷體", "Kaiti TC", serif; color: #000; }
+.page { height: 276mm; overflow: hidden; page-break-after: always; break-after: page; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+.half { height: 136mm; overflow: hidden; padding-top: 2mm; }
+.half + .half { border-top: 1px solid #000; padding-top: 4mm; }
+.t1 { text-align: center; font-size: 12pt; line-height: 1.6; }
+.item, .line { font-size: 11pt; line-height: 2; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0 1mm; font-size: 11pt; }
+.ko .hd td { height: 6mm; }
+.ko .hd2 td { height: 11mm; }
+.ko .g td { height: 8.2mm; }
+.ko .sch { font-size: 18pt; line-height: 1.2; }
+.ko .sm { font-size: 10pt; line-height: 1.1; }
+.ko .num { font-size: 12pt; }
+.ko .nm { font-size: 20pt; }
+.rr { border: 2px solid #000; }
+.rr td { font-size: 13pt; }
+.rr .tt td { height: 11mm; font-size: 20pt; }
+.rr .st td { height: 9mm; font-size: 16pt; }
+.rr .r td { height: 8.5mm; }
+.rr .hd td { height: 6.5mm; font-size: 11pt; }
+.rr .p td { height: 6.6mm; }
+.rr .pt { font-size: 10pt; line-height: 1.2; }
+.rr .sg td { height: 11mm; text-align: left; vertical-align: top; }
+.tip { font-family: system-ui, sans-serif; background: #fff4e0; border-left: 3px solid #9a5b00; padding: 10px 14px; margin: 0 0 8mm; font-size: 14px; }
+@media print { .tip { display: none; } }
+`;
+
+/** 列印版 HTML（整份文件） */
+export function scoresheetHtml({ event, st, byPos, matches, title = DEFAULT_TITLE, blanks = 3, withFinal = true }) {
+  let pages = '';
+  if (st.kind === 'ko') {
+    const sheets = matches ? sheetsFromMatches(matches, byPos) : koSheets(st, byPos);
+    const items = [...sheets, ...Array(blanks).fill(null)];
+    const half = Math.ceil(items.length / 2);
+    for (let i = 0; i < half; i++) {
+      pages += `<div class="page">${koHalfHtml(title, event, items[i])}${koHalfHtml(title, event, items[half + i])}</div>`;
+    }
+  } else {
+    const items = [...rrSheets(st, byPos, withFinal), ...Array(blanks).fill(null)];
+    pages = items.map(s => rrPageHtml(title, event, s)).join('');
+  }
+  return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${h(event)}點單</title><style>${PRINT_CSS}</style></head>
+<body><div class="tip">列印視窗開啟後，目的地選「另存為 PDF」，紙張 A4、邊界「預設」、縮放 100%，取消勾選「頁首及頁尾」。點單需再經人工檢查。</div>${pages}
+<script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script></body></html>`;
+}
