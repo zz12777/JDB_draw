@@ -65,23 +65,44 @@ const unitWord = name => (name === '社團' ? '單位' : '學校');
 const nameWord = name => (EVENT_TYPE[name] === 'team' ? '隊名' : EVENT_TYPE[name] === 'double' ? '選手（A/B）' : '選手');
 
 // ---------------- 籤表設定 ----------------
+/** 團體賽預設：女團以 3 隊循環為主，其他以 4 隊循環為主，剩下的用另一種補 */
+function rrDefault(n, pref) {
+  const other = pref === 3 ? 4 : 3;
+  for (let a = Math.floor(n / pref); a >= 0; a--) {
+    const rest = n - a * pref;
+    if (rest % other === 0) return pref === 3 ? { n3: a, n4: rest / 4 } : { n3: rest / 3, n4: a };
+  }
+  return { n3: 0, n4: Math.ceil(n / 4) };
+}
+function rrSizes(p) { return [...Array(p.n3).fill(3), ...Array(p.n4).fill(4)]; }
 function defaultPlan(name, n) {
   if (EVENT_TYPE[name] === 'team') {
-    const size = name === '女團' ? 3 : 4;
-    const g = Math.max(1, B.defaultGroupCount(n, size));
-    return { kind: 'rr', groupSize: size, groups: g, sizes: B.groupSizes(n, g) };
+    const p = { kind: 'rr', forN: n, ...rrDefault(n, name === '女團' ? 3 : 4) };
+    p.sizes = rrSizes(p);
+    return p;
   }
   const k = B.defaultSections(n);
-  return { kind: 'ko', sections: k, sizes: B.splitSizes(n, k) };
+  return { kind: 'ko', forN: n, sections: k, sizes: B.splitSizes(n, k) };
 }
 function planOf(name) {
   const e = ev(name);
   const n = e.entries.length;
-  const sum = p => p.sizes.reduce((a, b) => a + b, 0);
-  if (!e.plan || sum(e.plan) !== n) e.plan = defaultPlan(name, n);
+  // 人數變了，或是舊版格式，就依人數重設
+  if (!e.plan || e.plan.forN !== n || (e.plan.kind === 'rr' && e.plan.n3 === undefined)) e.plan = defaultPlan(name, n);
   return e.plan;
 }
+function planError(name) {
+  const p = planOf(name);
+  const n = ev(name).entries.length;
+  const sum = p.sizes.reduce((a, b) => a + b, 0);
+  if (sum === n) return '';
+  return p.kind === 'rr'
+    ? `3 隊區 ${p.n3} 個 + 4 隊區 ${p.n4} 個 = ${sum} 隊，與報名 ${n} 隊不符`
+    : `各區人數合計 ${sum}，與報名 ${n} 不符`;
+}
 function structureOf(name) {
+  const pe = planError(name);
+  if (pe) return { err: pe };
   try { return { st: B.buildStructure(planOf(name)) }; } catch (err) { return { err: err.message }; }
 }
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
@@ -161,16 +182,15 @@ function responsePanel(k) {
       <button class="btn" data-build="${k}">${icon('check')}${has ? '重新產生名單' : '產生名單'}</button></div>
     <p class="small muted">採用 ${rs.filter(r => r.include).length} / ${rs.length} 筆。整列劃掉的回應預設不勾選，格子裡劃掉的名字已直接排除。同校的多筆回應在產生名單時會合併，重複的人或隊伍只留一筆。${k === 'social' ? '社會組的「單位」用來做同單位分開，同一個人報的多隊請填相同單位。' : '學校欄可以直接修改。'}</p>
     <div class="tbl-wrap scroll"><table>
-      <thead><tr><th>採用</th><th class="num">列</th><th>${k === 'social' ? '單位' : '學校'}</th><th>隊伍</th><th class="num">團體</th><th class="num">單打</th><th class="num">雙打</th><th>提醒</th></tr></thead>
+      <thead><tr><th>採用</th><th class="num">列</th><th>${k === 'social' ? '單位' : '學校'}</th><th>隊伍</th><th class="num">團體</th>${k === 'social' ? '' : '<th class="num">單打</th><th class="num">雙打</th>'}<th>提醒</th></tr></thead>
       <tbody>${rs.map((r, i) => `<tr class="${r.include ? '' : 'off'}">
         <td><input type="checkbox" data-inc="${k}:${i}" ${r.include ? 'checked' : ''}></td>
         <td class="num">${r.rowNo}</td>
         <td><input type="text" value="${esc(r.school)}" data-rschool="${k}:${i}"></td>
         <td>${r.teams.map(t => `<span class="chip">${esc(t.name)}${t.waitlist ? '（候補）' : ''}</span>`).join(' ')}</td>
         <td class="num">${r.teams.length || ''}</td>
-        <td class="num">${r.singles.length || ''}</td>
-        <td class="num">${r.doubles.length || ''}</td>
-        <td>${r.notes.map(n => `<span class="tag">${esc(n)}</span>`).join('')}${sameSchool(r)}</td>
+        ${k === 'social' ? '' : `<td class="num">${r.singles.length || ''}</td><td class="num">${r.doubles.length || ''}</td>`}
+        <td>${r.manual ? '<span class="tag info">手動補入（無時間戳記）</span>' : ''}${r.notes.map(n => `<span class="tag">${esc(n)}</span>`).join('')}${sameSchool(r)}</td>
       </tr>`).join('')}</tbody></table></div>
   </section>`;
 }
@@ -227,7 +247,7 @@ function stepEdit() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-addrow>${icon('plus')}新增一列</button>
       <button class="btn ghost sm" data-dlorder>${icon('download')}下載抽籤順序表</button></div>
-    <div class="note small">地主隊（例如陽明交大）和工作人員保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。
+    <div class="note small">若陽明交大保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。
       種子欄填固定籤號（例如 1），抽籤時會固定在那個位置。</div>
     ${flagged ? `<div class="note warn small">有 ${flagged} 筆需要確認（看提醒欄）。</div>` : ''}
     <div class="tbl-wrap scroll"><table>
@@ -327,12 +347,12 @@ function stepPlan() {
   } else {
     body = `
     <div class="row">
-      <label class="field">每區隊數<select data-plan="groupSize">${[3, 4, 5].map(k => `<option ${plan.groupSize === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
-      <label class="field">區數<input type="number" min="1" value="${plan.groups}" data-plan="groups"></label>
+      <label class="field">3 隊循環（區數）<input type="number" min="0" value="${plan.n3}" data-plan="n3"></label>
+      <label class="field">4 隊循環（區數）<input type="number" min="0" value="${plan.n4}" data-plan="n4"></label>
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">除不盡時，多出的隊伍分到最後幾區。</p>`;
+    <p class="small muted">3 隊區排在前面，4 隊區排在後面。3 × 3 隊區數 + 4 × 4 隊區數 要等於 ${n}。</p>`;
   }
 
   let preview = '';
@@ -590,8 +610,8 @@ document.addEventListener('change', ev0 => {
     const n = e.entries.length;
     const p = planOf(S.event);
     if (d.plan === 'sections') { p.sections = +t.value; p.sizes = B.splitSizes(n, p.sections); }
-    if (d.plan === 'groupSize') { p.groupSize = +t.value; p.groups = Math.max(1, B.defaultGroupCount(n, p.groupSize)); p.sizes = B.groupSizes(n, p.groups); }
-    if (d.plan === 'groups') { p.groups = Math.max(1, +t.value || 1); p.sizes = B.groupSizes(n, p.groups); }
+    void n;
+    if (d.plan === 'n3' || d.plan === 'n4') { p[d.plan] = Math.max(0, Math.floor(+t.value || 0)); p.sizes = rrSizes(p); }
     render();
   } else if (d.size !== undefined) {
     const p = planOf(S.event);

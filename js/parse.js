@@ -107,8 +107,13 @@ export function parseResponses(rows, aliases = {}) {
   });
 
   const responses = [];
+  // 第一筆有時間戳記的回應之前是工作人員備註列；之後的列都算資料，
+  // 包含手動補在表格裡、沒有時間戳記和信箱的列
+  const firstData = rows.findIndex((r, i) => i > 0 && r && isTimestamp(rawOf(r[col.time])));
+  const dataCols = [col.single, col.double, col.unit, ...teamCols.map(t => t.name)].filter(c => c >= 0);
   rows.slice(1).forEach((rawRow, i) => {
-    if (!rawRow || !isTimestamp(rawOf(rawRow[col.time]))) return; // 工作人員備註列
+    if (!rawRow || firstData < 0 || i + 1 < firstData) return;
+    if (!dataCols.some(c => clean(rawOf(rawRow[c])) !== '')) return; // 空白列
     const filled = rawRow.filter(c => clean(rawOf(c)) !== '');
     const struckCells = filled.filter(c => isRich(c) && c.strike).length;
     const rowStruck = filled.length > 0 && struckCells / filled.length >= 0.5;
@@ -122,6 +127,7 @@ export function parseResponses(rows, aliases = {}) {
     const get = c => (c >= 0 ? clean(row[c]) : '');
     const r = {
       rowNo: i + 2, include: !rowStruck, struck: rowStruck,
+      manual: !isTimestamp(rawOf(rawRow[col.time])),
       time: row[col.time] instanceof Date ? row[col.time].toISOString() : get(col.time),
       email: get(col.email).toLowerCase(),
       contact: get(col.contact),
