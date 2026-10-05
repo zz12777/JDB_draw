@@ -33,7 +33,7 @@ let S = load();
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.version === 1) return { ...blank(), ...s };
+    if (s && s.version === 1) return { ...blank(), ...s, step: 0 }; // 每次打開都從步驟 1 開始
   } catch { /* 無法讀取就從頭開始 */ }
   return blank();
 }
