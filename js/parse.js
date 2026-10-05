@@ -128,8 +128,6 @@ export function parseResponses(rows, aliases = {}) {
       unitRaw: get(col.unit),
       teams: [], singles: [], singlesWait: [], doubles: [], notes: [],
     };
-    if (rowStruck) r.notes.push('整列有刪除線，預設不採用');
-    partial.forEach(p => r.notes.push(p + '，已拿掉'));
     const nameHints = []; // 推校名用，包含略過的隊名
     for (const tc of teamCols) {
       const raw = get(tc.name);
@@ -170,13 +168,6 @@ export function parseResponses(rows, aliases = {}) {
       if (!r.school) r.notes.push('抓不到校名，請手動填寫');
     }
     responses.push(r);
-  });
-
-  // 同一信箱多筆
-  const byEmail = new Map();
-  responses.forEach(r => { if (r.include && r.email) byEmail.set(r.email, (byEmail.get(r.email) || 0) + 1); });
-  responses.forEach(r => {
-    if (r.include && r.email && byEmail.get(r.email) > 1) r.notes.push('同一信箱有多筆回應，可能是更新，請確認');
   });
 
   return { kind, responses };

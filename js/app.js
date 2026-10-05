@@ -124,7 +124,7 @@ function stepUpload() {
       <b>刪除線的處理規則（僅 .xlsx）</b>
       <ul>
         <li>整列劃掉：視為作廢的回應，預設不採用（下方表格可以手動勾回來）。</li>
-        <li>格子裡只劃掉部分名字：自動拿掉被劃掉的名字，並在提醒欄註明。</li>
+        <li>格子裡只劃掉部分名字：被劃掉的名字直接排除。</li>
       </ul>
     </div>
     <div class="drops">
@@ -147,20 +147,32 @@ function responsePanel(k) {
   const rs = src.responses;
   const evs = EVENTS[k];
   const has = evs.some(e => S.events[e] && S.events[e].entries.length);
+  // 同校多筆回應：產生名單時會合併
+  const bySchool = new Map();
+  rs.forEach(r => {
+    if (!r.include || !r.school) return;
+    if (!bySchool.has(r.school)) bySchool.set(r.school, []);
+    bySchool.get(r.school).push(r.rowNo);
+  });
+  const sameSchool = r => {
+    const list = r.include && r.school ? (bySchool.get(r.school) || []).filter(n => n !== r.rowNo) : [];
+    return list.length ? `<span class="tag info">與第 ${list.join('、')} 列同${k === 'social' ? '單位' : '校'}，名單會合併</span>` : '';
+  };
   return `<section class="panel">
     <div class="row"><h2>${KIND_LABEL[k]}回應</h2><span class="muted small">${esc(src.fileName)}</span><span class="spacer"></span>
       <button class="btn" data-build="${k}">${icon('check')}${has ? '重新產生名單' : '產生名單'}</button></div>
-    <p class="small muted">採用 ${rs.filter(r => r.include).length} / ${rs.length} 筆。取消勾選的回應不會進入名單。${k === 'social' ? '社會組的「單位」用來做同單位分開，同一個人報的多隊請填相同單位。' : '學校欄可以直接修改。'}</p>
+    <p class="small muted">採用 ${rs.filter(r => r.include).length} / ${rs.length} 筆。整列劃掉的回應預設不勾選，格子裡劃掉的名字已直接排除。同校的多筆回應在產生名單時會合併，重複的人或隊伍只留一筆。${k === 'social' ? '社會組的「單位」用來做同單位分開，同一個人報的多隊請填相同單位。' : '學校欄可以直接修改。'}</p>
     <div class="tbl-wrap scroll"><table>
-      <thead><tr><th>採用</th><th class="num">列</th><th>${k === 'social' ? '單位' : '學校'}</th><th>隊伍</th><th class="num">單打</th><th class="num">雙打</th><th>提醒</th></tr></thead>
+      <thead><tr><th>採用</th><th class="num">列</th><th>${k === 'social' ? '單位' : '學校'}</th><th>隊伍</th><th class="num">團體</th><th class="num">單打</th><th class="num">雙打</th><th>提醒</th></tr></thead>
       <tbody>${rs.map((r, i) => `<tr class="${r.include ? '' : 'off'}">
         <td><input type="checkbox" data-inc="${k}:${i}" ${r.include ? 'checked' : ''}></td>
         <td class="num">${r.rowNo}</td>
         <td><input type="text" value="${esc(r.school)}" data-rschool="${k}:${i}"></td>
         <td>${r.teams.map(t => `<span class="chip">${esc(t.name)}${t.waitlist ? '（候補）' : ''}</span>`).join(' ')}</td>
+        <td class="num">${r.teams.length || ''}</td>
         <td class="num">${r.singles.length || ''}</td>
         <td class="num">${r.doubles.length || ''}</td>
-        <td>${r.notes.map(n => `<span class="tag ${/刪除線|不採用/.test(n) ? 'bad' : ''}">${esc(n)}</span>`).join('')}</td>
+        <td>${r.notes.map(n => `<span class="tag">${esc(n)}</span>`).join('')}${sameSchool(r)}</td>
       </tr>`).join('')}</tbody></table></div>
   </section>`;
 }

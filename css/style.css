@@ -145,7 +145,7 @@ textarea { width: 100%; min-height: 110px; font-family: inherit; }
 @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 13px; background: #fafaf8; }
+.chip { display: inline-block; white-space: nowrap; margin: 1px 0; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 13px; background: #fafaf8; }
 
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff;
