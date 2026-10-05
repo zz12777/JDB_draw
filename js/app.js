@@ -114,10 +114,7 @@ function stepUpload() {
     <div class="note">
       <b>下載方式與檔案格式</b>
       <ul>
-        <li>請在 Google 試算表選「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，上傳 .xlsx 檔。</li>
-        <li>也接受 .csv，但 CSV 是純文字，<b>刪除線、粗體等格式會全部消失</b>，所以建議用 .xlsx。</li>
-        <li>CSV 用 Excel 直接打開出現亂碼是正常的（檔案是 UTF-8 編碼），上傳到這裡會自動正確讀取。</li>
-        <li>男子組、女子組、社會組各上傳一份，系統會依欄位自動判斷是哪一組。</li>
+        <li>請在 Google 試算表選「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，上傳 .xlsx 檔（CSV 檔會抓不到刪除線）。</li>
       </ul>
     </div>
     <div class="note">
@@ -329,12 +326,12 @@ function stepPlan() {
   } else {
     body = `
     <div class="row">
-      <label class="field">每組隊數<select data-plan="groupSize">${[3, 4, 5].map(k => `<option ${plan.groupSize === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
-      <label class="field">組數<input type="number" min="1" value="${plan.groups}" data-plan="groups"></label>
+      <label class="field">每區隊數<select data-plan="groupSize">${[3, 4, 5].map(k => `<option ${plan.groupSize === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+      <label class="field">區數<input type="number" min="1" value="${plan.groups}" data-plan="groups"></label>
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">除不盡時，多出的隊伍分到最後幾組。</p>`;
+    <p class="small muted">除不盡時，多出的隊伍分到最後幾區。</p>`;
   }
 
   let preview = '';
@@ -343,28 +340,17 @@ function stepPlan() {
     preview = `
     <div class="stats">
       <div class="stat"><div class="k">總籤數</div><div class="v">${st.positions}</div></div>
-      <div class="stat"><div class="k">分區</div><div class="v">${st.sections.map(s => s.size).join(' / ')}</div></div>
-      <div class="stat"><div class="k">資格賽</div><div class="v">${st.sections.reduce((a, s) => a + s.prelims, 0)} 場</div></div>
+      <div class="stat"><div class="k">分區人數</div><div class="v">${st.sections.map(s => s.size).join(' / ')}</div></div>
       <div class="stat"><div class="k">總場數</div><div class="v">${st.matches.length} 場</div></div>
-    </div>
-    <div class="tbl-wrap"><table><thead><tr><th>輪次</th><th class="num">場數</th><th>場次編號</th></tr></thead><tbody>
-      ${st.rounds.map(r => `<tr><td>${r.label}</td><td class="num">${r.count}</td><td>${toCn(r.from)}${r.to !== r.from ? ` 到 ${toCn(r.to)}` : ''}</td></tr>`).join('')}
-    </tbody></table></div>
-    ${st.sections.length > 1 ? `<h3>各分區</h3><div class="tbl-wrap"><table><thead><tr><th>分區</th><th class="num">人數</th><th>籤號</th><th class="num">資格賽</th></tr></thead><tbody>
-      ${st.sections.map(s => `<tr><td>${s.letter}區</td><td class="num">${s.size}</td><td>${s.startPos} 到 ${s.startPos + s.size - 1}</td><td class="num">${s.prelims}</td></tr>`).join('')}
-    </tbody></table></div>` : ''}`;
+    </div>`;
   } else {
     preview = `
     <div class="stats">
       <div class="stat"><div class="k">總隊數</div><div class="v">${st.positions}</div></div>
-      <div class="stat"><div class="k">組數</div><div class="v">${st.groups.length}</div></div>
-      <div class="stat"><div class="k">各組隊數</div><div class="v">${summarizeSizes(st.groups.map(g => g.size))}</div></div>
+      <div class="stat"><div class="k">區數</div><div class="v">${st.groups.length}</div></div>
+      <div class="stat"><div class="k">各區隊數</div><div class="v">${summarizeSizes(st.groups.map(g => g.size))}</div></div>
       <div class="stat"><div class="k">預賽總場數</div><div class="v">${st.matchCount} 場</div></div>
-    </div>
-    <div class="tbl-wrap"><table><thead><tr><th>輪次</th><th class="num">場數</th><th>場次編號</th></tr></thead><tbody>
-      ${st.rounds.map(r => `<tr><td>${r.label}</td><td class="num">${r.count}</td><td>${toCn(r.from)} 到 ${toCn(r.to)}</td></tr>`).join('')}
-    </tbody></table></div>
-    <h3>各組</h3><div class="chips">${st.groups.map(g => `<span class="chip">${g.letter}組 ${g.size} 隊（籤號 ${g.startPos} 到 ${g.startPos + g.size - 1}）</span>`).join('')}</div>`;
+    </div>`;
   }
 
   $('#main').innerHTML = `
@@ -404,7 +390,7 @@ function stepDraw() {
     const where = p => {
       if (st.kind === 'rr') {
         const g = st.groups.find(x => p >= x.startPos && p < x.startPos + x.size);
-        return `${g.letter}組 ${p - g.startPos + 1}`;
+        return `${g.letter}區 ${p - g.startPos + 1}`;
       }
       const s = st.sections.find(x => p >= x.startPos && p < x.startPos + x.size);
       return s.letter ? `${s.letter}區` : '';
@@ -475,7 +461,7 @@ function stepExport() {
   <section class="panel">
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
-    <p class="small muted">完成籤表包含各分區（或預賽分組）工作表與「抽籤結果」工作表，抽籤結果附上學校、選手出現次數供核對。</p>
+    <p class="small muted">完成籤表包含預賽籤表、決賽頁與「抽籤結果」工作表，抽籤結果附上學校、選手出現次數供核對。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }

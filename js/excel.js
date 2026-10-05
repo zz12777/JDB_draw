@@ -1,30 +1,21 @@
-// Excel 輸出（ExcelJS）
-import { toCn } from './util.js';
+// Excel 輸出（ExcelJS），版面比照「2_空白籤表」範本
 import { EVENT_TYPE } from './parse.js';
 
 export const EVENT_TITLE = {
   男單: '大專組男子單打', 女單: '大專組女子單打', 男雙: '大專組男子雙打', 女雙: '大專組女子雙打',
   男團: '大專組男子團體', 女團: '大專組女子團體', 社團: '社會組團體',
 };
+const SHORT_TITLE = { 男單: '男子單打', 女單: '女子單打', 男雙: '男子雙打', 女雙: '女子雙打' };
 
-const FONT = '標楷體';
-const thin = { style: 'thin' };
-const medium = { style: 'medium' };
+const KAI = '標楷體';
+const MED = { style: 'medium' };
 
 function lib(x) { return x || globalThis.ExcelJS; }
 
-function addBorder(cell, side, style = thin) {
-  cell.border = { ...(cell.border || {}), [side]: style };
+function addBorder(cell, side) {
+  cell.border = { ...(cell.border || {}), [side]: MED };
 }
 
-function pageSetup(ws) {
-  ws.pageSetup = {
-    paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
-    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
-  };
-}
-
-/** 依籤號查人 */
 function posIndex(entries, assign) {
   const m = new Map();
   if (!entries || !assign) return m;
@@ -32,189 +23,180 @@ function posIndex(entries, assign) {
   return m;
 }
 
+function setWidths(ws, widths) {
+  widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+}
+
+function a4(ws) {
+  ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+}
+
 // ---------------- 單淘汰 ----------------
+// 範本規則：
+// 籤號在 C 欄（跨兩列置中，對齊線的高度），A 學校、B 姓名；
+// 每一輪佔兩欄，第 h 輪的直線在 3 + 2h 欄的右框線（E、G、I、K、M…）；
+// 選手的線從 D 欄畫到第一場的直線那一欄；
+// 場次國字在直線左側靠右，前兩輪寫在直線那一欄，第三輪以後寫在前一欄；
+// 勝方的線從直線右一欄畫到下一場的直線那一欄。
+
+function hline(ws, row, from, to) {
+  for (let c = from; c <= to; c++) addBorder(ws.getCell(row, c), 'bottom');
+}
+
+function labelCell(ws, row, col, text, size = 12) {
+  const c = ws.getCell(row, col);
+  c.value = text;
+  c.font = { name: KAI, size };
+  c.alignment = { horizontal: 'right', vertical: 'middle' };
+}
 
 /**
- * 在工作表上畫一棵樹。
- * leafRows: Map(leafNode -> row)，leafText(leaf) -> [A, B, C] 欄內容
+ * 畫一棵樹。rowOf: Map(葉 -> 線所在列)，colOfH(h) -> 直線欄，
+ * hOf(node) -> 輪次高度，leafStart：葉的線從哪一欄開始。
+ * 回傳 Map(節點 -> 輸出線所在列)。
  */
-function drawTree(ws, root, isLeaf, leafRows, leafText, firstCol) {
-  const leaves = [];
-  (function f(n) { if (isLeaf(n)) leaves.push(n); else n.children.forEach(f); })(root);
-  const maxD = Math.max(...leaves.map(l => l.depth));
-  const colOf = n => firstCol + (maxD - n.depth);
-  const rowOf = new Map();
-  leaves.forEach(l => rowOf.set(l, leafRows.get(l)));
-  let rightMost = firstCol;
-
-  function line(row, fromCol, toCol) {
-    for (let c = fromCol; c <= toCol; c++) addBorder(ws.getCell(row, c), 'bottom', medium);
-  }
-
+function drawTree(ws, root, isLeaf, rowOf, hOf, colOfH, leafStart) {
+  const out = new Map();
   (function place(n, parentCol) {
     if (isLeaf(n)) {
       const r = rowOf.get(n);
-      const [a, b, c] = leafText(n);
-      const ca = ws.getCell(r, 1), cb = ws.getCell(r, 2), cc = ws.getCell(r, 3);
-      ca.value = a; cb.value = b; cc.value = c;
-      [ca, cb].forEach(x => { x.font = { name: FONT, size: 11 }; x.alignment = { vertical: 'bottom', shrinkToFit: true }; });
-      cc.font = { name: FONT, size: 10 }; cc.alignment = { horizontal: 'center', vertical: 'bottom' };
-      line(r, 1, parentCol - 1);
+      hline(ws, r, leafStart, parentCol);
+      out.set(n, r);
       return r;
     }
-    const pc = colOf(n);
-    rightMost = Math.max(rightMost, pc);
-    const rows = n.children.map(c => place(c, pc));
+    const h = hOf(n);
+    const vc = colOfH(h);
+    const rows = n.children.map(c => place(c, vc));
     const r1 = Math.min(...rows), r2 = Math.max(...rows);
-    for (let r = r1 + 1; r <= r2; r++) addBorder(ws.getCell(r, pc), 'left', medium);
+    for (let r = r1 + 1; r <= r2; r++) addBorder(ws.getCell(r, vc), 'right');
     const rm = Math.floor((r1 + r2) / 2);
-    const cell = ws.getCell(rm, pc);
-    cell.value = n.label || '';
-    cell.font = { name: FONT, size: 9 };
-    cell.alignment = { horizontal: 'center', vertical: 'bottom' };
-    line(rm, pc, (parentCol ?? pc + 2) - 1);
-    rowOf.set(n, rm);
+    labelCell(ws, rm, h <= 2 ? vc : vc - 1, n.label || '');
+    hline(ws, rm, vc + 1, parentCol ?? vc + 1);
+    out.set(n, rm);
     return rm;
   })(root, null);
-  return { rightMost: rightMost + 2 };
-}
-
-function setKoColumns(ws, nameWidth, nCols) {
-  ws.getColumn(1).width = 12;
-  ws.getColumn(2).width = nameWidth;
-  ws.getColumn(3).width = 4.5;
-  for (let c = 4; c <= 3 + nCols; c++) ws.getColumn(c).width = 5;
-}
-
-function title(ws, text, sub) {
-  const c = ws.getCell(1, 1);
-  c.value = text;
-  c.font = { name: FONT, size: 16, bold: true };
-  if (sub) {
-    const s = ws.getCell(1, 6);
-    s.value = sub;
-    s.font = { name: FONT, size: 10 };
-  }
-}
-
-function podium(ws, row, col) {
-  ['冠軍-', '亞軍-', '季軍-', '季軍-'].forEach((t, i) => {
-    const c = ws.getCell(row + i, col);
-    c.value = t;
-    c.font = { name: FONT, size: 11 };
-  });
+  return out;
 }
 
 function koSheets(wb, event, st, entries, assign) {
   const byPos = posIndex(entries, assign);
-  const isDouble = EVENT_TYPE[event] === 'double';
-  const nameWidth = isDouble ? 20 : 12;
-  const multi = st.sections.length > 1;
-  const isLeaf = n => n.kind === 'leaf';
-  const leafText = l => {
-    const e = byPos.get(l.pos);
-    return [e ? e.school : '', e ? e.name : '', l.pos];
-  };
+  const ws = wb.addWorksheet(event);
+  setWidths(ws, [8.7, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13]);
 
-  st.sections.forEach((s, i) => {
-    const ws = wb.addWorksheet(event + (s.letter || ''));
-    const depthSpan = Math.max(...st.leaves.filter(l => l.pos >= s.startPos && l.pos < s.startPos + s.size).map(l => l.depth)) - s.root.depth;
-    setKoColumns(ws, nameWidth, depthSpan + 3);
-    title(ws, EVENT_TITLE[event] + (multi ? `(${toCn(i + 1)})` : ''));
-    const rows = new Map();
-    let r = 3;
-    (function f(n) { if (isLeaf(n)) { rows.set(n, r); r += 2; } else n.children.forEach(f); })(s.root);
-    const { rightMost } = drawTree(ws, s.root, isLeaf, rows, leafText, 4);
-    if (!multi) podium(ws, 3, rightMost + 1);
-    ws.views = [{ showGridLines: false }];
-    pageSetup(ws);
+  // 各分區的高度一致（從分區冠軍往下算），讓不同大小的分區欄位對齊
+  const rel = (n, s) => n.depth - s.root.depth;
+  let H = 0;
+  st.sections.forEach(s => {
+    (function f(n) { if (n.kind === 'match') { H = Math.max(H, rel(n, s) + 1); n.children.forEach(f); } })(s.root);
   });
 
-  if (multi) {
-    const ws = wb.addWorksheet(event + '決賽');
-    const roots = new Set(st.sections.map(s => s.root));
-    const isL = n => roots.has(n);
-    const span = st.sections[0].root.depth;
-    setKoColumns(ws, 14, span + 3);
-    title(ws, EVENT_TITLE[event] + (st.sections.length === 4 ? ' 四強' : st.sections.length === 2 ? ' 決賽' : ' 八強'));
-    const rows = new Map();
-    let r = 4;
-    st.sections.forEach(s => { rows.set(s.root, r); r += 8; });
-    const txt = n => {
-      const s = st.sections.find(x => x.root === n);
-      return [`${s.letter}區`, `${n.label}勝`, ''];
-    };
-    const { rightMost } = drawTree(ws, st.root, isL, rows, txt, 4);
-    podium(ws, 3, rightMost + 1);
-    ws.views = [{ showGridLines: false }];
-    pageSetup(ws);
-  }
+  let row = 1;
+  st.sections.forEach(s => {
+    // 版面列：有資格賽的分區每格 4 列（單人在第 1 列，資格賽兩人在第 1、3 列），否則每人 2 列
+    const per = s.hasPairs ? 4 : 2;
+    const rowOf = new Map();
+    s.slots.forEach((slot, i) => {
+      const base = row + per * i;
+      if (slot.kind === 'leaf') rowOf.set(slot, base);
+      else { rowOf.set(slot.children[0], base); rowOf.set(slot.children[1], base + 2); }
+    });
+    for (const [lf, r] of rowOf) {
+      const e = byPos.get(lf.pos);
+      const put = (col, v, align) => {
+        ws.mergeCells(r, col, r + 1, col);
+        const c = ws.getCell(r, col);
+        c.value = v;
+        c.font = { name: KAI, size: 12 };
+        c.alignment = { horizontal: align, vertical: 'middle', shrinkToFit: true };
+      };
+      put(3, lf.pos, 'center');
+      if (e) { put(1, e.school, 'center'); put(2, e.name, 'center'); }
+    }
+    drawTree(ws, s.root, n => n.kind === 'leaf', rowOf, n => H - rel(n, s), h => 3 + 2 * h, 4);
+    row += per * s.slots.length;
+  });
+  for (let r = 1; r < row; r++) ws.getRow(r).height = 17.5;
+  ws.views = [{ showGridLines: false }];
+  a4(ws);
+
+  if (st.sections.length > 1) finalSheet(wb, event, st);
+}
+
+function finalSheet(wb, event, st) {
+  const ws = wb.addWorksheet(event + '決賽');
+  setWidths(ws, [8.7, 13, 13, 11.2, 8.7, 13, 13, 13, 13, 13, 13, 13, 13]);
+  const k = st.sections.length;
+  const t = ws.getCell(3, 2);
+  t.value = `${SHORT_TITLE[event] || event} ${k === 2 ? '冠亞' : k === 4 ? '四強' : '八強'}`;
+  t.font = { name: KAI, size: 18 };
+  ws.getRow(3).height = 25;
+  ['冠軍-', '亞軍-', '季軍-', '季軍-'].forEach((v, i) => {
+    const c = ws.getCell(4 + i, 8);
+    c.value = v;
+    c.font = { name: KAI, size: 16 };
+    ws.getRow(4 + i).height = 21.5;
+  });
+  const roots = new Set(st.sections.map(s => s.root));
+  const gap = k === 2 ? 12 : k === 4 ? 8 : 6;
+  const rowOf = new Map();
+  st.sections.forEach((s, i) => {
+    const r = 12 + gap * i;
+    rowOf.set(s.root, r);
+    ws.mergeCells(r, 4, r + 1, 4);
+    const c = ws.getCell(r, 4);
+    c.value = `${s.root.label}勝`;
+    c.font = { name: KAI, size: 18 };
+    c.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+  const top = st.root.depth; // 0
+  const levels = Math.log2(k);
+  drawTree(ws, st.root, n => roots.has(n), rowOf, n => levels - (n.depth - top), h => 7 + 2 * h, 5);
+  ws.views = [{ showGridLines: false }];
+  a4(ws);
 }
 
 // ---------------- 分組循環 ----------------
+// 範本：一個分頁，各區由上往下排，區與區之間空一列；
+// 第 1 列：「A區」、1..n、勝場、名次；第 2 列：隊名；之後每隊一列，左下半格填場次。
 
 function rrSheet(wb, event, st, entries, assign) {
   const byPos = posIndex(entries, assign);
-  const ws = wb.addWorksheet(event + '預賽');
+  const ws = wb.addWorksheet(event);
   const maxSize = Math.max(...st.groups.map(g => g.size));
-  ws.getColumn(1).width = 4;
-  ws.getColumn(2).width = 14;
-  for (let c = 3; c < 3 + maxSize; c++) ws.getColumn(c).width = 13;
-  ws.getColumn(3 + maxSize).width = 7;
-  ws.getColumn(4 + maxSize).width = 7;
-  const perPage = maxSize >= 4 ? 4 : 5;
-
+  setWidths(ws, Array(maxSize + 4).fill(13));
+  const box = (r, c, v, font = KAI) => {
+    const cell = ws.getCell(r, c);
+    if (v !== undefined) cell.value = v;
+    cell.font = { name: font, size: 14 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+    cell.border = { top: MED, left: MED, bottom: MED, right: MED };
+  };
   let r = 1;
-  st.groups.forEach((g, gi) => {
-    if (gi % perPage === 0) {
-      if (gi > 0) ws.getRow(r - 1).addPageBreak();
-      const t = ws.getCell(r, 1);
-      t.value = EVENT_TITLE[event] + ' 預賽';
-      t.font = { name: FONT, size: 16, bold: true };
-      const s = ws.getCell(r, 5);
-      s.value = '(預賽各組取前二晉級)';
-      s.font = { name: FONT, size: 10 };
-      r += 2;
-    }
+  st.groups.forEach(g => {
     const n = g.size;
     const names = Array.from({ length: n }, (_, j) => {
       const e = byPos.get(g.startPos + j);
       return e ? e.name : '';
     });
-    const box = (cell, v, opt = {}) => {
-      cell.value = v;
-      cell.font = { name: FONT, size: opt.size || 11 };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
-      cell.border = { top: thin, left: thin, bottom: thin, right: thin };
-      if (opt.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
-    };
     ws.mergeCells(r, 1, r + 1, 2);
-    box(ws.getCell(r, 1), `${g.letter}組`);
-    for (let j = 0; j < n; j++) {
-      box(ws.getCell(r, 3 + j), j + 1);
-      box(ws.getCell(r + 1, 3 + j), names[j]);
-    }
-    ws.mergeCells(r, 3 + n, r + 1, 3 + n); box(ws.getCell(r, 3 + n), '勝場');
-    ws.mergeCells(r, 4 + n, r + 1, 4 + n); box(ws.getCell(r, 4 + n), '名次');
+    box(r, 1, `${g.letter}區`, '微軟正黑體');
+    for (let j = 0; j < n; j++) { box(r, 3 + j, j + 1); box(r + 1, 3 + j, names[j]); }
+    ws.mergeCells(r, 3 + n, r + 1, 3 + n); box(r, 3 + n, '勝場');
+    ws.mergeCells(r, 4 + n, r + 1, 4 + n); box(r, 4 + n, '名次');
     const label = new Map(g.matches.map(m => [`${Math.min(m.a, m.b)}-${Math.max(m.a, m.b)}`, m.label]));
     for (let i = 1; i <= n; i++) {
       const rr = r + 1 + i;
-      box(ws.getCell(rr, 1), i);
-      box(ws.getCell(rr, 2), names[i - 1]);
-      for (let j = 1; j <= n; j++) {
-        const c = ws.getCell(rr, 2 + j);
-        if (j === i) box(c, '', { fill: true });
-        else if (j < i) box(c, label.get(`${j}-${i}`) || '');
-        else box(c, '');
-      }
-      box(ws.getCell(rr, 3 + n), '');
-      box(ws.getCell(rr, 4 + n), '');
-      ws.getRow(rr).height = 22;
+      box(rr, 1, i);
+      box(rr, 2, names[i - 1]);
+      for (let j = 1; j <= n; j++) box(rr, 2 + j, j < i ? (label.get(`${j}-${i}`) || '') : '', '微軟正黑體');
+      box(rr, 3 + n, '');
+      box(rr, 4 + n, '');
     }
-    r += n + 4;
+    for (let x = r; x <= r + 1 + n; x++) ws.getRow(x).height = 18;
+    r += n + 3;
   });
   ws.views = [{ showGridLines: false }];
-  pageSetup(ws);
+  a4(ws);
 }
 
 // ---------------- 名單類 ----------------
@@ -223,7 +205,7 @@ function whereOf(st, pos) {
   if (!pos) return '';
   if (st.kind === 'rr') {
     const g = st.groups.find(x => pos >= x.startPos && pos < x.startPos + x.size);
-    return g ? `${g.letter}組 ${pos - g.startPos + 1}號` : '';
+    return g ? `${g.letter}區 ${pos - g.startPos + 1}號` : '';
   }
   const s = st.sections.find(x => pos >= x.startPos && pos < x.startPos + x.size);
   return s && s.letter ? `${s.letter}區` : '';

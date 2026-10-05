@@ -174,7 +174,7 @@ export function checkDraw(entries, structure, assign) {
     : structure.groups.length;
   totals.forEach((t, school) => {
     if (structure.kind === 'rr' && t > structure.groups.length) {
-      warnings.push(`${school} 有 ${t} 隊，比組數 ${structure.groups.length} 多，一定有同組`);
+      warnings.push(`${school} 有 ${t} 隊，比區數 ${structure.groups.length} 多，一定有同區`);
     }
   });
   void units;
@@ -183,10 +183,10 @@ export function checkDraw(entries, structure, assign) {
 
 function nodeLabel(structure, node) {
   if (structure.kind === 'rr') {
-    if (node.kind === 'group') return `${node.letter} 組`;
+    if (node.kind === 'group') return `${node.letter} 區`;
     const gs = [];
     (function f(n) { if (n.kind === 'group') gs.push(n.letter); else n.children.forEach(f); })(node);
-    return `${gs[0]} 到 ${gs[gs.length - 1]} 組`;
+    return `${gs[0]} 到 ${gs[gs.length - 1]} 區`;
   }
   const ps = [];
   (function f(n) { if (n.kind === 'leaf') ps.push(n.pos); else n.children.forEach(f); })(node);

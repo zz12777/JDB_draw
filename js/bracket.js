@@ -53,8 +53,10 @@ export function sectionTree(x, startPos = 1) {
     if (pairs.has(s)) { slots.push(match(leaf(pos), leaf(pos + 1))); pos += 2; }
     else { slots.push(leaf(pos)); pos += 1; }
   }
-  const root = combine(slots);
+  const root = combine(slots.slice());
   if (pos - startPos !== x) throw new Error(`${x} 單敗結構錯誤`);
+  root.slots = slots;
+  root.hasPairs = pairs.size > 0;
   return root;
 }
 
@@ -106,7 +108,7 @@ export function buildKO(sizes) {
   let pos = 1;
   sizes.forEach((x, i) => {
     const root = sectionTree(x, pos);
-    sections.push({ index: i, letter: k > 1 ? LETTERS[i] : '', size: x, startPos: pos, root });
+    sections.push({ index: i, letter: k > 1 ? LETTERS[i] : '', size: x, startPos: pos, root, slots: root.slots, hasPairs: root.hasPairs });
     pos += x;
   });
   const root = combine(sections.map(s => s.root));
