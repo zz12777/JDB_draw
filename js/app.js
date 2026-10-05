@@ -430,7 +430,7 @@ function stepDraw() {
     ${chk.warnings.length ? `<div class="note warn"><b>需要留意</b><ul>${chk.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
       : (!chk.errors.length ? `<div class="note ok">${icon('check')} 檢查通過：每個人都有籤號，同校都已盡量分開。</div>` : '')}
     <p class="small muted">亂數代碼 <b>${esc(d.seed)}</b>，${new Date(d.time).toLocaleString('zh-TW')} 抽出${d.swaps ? `，之後手動對調 ${d.swaps} 次` : ''}。
-      要對調兩個籤位：先點一列，再點另一列。</p>
+      對調兩個籤位方式：先點一列，再點另一列。</p>
     <div class="tbl-wrap scroll"><table>
       <thead><tr><th class="num">籤號</th><th>位置</th>${st.kind === 'ko' ? '<th>首場</th>' : ''}<th>${unitWord(name)}</th><th>${nameWord(name)}</th><th>種子</th></tr></thead>
       <tbody>${Array.from({ length: st.positions }, (_, i) => i + 1).map(p => {
@@ -449,7 +449,7 @@ function stepDraw() {
       <button class="btn" data-run ${err ? 'disabled' : ''}>${icon('shuffle')}${d ? '重抽' : '開始抽籤'}</button></div>
     ${err ? `<div class="note bad">${esc(err)}，請回步驟 3 調整。</div>` : ''}
     ${stale ? `<div class="note warn">抽籤後名單或種子有變更，請重新抽籤。</div>` : ''}
-    <p class="small muted">規則：學校依人數由多到少處理，每間學校沿著籤表一路往下平均分配（上下半區、四分之一區…到各籤區），同校越晚相遇越好；種子固定在指定籤號。輸入之前的亂數代碼可以重現同一個結果。</p>
+    <p class="small muted">規則：學校依隊數/人數由多到少處理，每間學校沿著籤表一路往下平均分配（上下半區、四分之一區…到各籤區），同校越晚相遇越好。輸入之前的亂數代碼可以重現同一個結果。</p>
     ${result || (!err && !stale ? '<div class="empty">還沒抽籤</div>' : '')}
   </section>`;
 }
@@ -489,7 +489,7 @@ function stepExport() {
   <section class="panel">
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
-    <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名、種子與籤位，必要時手動調整，再公告或列印。</div>
+    <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名與籤位等。</div>
     <p class="small muted">完成籤表比照往年最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
@@ -544,8 +544,8 @@ function stepSheets() {
   $('#main').innerHTML = `
   <section class="panel">
     <h2>產生點單</h2>
-    <div class="note warn"><b>點單需再經人工檢查</b>：下載後請核對場次、籤號、校名與姓名，再列印。</div>
-    <p class="small muted">每個項目可以直接使用步驟 4 的抽籤結果，或上傳人工調整後的最終籤表 Excel（本系統下載的完成籤表，或往年格式）。上傳的籤表會依線條與場次位置讀出實際對戰。</p>
+    <div class="note warn"><b>點單需再經人工檢查</b>：下載後請與籤表核對場次、籤號、校名與姓名等。</div>
+    <p class="small muted">每個項目可以直接套用步驟 4 的抽籤結果，或上傳最終籤表 Excel。</p>
     <div class="row">
       <label class="field grow">賽事名稱（點單標題）<input type="text" value="${esc(st0.title)}" data-sset="title"></label>
       <label class="field">空白點單張數<input type="number" min="0" value="${st0.blanks}" data-sset="blanks"></label>
@@ -554,8 +554,8 @@ function stepSheets() {
     <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>項目</th><th>籤表來源</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <h3>格式</h3>
     <ul class="small">
-      <li>個人賽：一頁兩張，上半是前半場次、下半是後半場次（例如 130 張時，第 1 頁是第一場和第六六場），整疊對半裁切後疊起來就是場次順序。第一場顯示籤號、校名、姓名，之後的場次顯示「X勝」。</li>
-      <li>團體賽：一場一頁，五點（單單雙單單）。預賽場次為「(一)」、籤位為「A1」；決賽場次為「決(一)」，籤位為決賽籤號。</li>
+      <li>個人賽：一頁兩張，上半是前半場次、下半是後半場次（例如 130 張時，第 1 頁是第一場和第六六場），整疊對半裁切後疊起來就是場次順序。</li>
+      <li>團體賽：一場一頁，五點（單單雙單單）。</li>
       <li>最後會多附幾張空白點單，張數可在上方設定。</li>
     </ul>
   </section>`;
@@ -602,7 +602,7 @@ function stepHelp() {
   </section>
   <section class="panel">
     <h2>多台電腦使用</h2>
-    <p>網址每個人都能開，但每台電腦、每個瀏覽器的資料各自獨立，A 電腦做的校正，B 電腦看不到。
+    <p>每台電腦、每個瀏覽器的資料各自獨立，A 電腦做的校正，B 電腦看不到。
       要換電腦或交給別人接手，在原本的電腦「匯出專案檔」，到另一台「匯入專案檔」。</p>
     <p>建議抽籤由一個人操作，抽完後匯出專案檔，連同完成籤表一起放進共用資料夾存檔。</p>
   </section>
