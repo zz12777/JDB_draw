@@ -12,10 +12,6 @@ const MED = { style: 'medium' };
 
 function lib(x) { return x || globalThis.ExcelJS; }
 
-function addBorder(cell, side) {
-  cell.border = { ...(cell.border || {}), [side]: MED };
-}
-
 function posIndex(entries, assign) {
   const m = new Map();
   if (!entries || !assign) return m;
@@ -39,49 +35,63 @@ function a4(ws) {
 // 場次國字在直線左側靠右，前兩輪寫在直線那一欄，第三輪以後寫在前一欄；
 // 勝方的線從直線右一欄畫到下一場的直線那一欄。
 
-function hline(ws, row, from, to) {
-  for (let c = from; c <= to; c++) addBorder(ws.getCell(row, c), 'bottom');
+// 先記錄所有框線、合併與文字，最後一次套用（合併會覆蓋格式，所以框線最後畫）
+function makeOps() { return { borders: new Map(), merges: [], texts: [] }; }
+function opBorder(ops, r, c, side) {
+  const k = r + ',' + c;
+  if (!ops.borders.has(k)) ops.borders.set(k, new Set());
+  ops.borders.get(k).add(side);
 }
-
-function labelCell(ws, row, col, text, size = 12) {
-  const c = ws.getCell(row, col);
-  c.value = text;
-  c.font = { name: KAI, size };
-  c.alignment = { horizontal: 'right', vertical: 'middle' };
+function opLine(ops, row, from, to) { for (let c = from; c <= to; c++) opBorder(ops, row, c, 'bottom'); }
+function applyOps(ws, ops) {
+  for (const [r1, c1, r2, c2] of ops.merges) ws.mergeCells(r1, c1, r2, c2);
+  for (const t of ops.texts) {
+    const c = ws.getCell(t.r, t.c);
+    c.value = t.v;
+    // 合併後的格子共用同一個樣式物件，要換成新物件才不會互相影響
+    c.style = { ...c.style, font: { name: KAI, size: t.size || 12 },
+      alignment: { horizontal: t.h || 'right', vertical: 'middle', shrinkToFit: !!t.shrink } };
+  }
+  for (const [k, sides] of ops.borders) {
+    const [r, c] = k.split(',').map(Number);
+    const border = {};
+    sides.forEach(sd => { border[sd] = MED; });
+    const cell = ws.getCell(r, c);
+    cell.style = { ...cell.style, border };
+  }
 }
 
 /**
- * 畫一棵樹。rowOf: Map(葉 -> 線所在列)，colOfH(h) -> 直線欄，
- * hOf(node) -> 輪次高度，leafStart：葉的線從哪一欄開始。
- * 回傳 Map(節點 -> 輸出線所在列)。
+ * 畫一棵樹。rowOf: Map(葉 -> 線所在列)，hOf(node) -> 輪次高度，
+ * colOfH(h) -> 直線所在欄，leafStart：葉的線從哪一欄開始。
+ * 場次國字放在直線那一欄（緊貼直線左側），整段直線範圍合併後垂直置中。
  */
-function drawTree(ws, root, isLeaf, rowOf, hOf, colOfH, leafStart) {
-  const out = new Map();
+function drawTree(ops, root, isLeaf, rowOf, hOf, colOfH, leafStart) {
   (function place(n, parentCol) {
     if (isLeaf(n)) {
       const r = rowOf.get(n);
-      hline(ws, r, leafStart, parentCol);
-      out.set(n, r);
+      opLine(ops, r, leafStart, parentCol);
       return r;
     }
-    const h = hOf(n);
-    const vc = colOfH(h);
+    const vc = colOfH(hOf(n));
     const rows = n.children.map(c => place(c, vc));
     const r1 = Math.min(...rows), r2 = Math.max(...rows);
-    for (let r = r1 + 1; r <= r2; r++) addBorder(ws.getCell(r, vc), 'right');
+    for (let r = r1 + 1; r <= r2; r++) opBorder(ops, r, vc, 'right');
+    if (r2 > r1 + 1) ops.merges.push([r1 + 1, vc, r2, vc]);
+    ops.texts.push({ r: r1 + 1, c: vc, v: n.label || '' });
     const rm = Math.floor((r1 + r2) / 2);
-    labelCell(ws, rm, h <= 2 ? vc : vc - 1, n.label || '');
-    hline(ws, rm, vc + 1, parentCol ?? vc + 1);
-    out.set(n, rm);
+    opLine(ops, rm, vc + 1, parentCol ?? vc + 1);
     return rm;
   })(root, null);
-  return out;
 }
+
+const W = 8.73; // 範本欄寬
 
 function koSheets(wb, event, st, entries, assign) {
   const byPos = posIndex(entries, assign);
   const ws = wb.addWorksheet(event);
-  setWidths(ws, [8.7, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13]);
+  setWidths(ws, Array(24).fill(W));
+  const ops = makeOps();
 
   // 各分區的高度一致（從分區冠軍往下算），讓不同大小的分區欄位對齊
   const rel = (n, s) => n.depth - s.root.depth;
@@ -92,7 +102,7 @@ function koSheets(wb, event, st, entries, assign) {
 
   let row = 1;
   st.sections.forEach(s => {
-    // 版面列：有資格賽的分區每格 4 列（單人在第 1 列，資格賽兩人在第 1、3 列），否則每人 2 列
+    // 有資格賽的分區每格 4 列（單人在第 1 列，資格賽兩人在第 1、3 列），否則每人 2 列
     const per = s.hasPairs ? 4 : 2;
     const rowOf = new Map();
     s.slots.forEach((slot, i) => {
@@ -102,19 +112,17 @@ function koSheets(wb, event, st, entries, assign) {
     });
     for (const [lf, r] of rowOf) {
       const e = byPos.get(lf.pos);
-      const put = (col, v, align) => {
-        ws.mergeCells(r, col, r + 1, col);
-        const c = ws.getCell(r, col);
-        c.value = v;
-        c.font = { name: KAI, size: 12 };
-        c.alignment = { horizontal: align, vertical: 'middle', shrinkToFit: true };
+      const put = (col, v) => {
+        ops.merges.push([r, col, r + 1, col]);
+        ops.texts.push({ r, c: col, v, h: 'center', shrink: col < 3 });
       };
-      put(3, lf.pos, 'center');
-      if (e) { put(1, e.school, 'center'); put(2, e.name, 'center'); }
+      put(3, lf.pos);
+      if (e) { put(1, e.school); put(2, e.name); }
     }
-    drawTree(ws, s.root, n => n.kind === 'leaf', rowOf, n => H - rel(n, s), h => 3 + 2 * h, 4);
+    drawTree(ops, s.root, n => n.kind === 'leaf', rowOf, n => H - rel(n, s), h => 3 + 2 * h, 4);
     row += per * s.slots.length;
   });
+  applyOps(ws, ops);
   for (let r = 1; r < row; r++) ws.getRow(r).height = 17.5;
   ws.views = [{ showGridLines: false }];
   a4(ws);
@@ -124,33 +132,25 @@ function koSheets(wb, event, st, entries, assign) {
 
 function finalSheet(wb, event, st) {
   const ws = wb.addWorksheet(event + '決賽');
-  setWidths(ws, [8.7, 13, 13, 11.2, 8.7, 13, 13, 13, 13, 13, 13, 13, 13]);
+  setWidths(ws, [W, W, W, 11.18, ...Array(16).fill(W)]);
+  const ops = makeOps();
   const k = st.sections.length;
-  const t = ws.getCell(3, 2);
-  t.value = `${SHORT_TITLE[event] || event} ${k === 2 ? '冠亞' : k === 4 ? '四強' : '八強'}`;
-  t.font = { name: KAI, size: 18 };
-  ws.getRow(3).height = 25;
-  ['冠軍-', '亞軍-', '季軍-', '季軍-'].forEach((v, i) => {
-    const c = ws.getCell(4 + i, 8);
-    c.value = v;
-    c.font = { name: KAI, size: 16 };
-    ws.getRow(4 + i).height = 21.5;
-  });
+  ops.texts.push({ r: 3, c: 2, v: `${SHORT_TITLE[event] || event} ${k === 2 ? '冠亞' : k === 4 ? '四強' : '八強'}`, size: 18, h: 'left' });
+  ['冠軍-', '亞軍-', '季軍-', '季軍-'].forEach((v, i) => ops.texts.push({ r: 4 + i, c: 8, v, size: 16, h: 'left' }));
   const roots = new Set(st.sections.map(s => s.root));
   const gap = k === 2 ? 12 : k === 4 ? 8 : 6;
   const rowOf = new Map();
   st.sections.forEach((s, i) => {
     const r = 12 + gap * i;
     rowOf.set(s.root, r);
-    ws.mergeCells(r, 4, r + 1, 4);
-    const c = ws.getCell(r, 4);
-    c.value = `${s.root.label}勝`;
-    c.font = { name: KAI, size: 18 };
-    c.alignment = { horizontal: 'center', vertical: 'middle' };
+    ops.merges.push([r, 4, r + 1, 4]);
+    ops.texts.push({ r, c: 4, v: `${s.root.label}勝`, size: 18, h: 'center' });
   });
-  const top = st.root.depth; // 0
   const levels = Math.log2(k);
-  drawTree(ws, st.root, n => roots.has(n), rowOf, n => levels - (n.depth - top), h => 7 + 2 * h, 5);
+  drawTree(ops, st.root, n => roots.has(n), rowOf, n => levels - n.depth, h => 7 + 2 * h, 5);
+  applyOps(ws, ops);
+  ws.getRow(3).height = 25;
+  for (let i = 4; i < 8; i++) ws.getRow(i).height = 21.5;
   ws.views = [{ showGridLines: false }];
   a4(ws);
 }

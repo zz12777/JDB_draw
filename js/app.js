@@ -21,6 +21,7 @@ const ICON = {
   open: '<path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
   reset: '<path d="M4 4v6h6"/><path d="M5 15a8 8 0 1 0 1-9L4 10"/>',
   swap: '<path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17v.5"/>',
 };
 const icon = n => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -86,15 +87,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}"><span class="n">${i + 1}</span>${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 5 ? `<span class="n">${i + 1}</span>` : icon('help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -479,6 +480,36 @@ async function dlBlank(name) {
 }
 async function dlOrder(name) {
   download(await workbookBlob(orderWorkbook(name, ev(name).entries)), `${name}_抽籤順序表.xlsx`);
+}
+
+// ---------------- 使用說明 ----------------
+function stepHelp() {
+  $('#main').innerHTML = `
+  <section class="panel">
+    <h2>專案檔</h2>
+    <p>網頁不會把資料存到任何伺服器，進度只存在這台電腦的瀏覽器裡。</p>
+    <div class="kv">
+      <b>匯出專案檔</b><span>把目前的名單、校名修正、籤表設定和抽籤結果，存成一個 .json 檔。可以當備份，也可以交接給別人或下一屆。</span>
+      <b>匯入專案檔</b><span>讀回那個 .json 檔，就能從存檔的地方繼續。</span>
+      <b>清除全部</b><span>清掉這台電腦上的所有資料，例如要從頭開始，或用公用電腦做完要清掉個資時。</span>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>多台電腦使用</h2>
+    <p>網址每個人都能開，但每台電腦、每個瀏覽器的資料各自獨立，A 電腦做的校正，B 電腦看不到。
+      要換電腦或交給別人接手，在原本的電腦「匯出專案檔」，到另一台「匯入專案檔」。</p>
+    <p>建議抽籤由一個人操作，抽完後匯出專案檔，連同完成籤表一起放進共用資料夾存檔。</p>
+  </section>
+  <section class="panel">
+    <h2>流程</h2>
+    <ol>
+      <li><b>上傳表單回應</b>：Google 試算表「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，男子組、女子組、社會組各一份。整列劃掉的回應預設不採用，格子裡劃掉的名字直接排除。</li>
+      <li><b>名單校正</b>：檢查名單、統一校名、加入地主隊與保留名額、設定種子籤號。</li>
+      <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
+      <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
+      <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果。</li>
+    </ol>
+  </section>`;
 }
 
 // ---------------- 事件 ----------------
