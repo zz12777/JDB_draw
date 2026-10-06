@@ -708,15 +708,15 @@ function stepStrong() {
   <section class="panel">
     <div class="row"><h2>資料庫涵蓋範圍</h2><span class="spacer"></span>
       <a class="btn ghost" href="${SHEET_EDIT}" target="_blank" rel="noopener">${icon('open')}開啟共用試算表</a></div>
-    <p class="small">要新增成績，請到共用試算表新增（請用交大盃信箱開啟），存檔後重新整理這個網頁就會更新。</p>
+    <p class="small">可於共用試算表新增成績（請用交大盃信箱帳號開啟），存檔後重新整理這個網頁就會更新。</p>
     <p class="small muted">${sheetStatus.state === 'ok' ? `目前資料：共用試算表，${sheetStatus.count} 筆，${new Date(sheetStatus.time).toLocaleString('zh-TW')} 讀取。`
       : sheetStatus.state === 'loading' ? '正在讀取共用試算表，先顯示網頁內建資料。'
       : `讀不到共用試算表（${esc(sheetStatus.msg)}），先用網頁內建資料。`}</p>
     <div class="kv">${cov.map(c => `<b>${esc(KIND_TEXT[c.k] || c.k)}</b><span>${esc(c.items.join('、'))}</span>`).join('')}</div>
-    <p class="small muted">用人名比對，換學校也找得到。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是分區預賽與盃賽。公開組選手只能報社會組，不列在下方資料庫，但一樣會用在社會組的燈號。</p>
+    <p class="small muted">用人名比對。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是分區預賽與盃賽。</p>
   </section>
   <section class="panel">
-    <h2>本屆名單裡的猛將</h2>
+    <h2>目前名單裡的猛將</h2>
     ${groups.length ? groups.map(g => `
       <details class="fold" data-fold="${g.name}" ${strongOpen.has(g.name) ? 'open' : ''}>
         <summary>${g.name}<span class="muted small">　${g.rows.length} ${g.isTeam ? '隊' : '筆'}</span></summary>
