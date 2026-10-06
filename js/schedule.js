@@ -20,6 +20,8 @@ export const DEFAULT_PARAMS = {
   teamStartStage: 8, // 個人賽打到幾強時，大專團體預賽開始
   socialStartRound: 2, // 社會組預賽在大專團體決賽第幾輪開始
   drawMin: 20,   // 決賽抽籤
+  finalDay1: true, // 第一天時間許可時，先打大專團體決賽第一輪
+  day1Latest: '20:00', // 第一天最晚結束
   roundTo: 10,   // 時段長度取整（分鐘）
 };
 
@@ -129,46 +131,6 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
     day1.push({ id: 'd1-draw', items: [], est: p.drawMin, draw: '決賽抽籤', tableMin: 0, minLen: p.drawMin });
   }
 
-  // ---------- 第二天：大專團體決賽、社會組 ----------
-  const finals = TEAM.filter(e => structs[e] && structs[e].kind === 'rr' && structs[e].groups.length >= 1);
-  const ko = {};
-  finals.forEach(e => { ko[e] = buildKO([structs[e].groups.length * 2]); });
-  const teamUnit = (depth, first) => (depth <= 1 ? { unit: p.tSemi, split: p.splitSemi } : first ? { unit: p.tAfterDraw, split: p.split } : { unit: p.tFinal, split: p.split });
-  const koItems = (e, k, d, afterDraw) => {
-    const r = k.rounds.find(x => x.depth === d);
-    if (!r) return null;
-    const first = afterDraw && d === Math.max(...k.matches.map(m => m.depth));
-    const { unit, split } = teamUnit(d, first);
-    return { event: e, count: r.count, unit, text: frange(r.from, r.to), tableMin: r.count * unit, minLen: unit / split };
-  };
-  const day2 = [];
-  const social = structs['社團'] && structs['社團'].kind === 'rr' ? structs['社團'] : null;
-  const fD = Math.max(-1, ...finals.map(e => Math.max(...ko[e].matches.map(m => m.depth))));
-  const socRounds = social ? social.rounds : [];
-  const socStart = Math.max(1, +p.socialStartRound || 1);
-  let j = 0, sr = 0;
-  for (let d = fD; d >= 0 || sr < socRounds.length; d--) {
-    j++;
-    const items = [];
-    if (d >= 0) finals.forEach(e => { const x = koItems(e, ko[e], d, false); if (x) items.push(x); });
-    if (social && j >= socStart && sr < socRounds.length) {
-      const x = socRounds[sr++];
-      items.push({ event: '社團', count: x.count, unit: p.tPre, text: range(x.from, x.to), tableMin: x.count * p.tPre, minLen: p.tPre / p.split });
-    }
-    if (!items.length) continue;
-    day2.push(slot(`d2-s${j}`, items));
-    if (d < 0 && sr >= socRounds.length) break;
-  }
-  if (social && social.groups.length) {
-    day2.push({ id: 'd2-draw', items: [], est: p.drawMin, draw: '決賽抽籤', drawCol: '社團', tableMin: 0, minLen: p.drawMin });
-    const k = buildKO([social.groups.length * 2]);
-    const sd = Math.max(...k.matches.map(m => m.depth));
-    for (let d = sd; d >= 0; d--) {
-      const x = koItems('社團', k, d, true);
-      if (x) day2.push(slot(`d2-f${d}`, [x]));
-    }
-  }
-
   // ---------- 時段長度與時間 ----------
   function place(rows, start, blockNeed) {
     let t = start;
@@ -187,7 +149,72 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
     });
     return t;
   }
+  // ---------- 大專團體決賽 ----------
+  const finals = TEAM.filter(e => structs[e] && structs[e].kind === 'rr' && structs[e].groups.length >= 1);
+  const ko = {}, top = {};
+  finals.forEach(e => { ko[e] = buildKO([structs[e].groups.length * 2]); top[e] = Math.max(...ko[e].matches.map(m => m.depth)); });
+  const teamUnit = (depth, first) => (depth <= 1 ? { unit: p.tSemi, split: p.splitSemi } : first ? { unit: p.tAfterDraw, split: p.split } : { unit: p.tFinal, split: p.split });
+  const koItems = (e, k, d, afterDraw) => {
+    const r = k.rounds.find(x => x.depth === d);
+    if (!r) return null;
+    const first = afterDraw && d === Math.max(...k.matches.map(m => m.depth));
+    const { unit, split } = teamUnit(d, first);
+    return { event: e, count: r.count, unit, text: frange(r.from, r.to), tableMin: r.count * unit, minLen: unit / split };
+  };
+
+  // 第一天時間許可（抽籤後打完不超過最晚結束時間），最多先打決賽第一輪：先試兩項一起，不行再試單一項（女團先）
   const s1 = toMin(p.day1Start), s2 = toMin(p.day2Start);
+  const moved = new Set();
+  if (p.finalDay1 && finals.length && day1.some(r => r.draw)) {
+    const endNow = place(day1, s1, day1.blockNeed);
+    const latest = toMin(p.day1Latest || '20:00');
+    const tries = [finals, ...finals.slice().reverse().map(e => [e])];
+    for (const es of tries) {
+      const items = es.map(e => koItems(e, ko[e], top[e], true)).filter(Boolean);
+      if (!items.length) continue;
+      const sl = slot('d1-f1', items);
+      sl.teamItems = items; sl.items = []; sl.teamSpan = 1;
+      const len = override['d1-f1'] != null ? +override['d1-f1'] : roundTo(sl.est, p.roundTo);
+      if (endNow + len <= latest) { day1.push(sl); es.forEach(e => moved.add(e)); break; }
+    }
+  }
+
+  // ---------- 第二天：大專團體決賽、社會組 ----------
+  // 大專決賽各輪：男女團各自從自己的第一輪開始，第 j 個時段放兩項各自的第 j 輪
+  const uniRounds = [];
+  finals.forEach(e => {
+    let j = 0;
+    for (let d = top[e] - (moved.has(e) ? 1 : 0); d >= 0; d--) {
+      const x = koItems(e, ko[e], d, false);
+      if (!x) continue;
+      (uniRounds[j] = uniRounds[j] || []).push(x);
+      j++;
+    }
+  });
+  const day2 = [];
+  const social = structs['社團'] && structs['社團'].kind === 'rr' ? structs['社團'] : null;
+  const socRounds = social ? social.rounds : [];
+  const socStart = Math.max(1, +p.socialStartRound || 1) - 1;
+  const nSlots = Math.max(uniRounds.length, socRounds.length ? socStart + socRounds.length : 0);
+  for (let j = 0; j < nSlots; j++) {
+    const items = [...(uniRounds[j] || [])];
+    const sr = j - (uniRounds.length ? socStart : 0);
+    if (sr >= 0 && sr < socRounds.length) {
+      const x = socRounds[sr];
+      items.push({ event: '社團', count: x.count, unit: p.tPre, text: range(x.from, x.to), tableMin: x.count * p.tPre, minLen: p.tPre / p.split });
+    }
+    if (items.length) day2.push(slot(`d2-s${j + 1}`, items));
+  }
+  if (social && social.groups.length) {
+    day2.push({ id: 'd2-draw', items: [], est: p.drawMin, draw: '決賽抽籤', drawCol: '社團', tableMin: 0, minLen: p.drawMin });
+    const k = buildKO([social.groups.length * 2]);
+    const sd = Math.max(...k.matches.map(m => m.depth));
+    for (let d = sd; d >= 0; d--) {
+      const x = koItems('社團', k, d, true);
+      if (x) day2.push(slot(`d2-f${d}`, [x]));
+    }
+  }
+
   const e1 = place(day1, s1, day1.blockNeed);
   const e2 = place(day2, s2, 0);
   let cum = 0;

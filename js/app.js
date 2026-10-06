@@ -688,7 +688,7 @@ function stepTime() {
     <div class="row"><h2>賽程時間表</h2><span class="spacer"></span>
       ${Object.keys(ov).length ? `<button class="btn ghost" data-ovreset>${icon('reset')}長度全部改回估算</button>` : ''}
       <button class="btn" data-dlsched>${icon('download')}下載 Excel</button></div>
-    <p class="small muted">依步驟 3 的籤表規劃自動排。每個時段：把這段所有比賽佔用桌子的分鐘數加起來，除以桌數，就是這段要多久；場次少的時候，至少要等最久的一場打完。第一天個人賽＋大專團體預賽，第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
+    <p class="small muted">依步驟 3 的籤表規劃自動排。每個時段：把這段所有比賽佔用桌子的分鐘數加起來，除以桌數，就是這段要多久；場次少的時候，至少要等最久的一場打完。第一天個人賽＋大專團體預賽（時間許可時再打大專團體決賽第一輪），第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
     ${problems.length ? `<div class="note warn"><b>這些項目沒有排進來</b><ul>${problems.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     <div class="kv">
       <b>第一天</b><span>${fmtTime(sch.start1)} 開打，預估 <b>${fmtTime(sch.end1)}</b> 結束（單打 ${sm.singles} 場、雙打 ${sm.doubles} 場、大專團體預賽 ${sm.teamPre} 場）</span>
@@ -722,6 +722,8 @@ function stepTime() {
           <label class="field">大專團體預賽開始<select data-sp="teamStartStage">${[16, 8, 4].map(v => `<option value="${v}" ${+p.teamStartStage === v ? 'selected' : ''}>個人賽打到 ${v} 強時</option>`).join('')}</select></label>
           <label class="field">社會組預賽開始<select data-sp="socialStartRound">${[1, 2, 3].map(v => `<option value="${v}" ${+p.socialStartRound === v ? 'selected' : ''}>大專決賽第 ${v} 輪時</option>`).join('')}</select></label>
           ${num('drawMin', '決賽抽籤')}${num('roundTo', '時段取整到')}
+          <label class="field">第一天最晚結束<input type="time" value="${p.day1Latest}" data-sp="day1Latest"></label>
+          <label class="field" style="flex-direction:row;align-items:center;gap:6px;margin-top:18px"><input type="checkbox" ${p.finalDay1 ? 'checked' : ''} data-sp="finalDay1">時間許可時，第一天先打大專團體決賽第一輪</label>
           <button class="btn ghost" data-spreset>${icon('reset')}參數改回預設</button>
         </div>
       </div>
@@ -913,8 +915,9 @@ function stepHelp() {
         </ul></li>
       <li><b>排成兩天</b>
         <ul>
-          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。接著預賽第二、三輪，最後決賽抽籤。</li>
-          <li>第二天：大專團體決賽一輪一輪打，社會組預賽從大專決賽第 2 輪開始一起進行。打完後社會組決賽抽籤，接著社會組決賽。</li>
+          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。接著預賽第二、三輪，再來決賽抽籤。</li>
+          <li>抽完籤如果時間還早，第一天會先打大專團體決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完。先試男女團一起打，放不下就只排一項（女團先），都放不下就全部留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
+          <li>第二天：大專團體決賽一輪一輪打（男女團各自從還沒打的那一輪開始），社會組預賽從大專決賽第 2 輪開始一起進行。打完後社會組決賽抽籤，接著社會組決賽。</li>
         </ul></li>
       <li><b>手動調整</b>：每個時段的「長度」可以改，例如湊成整點或半點，後面的時間會跟著順延。時間差 ＝ 長度減估算，正數表示抓得比較寬鬆，紅字表示可能會延遲。參數（桌數、每場分鐘、開始時機）都可以改，按「參數改回預設」就回到往年數值。</li>
       <li><b>下載 Excel</b>：第一頁是時間預定表，格式比照往年；第二頁「估算明細」列出每個時段的場數、分鐘和時間差，方便核對。</li>
@@ -1000,10 +1003,10 @@ document.addEventListener('toggle', ev0 => {
 
 document.addEventListener('change', ev0 => {
   if (d0(ev0).sp) {
-    const k = ev0.target.dataset.sp, v = ev0.target.value;
+    const k = ev0.target.dataset.sp, v = ev0.target.type === 'checkbox' ? ev0.target.checked : ev0.target.value;
     const P = S.schedule.params;
     if (k.includes('.')) { const [a, i] = k.split('.'); P[a] = [...(P[a] || DEFAULT_PARAMS[a])]; P[a][+i] = Math.max(0, +v || 0); }
-    else P[k] = typeof DEFAULT_PARAMS[k] === 'number' ? Math.max(0, +v || 0) : v;
+    else P[k] = typeof DEFAULT_PARAMS[k] === 'number' ? Math.max(0, +v || 0) : v; // 勾選框是 true/false
     if (k === 'tables' && !P[k]) P[k] = DEFAULT_PARAMS.tables;
     return render();
   }
