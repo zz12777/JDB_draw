@@ -7,27 +7,64 @@ const TEAM_EV = new Set(['男團', '女團', '社團']);
 
 export const cleanName = s => String(s ?? '').replace(/[\s　]+/g, '').replace(/黄/g, '黃');
 
-/** 姓名 → { name, schools, ind: [紀錄], team: [紀錄] } */
-const INDEX = new Map();
-for (const r of STRONG) {
-  for (const n of r.n) {
-    const k = cleanName(n);
-    if (!INDEX.has(k)) INDEX.set(k, { name: k, schools: [], ind: [], team: [] });
-    const p = INDEX.get(k);
-    if (!p.schools.includes(r.u)) p.schools.push(r.u);
-    (TEAM_EV.has(r.e) ? p.team : p.ind).push(r);
-  }
-}
 // 成績由近到遠；同一年全大運在前
 const KORD = { 全大運: 0, 分區預賽: 1, 盃賽: 2 };
 const byRecent = (x, y) => (y.y - x.y) || ((KORD[x.k] ?? 3) - (KORD[y.k] ?? 3)) || (x.r - y.r);
-INDEX.forEach(p => { p.ind.sort(byRecent); p.team.sort(byRecent); });
-const NAMES = [...INDEX.keys()].sort((a, b) => b.length - a.length);
+
+/** 姓名 → { name, schools, ind: [紀錄], team: [紀錄] } */
+let DATA = [];
+const INDEX = new Map();
+let NAMES = [];
+
+/** 換一份資料（內建資料或共用試算表） */
+export function setData(records) {
+  DATA = records;
+  INDEX.clear();
+  for (const r of records) {
+    for (const n of r.n) {
+      const k = cleanName(n);
+      if (!k) continue;
+      if (!INDEX.has(k)) INDEX.set(k, { name: k, schools: [], ind: [], team: [] });
+      const p = INDEX.get(k);
+      if (r.u && r.d !== '社會' && !p.schools.includes(r.u)) p.schools.push(r.u); // 社會組的隊名不當學校
+      (TEAM_EV.has(r.e) ? p.team : p.ind).push(r);
+    }
+  }
+  INDEX.forEach(p => { p.ind.sort(byRecent); p.team.sort(byRecent); });
+  NAMES = [...INDEX.keys()].sort((a, b) => b.length - a.length);
+}
+setData(STRONG);
+
+/**
+ * 共用試算表（成績總表）的 CSV 轉成資料。
+ * 欄位：賽事、年份、組別、項目、名次、學校、隊名、姓名（依標題找欄位，順序可不同，可多欄）
+ */
+export function recordsFromRows(rows, normSchool = x => x) {
+  const hi = rows.findIndex(r => r && r.some(c => String(c).trim() === '姓名') && r.some(c => String(c).trim() === '賽事'));
+  if (hi < 0) throw new Error('找不到「賽事」「姓名」標題列');
+  const H = rows[hi].map(c => String(c).trim());
+  const col = name => H.indexOf(name);
+  const C = { s: col('賽事'), y: col('年份'), d: col('組別'), e: col('項目'), r: col('名次'), u: col('學校'), t: col('隊名'), n: col('姓名') };
+  const get = (row, k) => (C[k] >= 0 ? String(row[C[k]] ?? '').trim() : '');
+  const out = [];
+  for (const row of rows.slice(hi + 1)) {
+    if (!row) continue;
+    const ev = get(row, 's'), y = parseInt(get(row, 'y'), 10), r = parseInt(get(row, 'r'), 10);
+    const names = get(row, 'n').split(/[、,，/／;；\s]+/).map(cleanName).filter(x => x && !/名單缺/.test(x));
+    if (!ev || !names.length || !r) continue;
+    const k = /預賽/.test(ev) ? '分區預賽' : /全大運/.test(ev) ? '全大運' : '盃賽';
+    const m = ev.match(/^(.+?)(第.+屆)$/);
+    const label = m ? m[2] + m[1] : /屆/.test(ev) ? ev : `${Number.isNaN(y) ? '' : y}${ev}`;
+    out.push({ y: Number.isNaN(y) ? 0 : y, k, s: label, d: get(row, 'd').replace(/組$/, ''), e: get(row, 'e'), r,
+      u: normSchool(get(row, 'u')), t: get(row, 't'), n: names });
+  }
+  return out;
+}
 
 /** 資料涵蓋範圍，依資料自動產生：[{ k, items: ['112全大運', ...] }] */
 export function coverage() {
   const m = new Map();
-  for (const r of STRONG) {
+  for (const r of DATA) {
     if (!m.has(r.k)) m.set(r.k, new Map());
     m.get(r.k).set(r.s, r.y);
   }

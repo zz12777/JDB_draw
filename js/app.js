@@ -3,12 +3,13 @@ import { parseResponses, buildEntries, EVENTS, ALL_EVENTS, EVENT_TYPE, KIND_LABE
 import { readFormFile, readWorkbookValues } from './reader.js';
 import { parseFinalBracket } from './finalparse.js';
 import { scoresheetDocx, scoresheetPages, PDF_CSS, DEFAULT_TITLE } from './scoresheet.js';
-import { looseKey } from './schools.js';
+import { looseKey, extractSchool, normalizeText } from './schools.js';
 import * as B from './bracket.js';
 import { runDraw, checkDraw, swapPositions } from './draw.js';
 import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrder } from './excel.js';
 import { newSeed, uid, toCn } from './util.js';
-import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage } from './strong.js';
+import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage, setData, recordsFromRows } from './strong.js';
+import { parseCsvText } from './reader.js';
 
 // ---------------- 圖示（線條） ----------------
 const ICON = {
@@ -633,6 +634,27 @@ async function handleSheetUpload(file, name) {
 // ---------------- 使用說明 ----------------
 // ---------------- 猛將資料庫 ----------------
 let strongQ = '', strongAll = false;
+// 共用試算表：大家在這裡新增成績，網頁打開時讀「發布到網路」的 CSV
+const SHEET_EDIT = 'https://docs.google.com/spreadsheets/d/1oXrar8-PJ2dkPQxfqPcpRjuZymbHljeCh486AXuX5Cc/edit?usp=sharing';
+const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTDauYybFKVAo7xdR7NMbbJHzMYay7B-PcLa2v70E0wg-NUGHdox11mMWoiFMW_f_Q9mWlop_n-UC_q/pub?gid=1568254390&single=true&output=csv';
+let sheetStatus = { state: 'loading' };
+async function loadSheet() {
+  sheetStatus = { state: 'loading' };
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    const res = await fetch(SHEET_CSV + '&t=' + Date.now(), { signal: ctl.signal, cache: 'no-store' });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const recs = recordsFromRows(parseCsvText(await res.text()), u => extractSchool(u) || normalizeText(u));
+    if (!recs.length) throw new Error('試算表沒有資料');
+    setData(recs);
+    sheetStatus = { state: 'ok', time: Date.now(), count: recs.length };
+  } catch (err) {
+    sheetStatus = { state: 'fail', msg: err.name === 'AbortError' ? '逾時' : err.message };
+  }
+  if (S.step === 3 || S.step === 6) render();
+}
 const strongOpen = new Set();
 const KIND_TEXT = { 全大運: '全大運決賽前八', 分區預賽: '全大運分區預賽前四', 盃賽: '交大盃與其他盃賽前四' };
 /** 一串成績：全大運用藍色，其他用黑色 */
@@ -684,7 +706,12 @@ function stepStrong() {
   const cov = coverage();
   $('#main').innerHTML = `
   <section class="panel">
-    <h2>資料庫涵蓋範圍</h2>
+    <div class="row"><h2>資料庫涵蓋範圍</h2><span class="spacer"></span>
+      <a class="btn ghost" href="${SHEET_EDIT}" target="_blank" rel="noopener">${icon('open')}開啟共用試算表</a></div>
+    <p class="small">要新增成績，請到共用試算表新增（請用交大盃信箱開啟），存檔後重新整理這個網頁就會更新。</p>
+    <p class="small muted">${sheetStatus.state === 'ok' ? `目前資料：共用試算表，${sheetStatus.count} 筆，${new Date(sheetStatus.time).toLocaleString('zh-TW')} 讀取。`
+      : sheetStatus.state === 'loading' ? '正在讀取共用試算表，先顯示網頁內建資料。'
+      : `讀不到共用試算表（${esc(sheetStatus.msg)}），先用網頁內建資料。`}</p>
     <div class="kv">${cov.map(c => `<b>${esc(KIND_TEXT[c.k] || c.k)}</b><span>${esc(c.items.join('、'))}</span>`).join('')}</div>
     <p class="small muted">用人名比對，換學校也找得到。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是分區預賽與盃賽。公開組選手只能報社會組，不列在下方資料庫，但一樣會用在社會組的燈號。</p>
   </section>
@@ -930,3 +957,4 @@ $('#btn-reset').onclick = () => {
 };
 
 render();
+loadSheet();

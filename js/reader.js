@@ -47,6 +47,11 @@ export function readCsv(buffer) {
   } catch {
     text = new TextDecoder('big5').decode(bytes);
   }
+  return parseCsvText(text);
+}
+
+/** CSV 文字轉成二維陣列（支援引號與換行） */
+export function parseCsvText(text) {
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const rows = [];
   let row = [], field = '', q = false;
