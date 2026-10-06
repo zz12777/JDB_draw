@@ -18,6 +18,7 @@ let NAMES = [];
 
 /** 換一份資料（內建資料或共用試算表） */
 export function setData(records) {
+  records = records.filter(r => r.k !== '分區預賽'); // 分區預賽不列入，只看全大運決賽與盃賽
   DATA = records;
   INDEX.clear();
   for (const r of records) {

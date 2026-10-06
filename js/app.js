@@ -636,18 +636,29 @@ async function handleSheetUpload(file, name) {
 // ---------------- 使用說明 ----------------
 // ---------------- 賽程時間表 ----------------
 const schParams = () => ({ ...DEFAULT_PARAMS, ...(S.schedule.params || {}) });
+/** 每個項目的籤表：有上傳最終籤表就用上傳的，沒有就用步驟 3 的籤表規劃 */
 function scheduleStructs() {
-  const structs = {}, problems = [];
-  activeEvents().forEach(name => {
+  const structs = {}, problems = [], from = {};
+  ALL_EVENTS.forEach(name => {
+    const up = uploadSource(name);
+    if (up) { structs[name] = up.st; from[name] = up.label; return; }
+    if (!activeEvents().includes(name)) return;
     const { st, err } = structureOf(name);
-    if (st) structs[name] = st; else problems.push(`${name}：${err}`);
+    if (st) { structs[name] = st; from[name] = '籤表規劃'; } else problems.push(`${name}：${err}`);
   });
-  return { structs, problems };
+  return { structs, problems, from };
 }
 function stepTime() {
-  const { structs, problems } = scheduleStructs();
+  const { structs, problems, from } = scheduleStructs();
+  const srcRows = ALL_EVENTS.map(name => `<tr><td>${name}</td><td>${from[name] ? esc(from[name]) : '<span class="muted">沒有籤表</span>'}</td>
+    <td><div class="row"><label class="btn ghost sm">${icon('upload')}上傳完成籤表<input type="file" accept=".xlsx" hidden data-sheetup="${name}"></label>
+    ${S.sheetUploads[name] ? `<button class="btn ghost sm" data-sheetclear="${name}">${icon('reset')}改用籤表規劃</button>` : ''}</div></td></tr>`).join('');
+  const srcPanel = `<section class="panel"><details class="fold" data-fold="sched-src" ${strongOpen.has('sched-src') || !Object.keys(structs).length ? 'open' : ''}>
+    <summary>籤表來源（${Object.keys(structs).length} 項）</summary>
+    <div style="padding:12px 14px"><p class="small muted">可以上傳各項目的完成籤表 Excel（跟點單共用）；沒上傳的項目用步驟 3 的籤表規劃。</p>
+    <div class="tbl-wrap"><table><thead><tr><th>項目</th><th>來源</th><th></th></tr></thead><tbody>${srcRows}</tbody></table></div></div></details></section>`;
   if (!Object.keys(structs).length) {
-    $('#main').innerHTML = `<section class="panel"><div class="empty">還沒有籤表規劃，請先完成步驟 1 到 3。</div></section>`;
+    $('#main').innerHTML = `${srcPanel}<section class="panel"><div class="empty">還沒有籤表：請上傳完成籤表，或先完成步驟 1 到 3。</div></section>`;
     return;
   }
   const p = schParams();
@@ -676,13 +687,14 @@ function stepTime() {
     <div class="row"><h2>賽程時間表</h2><span class="spacer"></span>
       ${Object.keys(ov).length ? `<button class="btn ghost" data-ovreset>${icon('reset')}長度全部改回估算</button>` : ''}
       <button class="btn" data-dlsched>${icon('download')}下載 Excel</button></div>
-    <p class="small muted">依步驟 3 的籤表規劃自動排。每個時段：把這段所有比賽佔用桌子的分鐘數加起來，除以桌數，就是這段要多久；場次少的時候，至少要等最久的一場打完。第一天個人賽＋大專團體預賽（時間許可時再打大專團體決賽第一輪），第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
+    <p class="small muted">依完成籤表或步驟 3 的籤表規劃自動排。每個時段：把這段所有比賽佔用桌子的分鐘數加起來，除以桌數，就是這段要多久；場次少的時候，至少要等最久的一場打完。第一天個人賽＋大專團體預賽（時間許可時再打大專團體決賽第一輪），第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
     ${problems.length ? `<div class="note warn"><b>這些項目沒有排進來</b><ul>${problems.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     <div class="kv">
       <b>第一天</b><span>${fmtTime(sch.start1)} 開打，預估 <b>${fmtTime(sch.end1)}</b> 結束（單打 ${sm.singles} 場、雙打 ${sm.doubles} 場、大專團體預賽 ${sm.teamPre} 場）</span>
       <b>第二天</b><span>${fmtTime(sch.start2)} 開打，預估 <b>${fmtTime(sch.end2)}</b> 結束（大專團體決賽 ${sm.teamFinal} 場、社會組預賽 ${sm.socialPre} 場、決賽 ${sm.socialFinal} 場）</span>
     </div>
   </section>
+  ${srcPanel}
   <section class="panel">
     <details class="fold" data-fold="sched-params" ${strongOpen.has('sched-params') ? 'open' : ''}>
       <summary>參數設定（預設為往年數值）</summary>
@@ -756,7 +768,7 @@ async function loadSheet() {
   if (S.step === 3 || S.step === 7) render();
 }
 const strongOpen = new Set();
-const KIND_TEXT = { 全大運: '全大運決賽前八', 分區預賽: '全大運分區預賽前四', 盃賽: '交大盃與其他盃賽前四' };
+const KIND_TEXT = { 全大運: '全大運決賽前八', 盃賽: '交大盃與其他盃賽前四' };
 /** 一串成績：全大運用藍色，其他用黑色 */
 const recHtml = list => list.map(r => `<span class="${r.k === '全大運' ? 'rec-top' : ''}">${esc(recLabel(r))}</span>`).join('、');
 /** 抽籤結果的亮燈：實心是個人賽得過名次，空心是只有團體賽名次 */
@@ -813,7 +825,7 @@ function stepStrong() {
       : sheetStatus.state === 'loading' ? '正在讀取共用試算表，先顯示網頁內建資料。'
       : `讀不到共用試算表（${esc(sheetStatus.msg)}），先用網頁內建資料。`}</p>
     <div class="kv">${cov.map(c => `<b>${esc(KIND_TEXT[c.k] || c.k)}</b><span>${esc(c.items.join('、'))}</span>`).join('')}</div>
-    <p class="small muted">用人名比對。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是分區預賽與盃賽。</p>
+    <p class="small muted">用人名比對。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是交大盃等盃賽。</p>
   </section>
   <section class="panel">
     <h2>目前名單裡的猛將</h2>
@@ -882,12 +894,12 @@ function stepHelp() {
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
-      <li><b>賽程時間表</b>：依籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
+      <li><b>賽程時間表</b>：依完成籤表或籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
     </ol>
   </section>
   <section class="panel">
     <h2>賽程時間表怎麼算</h2>
-    <p>沿用往年「交大盃時間估算模型」的公式，場數、輪次、場次號碼從籤表規劃自動帶入。</p>
+    <p>沿用往年「交大盃時間估算模型」的公式，場數、輪次、場次號碼自動帶入：有上傳完成籤表 Excel 的項目用上傳的，沒有的用籤表規劃。</p>
     <ol>
       <li><b>先算每場要多久</b>
         <ul>
