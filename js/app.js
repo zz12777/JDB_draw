@@ -498,7 +498,7 @@ function stepExport() {
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
     <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名與籤位等。</div>
-    <p class="small muted">完成籤表比照往年最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
+    <p class="small muted">完成籤表比照往年最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表並附決賽籤表（各組冠亞軍，決賽另外抽），另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
@@ -554,7 +554,6 @@ function stepSheets() {
   <section class="panel">
     <h2>產生點單</h2>
     <div class="note warn"><b>點單需再經人工檢查</b>：下載後請與籤表核對場次、籤號、校名與姓名等。</div>
-    <p class="small muted">每個項目可以直接套用步驟 4 的抽籤結果，或上傳最終籤表 Excel。</p>
     <div class="row">
       <label class="field grow">賽事名稱（點單標題）<input type="text" value="${esc(st0.title)}" data-sset="title"></label>
       <label class="field">空白點單張數<input type="number" min="0" value="${st0.blanks}" data-sset="blanks"></label>
@@ -722,8 +721,8 @@ function stepStrong() {
       <details class="fold" data-fold="${g.name}" ${strongOpen.has(g.name) ? 'open' : ''}>
         <summary>${g.name}<span class="muted small">　${g.rows.length} ${g.isTeam ? '隊' : '筆'}</span></summary>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>${unitWord(g.name)}</th><th>${nameWord(g.name)}</th>${g.isTeam ? '<th class="num">猛將</th>' : ''}<th>成績</th></tr></thead>
-          <tbody>${g.rows.map(({ x, s }) => `<tr><td class="nowrap">${esc(x.school)}</td><td class="nowrap">${esc(x.name)}</td>
+          <thead><tr>${g.isTeam ? '' : `<th>${unitWord(g.name)}</th>`}<th>${nameWord(g.name)}</th>${g.isTeam ? '<th class="num">猛將</th>' : ''}<th>成績</th></tr></thead>
+          <tbody>${g.rows.map(({ x, s }) => `<tr>${g.isTeam ? '' : `<td class="nowrap">${esc(x.school)}</td>`}<td class="nowrap">${esc(x.name)}</td>
             ${g.isTeam ? `<td class="num nowrap">${s.a ? `<span class="lamp on"></span>${s.a}` : ''} ${s.b ? `<span class="lamp half"></span>${s.b}` : ''}</td>` : ''}
             <td class="small">${detailOf(g, s)}</td></tr>`).join('')}</tbody>
         </table></div>
@@ -759,7 +758,7 @@ function stepHelp() {
     <h2>籤表規劃</h2>
     <ul>
       <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
-      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。每區取前二晉級，決賽籤表另外處理。</li>
+      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。每區取前二晉級，完成籤表會附決賽籤表（冠、亞位置），決賽另外抽。</li>
       <li><b>團體賽場次編號</b>：一輪一輪編，每輪由 A 組到最後一組。4 隊組：第一輪 1-3、2-4，第二輪 2-3、1-4，第三輪 1-2、3-4；3 隊組：1-2、1-3、2-3。</li>
     </ul>
   </section>
@@ -782,8 +781,7 @@ function stepHelp() {
       <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
-      <li><b>點單</b>：用抽籤結果或上傳最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
-      <li><b>猛將資料庫</b>：歷年全大運與交大盃得名的選手，抽籤結果會用燈號標出名單裡的猛將。</li>
+      <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
     </ol>
   </section>`;
 }

@@ -1,6 +1,7 @@
 // Excel 輸出（ExcelJS），版面比照「2_空白籤表」範本
 import { EVENT_TYPE } from './parse.js';
 import { toCn } from './util.js';
+import { buildKO, championSlots } from './bracket.js';
 
 export const EVENT_TITLE = {
   男單: '大專組男子單打', 女單: '大專組女子單打', 男雙: '大專組男子雙打', 女雙: '大專組女子雙打',
@@ -341,6 +342,48 @@ function finalRrSheet(wb, event, st, entries, assign) {
   ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
 }
 
+/** 團體賽決賽：各組前二晉級，籤位標「冠 1」「亞 2」，決賽另外抽 */
+function finalTeamFinal(wb, event, st) {
+  const n = st.groups.length * 2;
+  if (n < 2 || n > 32) return;
+  const ko = buildKO([n]);
+  const s = ko.sections[0];
+  const mark = championSlots(ko);
+  const ws = wb.addWorksheet(event + '決賽');
+  const ops = makeOps();
+  let H = 0;
+  (function f(x) { if (x.kind === 'match') { H = Math.max(H, x.depth + 1); x.children.forEach(f); } })(s.root);
+  const widths = [3, 3, 3, 8];
+  for (let h = 1; h <= H + 1; h++) widths.push(6.5, 3.6);
+  setWidths(ws, widths);
+  ops.texts.push({ r: 1, c: 1, v: `${EVENT_TITLE[event]} 決賽`, size: 24, h: 'left' });
+  ops.texts.push({ r: 3, c: 4, v: '(預賽同循環之冠亞軍，決賽抽籤時將會分別分至籤表上下半區)', size: 12, h: 'left' });
+  const per = s.hasPairs ? 4 : 2;
+  const top = 6;
+  const rowOf = new Map();
+  s.slots.forEach((slot, j) => {
+    const base = top + per * j;
+    if (slot.kind === 'leaf') rowOf.set(slot, base);
+    else { rowOf.set(slot.children[0], base); rowOf.set(slot.children[1], base + 2); }
+  });
+  for (const [lf, r] of rowOf) {
+    ops.merges.push([r, 4, r + 1, 4]);
+    ops.texts.push({ r, c: 4, v: `${mark.get(lf.pos)} ${lf.pos}`, size: 14, h: 'center' });
+  }
+  drawTree(ops, s.root, x => x.kind === 'leaf', rowOf, x => H - x.depth, h => 4 + 2 * h, 5);
+  const pc = 4 + 2 * (H + 1) + 1;
+  ops.texts.push({ r: 4, c: pc, v: '冠軍-\n亞軍-\n季軍-\n季軍-', size: 14, h: 'left' });
+  applyOps(ws, ops);
+  ws.getCell(1, 1).font = { name: KAI, size: 24, bold: true };
+  ws.getCell(4, pc).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+  ws.getColumn(pc).width = 12;
+  ws.getRow(1).height = 33.5;
+  const last = top + per * s.slots.length;
+  for (let r = top; r < last; r++) ws.getRow(r).height = per === 4 ? 11.25 : 15;
+  ws.views = [{ showGridLines: false }];
+  ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
+}
+
 // ---------------- 名單類 ----------------
 
 function whereOf(st, pos) {
@@ -421,7 +464,7 @@ export function finalWorkbook(event, st, entries, assign, ExcelJSLib, meta) {
   const wb = new (lib(ExcelJSLib).Workbook)();
   wb.creator = '交大盃抽籤系統';
   if (st.kind === 'ko') finalKoSheets(wb, event, st, entries, assign);
-  else finalRrSheet(wb, event, st, entries, assign);
+  else { finalRrSheet(wb, event, st, entries, assign); finalTeamFinal(wb, event, st); }
   const sorted = entries.slice().sort((a, b) => (assign[a.id] || 1e9) - (assign[b.id] || 1e9));
   addListSheet(wb, event + '抽籤結果', event, sorted, assign, st, meta);
   return wb;

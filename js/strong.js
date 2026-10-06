@@ -73,7 +73,7 @@ export function coverage() {
 }
 export const playerCount = () => INDEX.size;
 
-export const recLabel = r => `${r.s} ${r.d}${r.e} ${rankLabel(r.r)}`;
+export const recLabel = r => `${r.s} ${r.e === "社團" ? "社會團體" : r.d + r.e} ${rankLabel(r.r)}`;
 export const allPlayers = () => [...INDEX.values()];
 export const isGeneral = r => r.d === '一般' || r.d === '大專';
 

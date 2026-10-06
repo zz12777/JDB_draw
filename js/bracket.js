@@ -209,3 +209,42 @@ export function buildRR(sizes) {
 export function buildStructure(plan) {
   return plan.kind === 'ko' ? buildKO(plan.sizes) : buildRR(plan.sizes);
 }
+
+/**
+ * 團體賽決賽籤表的「冠/亞」位置：各組冠軍、亞軍各一半，上下半區平均；
+ * 輪空（不用打第一輪）的位置優先給冠軍，資格賽一場盡量是冠對亞。
+ * 回傳 Map(籤號 -> '冠' | '亞')
+ */
+export function championSlots(st) {
+  const out = new Map();
+  const byes = new Map();
+  (function count(n, parentIsPair) {
+    if (n.kind === 'leaf') { byes.set(n, parentIsPair ? 0 : 1); return; }
+    const pair = n.children.every(c => c.kind === 'leaf') && isFirstPair(n);
+    n.children.forEach(c => count(c, pair));
+    byes.set(n, n.children.reduce((s, c) => s + byes.get(c), 0));
+  })(st.root, false);
+  function isFirstPair(n) {
+    // 兩個葉子的場次，且該分區有資格賽（有人輪空）時才算資格賽
+    return st.sections.some(s => s.hasPairs && s.slots.includes(n));
+  }
+  let flip = true;
+  (function give(n, k) {
+    if (n.kind === 'leaf') { out.set(n.pos, k > 0 ? '冠' : '亞'); return; }
+    const [a, b] = n.children;
+    const ba = byes.get(a), bb = byes.get(b);
+    let ka, kb;
+    if (k >= ba + bb) {
+      const rest = k - ba - bb;
+      const fa = a.cap - ba, fb = b.cap - bb;
+      let ra = Math.floor(rest * fa / Math.max(1, fa + fb)), rb = rest - ra;
+      if (rest % 2 === 1 && fa === fb) { if (flip) { ra = Math.ceil(rest / 2); rb = rest - ra; } else { ra = Math.floor(rest / 2); rb = rest - ra; } flip = !flip; }
+      ka = ba + ra; kb = bb + rb;
+    } else {
+      ka = Math.min(ba, Math.ceil(k / 2)); kb = k - ka;
+      if (kb > bb) { kb = bb; ka = k - kb; }
+    }
+    give(a, ka); give(b, kb);
+  })(st.root, st.positions / 2);
+  return out;
+}
