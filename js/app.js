@@ -657,24 +657,12 @@ function stepTime() {
   const arr = (k, i) => `<input type="number" min="0" value="${p[k][i]}" data-sp="${k}.${i}" style="width:60px">`;
   const diffCls = v => (v < -5 ? 'bad-t' : v > 15 ? 'muted' : '');
   const table = (rows, cols) => {
-    const skip = new Map(); // 合併的團體欄
-    const body = rows.map((r, i) => {
+    const body = rows.map(r => {
       const cells = cols.map(c => {
-        if (skip.get(`${i}|${c}`)) return '';
-        const it = (r.items || []).find(x => x.event === c);
-        const tt = (r.teamItems || []).find(x => x.event === c);
-        if (tt && r.teamSpan > 1) {
-          for (let k = 1; k < r.teamSpan; k++) skip.set(`${i + k}|${c}`, true);
-          return `<td class="tc" rowspan="${r.teamSpan}">${tt.text}</td>`;
-        }
-        if (r.draw && (r.drawCol ? c === r.drawCol : c === '男團')) {
-          const span = r.drawCol ? 1 : cols.filter(x => x === '男團' || x === '女團').length;
-          if (!r.drawCol && span > 1) skip.set(`${i}|女團`, true);
-          return `<td class="tc" colspan="${span}"><b>${r.draw}</b></td>`;
-        }
-        if (r.draw && !r.drawCol && c === '女團') return skip.get(`${i}|女團`) ? '' : '<td></td>';
-        const x = it || tt;
-        return `<td class="tc">${x ? x.text : ''}</td>`;
+        if (r.skip.has(c)) return '';
+        const x = r.cells[c];
+        if (!x) return '<td class="tc"></td>';
+        return `<td class="tc"${x.span > 1 ? ` rowspan="${x.span}"` : ''}>${x.bold ? `<b>${x.text}</b>` : x.text}</td>`;
       }).join('');
       return `<tr><td class="nowrap"><b>${fmtTime(r.start)}</b></td>
         <td><input type="number" min="0" step="5" value="${r.len}" data-ov="${r.id}" class="${ov[r.id] != null ? 'ovr' : ''}" style="width:64px"></td>
@@ -915,8 +903,8 @@ function stepHelp() {
         </ul></li>
       <li><b>排成兩天</b>
         <ul>
-          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。接著預賽第二、三輪，再來決賽抽籤。</li>
-          <li>抽完籤如果時間還早，第一天會先打大專團體決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完。先試男女團一起打，放不下就只排一項（女團先），都放不下就全部留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
+          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。之後男女團各自往下打：預賽第二、三輪，打完就各自抽籤，所以兩項的抽籤會錯開。桌子先讓每場比賽都有一張（女團先叫），還有空桌再拆桌。</li>
+          <li>哪一項抽完籤時間還早，第一天就先打那一項的決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完。兩項都排會超過時，比較晚打完的那項留到第二天；還是超過就都留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
           <li>第二天：大專團體決賽一輪一輪打（男女團各自從還沒打的那一輪開始），社會組預賽從大專決賽第 2 輪開始一起進行。打完後社會組決賽抽籤，接著社會組決賽。</li>
         </ul></li>
       <li><b>手動調整</b>：每個時段的「長度」可以改，例如湊成整點或半點，後面的時間會跟著順延。時間差 ＝ 長度減估算，正數表示抓得比較寬鬆，紅字表示可能會延遲。參數（桌數、每場分鐘、開始時機）都可以改，按「參數改回預設」就回到往年數值。</li>
