@@ -26,6 +26,7 @@ const ICON = {
   reset: '<path d="M4 4v6h6"/><path d="M5 15a8 8 0 1 0 1-9L4 10"/>',
   swap: '<path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17v.5"/>',
 };
 const icon = n => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
@@ -929,6 +930,7 @@ document.addEventListener('drop', e => {
 });
 
 // 專案檔
+$('#btn-feedback').innerHTML = `${icon('chat')}問題回報/建議提供`;
 $('#btn-export').innerHTML = `${icon('save')}匯出專案檔`;
 $('#lbl-import').outerHTML = `${icon('open')}匯入專案檔`;
 $('#btn-reset').innerHTML = `${icon('reset')}清除全部`;
