@@ -167,3 +167,8 @@ details.fold { border: 1px solid var(--line); border-radius: var(--radius); marg
 details.fold > summary { cursor: pointer; padding: 10px 14px; font-weight: 500; list-style: revert; }
 details.fold[open] > summary { border-bottom: 1px solid var(--line); }
 details.fold .tbl-wrap { border: 0; border-radius: 0; }
+/* 賽程時間表 */
+table.sched td, table.sched th { vertical-align: middle; }
+.tc { text-align: center; }
+.bad-t { color: var(--bad); }
+input.ovr { border-color: var(--warn); background: var(--warn-soft); }

@@ -10,6 +10,7 @@ import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrd
 import { newSeed, uid, toCn } from './util.js';
 import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage, setData, recordsFromRows } from './strong.js';
 import { parseCsvText } from './reader.js';
+import { buildSchedule, scheduleWorkbook, DEFAULT_PARAMS, DAY1_COLS, DAY2_COLS, COL_TITLE, fmt as fmtTime } from './schedule.js';
 
 // ---------------- 圖示（線條） ----------------
 const ICON = {
@@ -34,13 +35,14 @@ const icon = n => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${IC
 // ---------------- 狀態 ----------------
 const KEY = 'jdb-draw-v1';
 const blank = () => ({ version: 1, aliases: {}, sources: {}, events: {}, step: 0, event: '男團',
-  sheetSettings: { title: DEFAULT_TITLE, blanks: 3, withFinal: true }, sheetUploads: {} });
+  sheetSettings: { title: DEFAULT_TITLE, blanks: 3, withFinal: true }, sheetUploads: {},
+  schedule: { params: {}, override: {} } });
 let S = load();
 
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.version === 1) { const b = blank(); return { ...b, ...s, sheetSettings: fixTitle({ ...b.sheetSettings, ...(s.sheetSettings || {}) }), sheetUploads: s.sheetUploads || {}, step: 0 }; } // 每次打開都從步驟 1 開始
+    if (s && s.version === 1) { const b = blank(); return { ...b, ...s, sheetSettings: fixTitle({ ...b.sheetSettings, ...(s.sheetSettings || {}) }), sheetUploads: s.sheetUploads || {}, schedule: s.schedule || b.schedule, step: 0 }; } // 每次打開都從步驟 1 開始
   } catch { /* 無法讀取就從頭開始 */ }
   return blank();
 }
@@ -119,15 +121,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '猛將資料庫', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '猛將資料庫', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 6 ? `<span class="n">${i + 1}</span>` : icon(i === 6 ? 'star' : 'help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 7 ? `<span class="n">${i + 1}</span>` : icon(i === 7 ? 'star' : 'help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepStrong, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepStrong, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -632,6 +634,114 @@ async function handleSheetUpload(file, name) {
 }
 
 // ---------------- 使用說明 ----------------
+// ---------------- 賽程時間表 ----------------
+const schParams = () => ({ ...DEFAULT_PARAMS, ...(S.schedule.params || {}) });
+function scheduleStructs() {
+  const structs = {}, problems = [];
+  activeEvents().forEach(name => {
+    const { st, err } = structureOf(name);
+    if (st) structs[name] = st; else problems.push(`${name}：${err}`);
+  });
+  return { structs, problems };
+}
+function stepTime() {
+  const { structs, problems } = scheduleStructs();
+  if (!Object.keys(structs).length) {
+    $('#main').innerHTML = `<section class="panel"><div class="empty">還沒有籤表規劃，請先完成步驟 1 到 3。</div></section>`;
+    return;
+  }
+  const p = schParams();
+  const ov = S.schedule.override || {};
+  const sch = buildSchedule(structs, p, ov);
+  const num = (k, label, unit = '分', w = 70) => `<label class="field">${label}<span class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" min="0" value="${p[k]}" data-sp="${k}" style="width:${w}px">${unit}</span></label>`;
+  const arr = (k, i) => `<input type="number" min="0" value="${p[k][i]}" data-sp="${k}.${i}" style="width:60px">`;
+  const diffCls = v => (v < -5 ? 'bad-t' : v > 15 ? 'muted' : '');
+  const table = (rows, cols) => {
+    const skip = new Map(); // 合併的團體欄
+    const body = rows.map((r, i) => {
+      const cells = cols.map(c => {
+        if (skip.get(`${i}|${c}`)) return '';
+        const it = (r.items || []).find(x => x.event === c);
+        const tt = (r.teamItems || []).find(x => x.event === c);
+        if (tt && r.teamSpan > 1) {
+          for (let k = 1; k < r.teamSpan; k++) skip.set(`${i + k}|${c}`, true);
+          return `<td class="tc" rowspan="${r.teamSpan}">${tt.text}</td>`;
+        }
+        if (r.draw && (r.drawCol ? c === r.drawCol : c === '男團')) {
+          const span = r.drawCol ? 1 : cols.filter(x => x === '男團' || x === '女團').length;
+          if (!r.drawCol && span > 1) skip.set(`${i}|女團`, true);
+          return `<td class="tc" colspan="${span}"><b>${r.draw}</b></td>`;
+        }
+        if (r.draw && !r.drawCol && c === '女團') return skip.get(`${i}|女團`) ? '' : '<td></td>';
+        const x = it || tt;
+        return `<td class="tc">${x ? x.text : ''}</td>`;
+      }).join('');
+      return `<tr><td class="nowrap"><b>${fmtTime(r.start)}</b></td>
+        <td><input type="number" min="0" step="5" value="${r.len}" data-ov="${r.id}" class="${ov[r.id] != null ? 'ovr' : ''}" style="width:64px"></td>
+        <td class="num muted">${Math.round(r.est)}</td><td class="num ${diffCls(r.diff)}">${Math.round(r.diff)}</td>${cells}</tr>`;
+    }).join('');
+    return `<div class="tbl-wrap"><table class="sched"><thead><tr><th>開始</th><th>長度(分)</th><th class="num">估算</th><th class="num">時間差</th>${cols.map(c => `<th class="tc">${COL_TITLE[c].replace('\n', '')}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+  };
+  const sm = sch.summary;
+  $('#main').innerHTML = `
+  <section class="panel">
+    <div class="row"><h2>賽程時間表</h2><span class="spacer"></span>
+      ${Object.keys(ov).length ? `<button class="btn ghost" data-ovreset>${icon('reset')}長度全部改回估算</button>` : ''}
+      <button class="btn" data-dlsched>${icon('download')}下載 Excel</button></div>
+    <p class="small muted">依步驟 3 的籤表規劃自動排。每個時段：把這段所有比賽佔用桌子的分鐘數加起來，除以桌數，就是這段要多久；場次少的時候，至少要等最久的一場打完。第一天個人賽＋大專團體預賽，第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
+    ${problems.length ? `<div class="note warn"><b>這些項目沒有排進來</b><ul>${problems.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+    <div class="kv">
+      <b>第一天</b><span>${fmtTime(sch.start1)} 開打，預估 <b>${fmtTime(sch.end1)}</b> 結束（單打 ${sm.singles} 場、雙打 ${sm.doubles} 場、大專團體預賽 ${sm.teamPre} 場）</span>
+      <b>第二天</b><span>${fmtTime(sch.start2)} 開打，預估 <b>${fmtTime(sch.end2)}</b> 結束（大專團體決賽 ${sm.teamFinal} 場、社會組預賽 ${sm.socialPre} 場、決賽 ${sm.socialFinal} 場）</span>
+    </div>
+  </section>
+  <section class="panel">
+    <details class="fold" data-fold="sched-params" ${strongOpen.has('sched-params') ? 'open' : ''}>
+      <summary>參數設定（預設為往年數值）</summary>
+      <div style="padding:12px 14px">
+        <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+          ${num('tables', '桌數', '桌')}
+          <label class="field">第一天日期<input type="date" value="${p.day1Date}" data-sp="day1Date"></label>
+          <label class="field">開打時間<input type="time" value="${p.day1Start}" data-sp="day1Start"></label>
+          <label class="field">第二天日期<input type="date" value="${p.day2Date}" data-sp="day2Date"></label>
+          <label class="field">開打時間<input type="time" value="${p.day2Start}" data-sp="day2Start"></label>
+        </div>
+        <h3>個人賽每場分鐘（依該輪場數）</h3>
+        <div class="tbl-wrap"><table><thead><tr><th></th><th>17 場以上</th><th>5 到 16 場</th><th>1 到 4 場</th></tr></thead>
+          <tbody><tr><td>單打</td><td>${arr('single', 0)}</td><td>${arr('single', 1)}</td><td>${arr('single', 2)}</td></tr>
+          <tr><td>雙打</td><td>${arr('double', 0)}</td><td>${arr('double', 1)}</td><td>${arr('double', 2)}</td></tr></tbody></table></div>
+        <p class="small muted">例：男單 128 人，第一輪 64 場，每場 20 分；8 強那輪 4 場，每場 30 分。人數不是 2 的次方時，第一輪（資格賽）照它所在那一級算，例如女單 79 人第一輪 15 場，照 64 場那一級算 20 分。</p>
+        <h3>團體賽每場佔用桌子的分鐘（桌分鐘）</h3>
+        <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+          ${num('tPre', '預賽')}${num('tFinal', '決賽（四強前）')}${num('tSemi', '四強起')}${num('tAfterDraw', '抽籤後第一輪')}
+          ${num('split', '一場最多拆幾桌', '桌')}${num('splitSemi', '四強起最多拆幾桌', '桌')}
+        </div>
+        <p class="small muted">桌分鐘：一場團體賽在一張桌子上打完要幾分鐘。拆成 2 桌同時打，實際只要一半時間，但佔用的桌分鐘不變。預賽約 95 到 105 分；抽籤後第一輪要等交點單，所以抓 120 分。</p>
+        <h3>開始時機與其他</h3>
+        <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+          <label class="field">大專團體預賽開始<select data-sp="teamStartStage">${[16, 8, 4].map(v => `<option value="${v}" ${+p.teamStartStage === v ? 'selected' : ''}>個人賽打到 ${v} 強時</option>`).join('')}</select></label>
+          <label class="field">社會組預賽開始<select data-sp="socialStartRound">${[1, 2, 3].map(v => `<option value="${v}" ${+p.socialStartRound === v ? 'selected' : ''}>大專決賽第 ${v} 輪時</option>`).join('')}</select></label>
+          ${num('drawMin', '決賽抽籤')}${num('roundTo', '時段取整到')}
+          <button class="btn ghost" data-spreset>${icon('reset')}參數改回預設</button>
+        </div>
+      </div>
+    </details>
+  </section>
+  <section class="panel">
+    <h2>第一天${p.day1Date ? `（${esc(p.day1Date)}）` : ''}</h2>
+    ${table(sch.day1, DAY1_COLS)}
+    <h2 style="margin-top:20px">第二天${p.day2Date ? `（${esc(p.day2Date)}）` : ''}</h2>
+    ${table(sch.day2, DAY2_COLS)}
+    <p class="small muted">估算：照公式算出的分鐘。時間差：長度減估算，正數表示抓得比較寬鬆，<span class="bad-t">紅字</span>表示可能會延遲。團體欄跨好幾列，表示和個人賽同時進行。</p>
+  </section>`;
+}
+async function dlSched() {
+  const { structs } = scheduleStructs();
+  const p = schParams();
+  const sch = buildSchedule(structs, p, S.schedule.override || {});
+  download(await workbookBlob(scheduleWorkbook(sch, p)), '賽程時間預定表.xlsx');
+}
+
 // ---------------- 猛將資料庫 ----------------
 let strongQ = '', strongAll = false;
 // 共用試算表：大家在這裡新增成績，網頁打開時讀「發布到網路」的 CSV
@@ -653,7 +763,7 @@ async function loadSheet() {
   } catch (err) {
     sheetStatus = { state: 'fail', msg: err.name === 'AbortError' ? '逾時' : err.message };
   }
-  if (S.step === 3 || S.step === 6) render();
+  if (S.step === 3 || S.step === 7) render();
 }
 const strongOpen = new Set();
 const KIND_TEXT = { 全大運: '全大運決賽前八', 分區預賽: '全大運分區預賽前四', 盃賽: '交大盃與其他盃賽前四' };
@@ -782,15 +892,44 @@ function stepHelp() {
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
+      <li><b>賽程時間表</b>：依籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
+    </ol>
+  </section>
+  <section class="panel">
+    <h2>賽程時間表怎麼算</h2>
+    <p>沿用往年「交大盃時間估算模型」的公式，只是場數、輪次、場次號碼改成從籤表規劃自動帶入，不用再手動填。</p>
+    <ol>
+      <li><b>先算每場要多久</b>
+        <ul>
+          <li>個人賽看「這一輪有幾場」：17 場以上每場 20 分（雙打 25），5 到 16 場 25 分，1 到 4 場 30 分。越後面的輪次打得越久，因為選手比較接近、休息也比較長。</li>
+          <li>第一輪是資格賽（人數不是 2 的次方）時，照它所在那一級算。例：女單 79 人，第一輪只有 15 場，但它是 64 場那一級，所以每場 20 分。</li>
+          <li>團體賽用「桌分鐘」：一場在一張桌子上打完要幾分鐘。預賽 100、決賽 105、四強起 150、抽籤後第一輪 120（要等交點單）。</li>
+        </ul></li>
+      <li><b>再算每個時段要多久</b>
+        <ul>
+          <li>時段長度 ＝ 這段所有比賽的分鐘加起來 ÷ 桌數。例：第一輪男單 64 場、女單 15 場，(64＋15)×20 ÷ 24 桌 ≒ 66 分，取整成 70 分。</li>
+          <li>場次比桌子少的時候，不能只看平均，至少要等最久的一場打完。例：8 強每場 30 分，就算只有 16 場也要 30 分。</li>
+          <li>團體賽可以拆桌：一場拆成 2 桌同時打，實際時間減半（四強起最多拆 5 桌）。所以一個時段至少要「桌分鐘 ÷ 拆桌數」。</li>
+        </ul></li>
+      <li><b>排成兩天</b>
+        <ul>
+          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。接著預賽第二、三輪，最後決賽抽籤。</li>
+          <li>第二天：大專團體決賽一輪一輪打，社會組預賽從大專決賽第 2 輪開始一起進行。打完後社會組決賽抽籤，接著社會組決賽。</li>
+        </ul></li>
+      <li><b>手動調整</b>：每個時段的「長度」可以改，例如湊成整點或半點，後面的時間會跟著順延。時間差 ＝ 長度減估算，正數表示抓得比較寬鬆，紅字表示可能會延遲。參數（桌數、每場分鐘、開始時機）都可以改，按「參數改回預設」就回到往年數值。</li>
+      <li><b>下載 Excel</b>：第一頁是時間預定表，格式比照往年；第二頁「估算明細」列出每個時段的場數、分鐘和時間差，方便核對。</li>
     </ol>
   </section>`;
 }
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
+  if (d.dlsched !== undefined) return dlSched();
+  if (d.ovreset !== undefined) { S.schedule.override = {}; return render(); }
+  if (d.spreset !== undefined) { S.schedule.params = {}; S.schedule.override = {}; return render(); }
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }
   else if (d.dlsheet) dlSheet(d.dlsheet);
   else if (d.pdfsheet) pdfSheet(d.pdfsheet);
@@ -841,6 +980,7 @@ document.addEventListener('click', async ev0 => {
   }
 });
 
+const d0 = e => (e.target && e.target.dataset) || {};
 // 搜尋只更新結果表，不重畫整頁；中文輸入法選字中不更新
 function updateStrongList(t) {
   strongQ = t.value;
@@ -859,6 +999,19 @@ document.addEventListener('toggle', ev0 => {
 }, true);
 
 document.addEventListener('change', ev0 => {
+  if (d0(ev0).sp) {
+    const k = ev0.target.dataset.sp, v = ev0.target.value;
+    const P = S.schedule.params;
+    if (k.includes('.')) { const [a, i] = k.split('.'); P[a] = [...(P[a] || DEFAULT_PARAMS[a])]; P[a][+i] = Math.max(0, +v || 0); }
+    else P[k] = typeof DEFAULT_PARAMS[k] === 'number' ? Math.max(0, +v || 0) : v;
+    if (k === 'tables' && !P[k]) P[k] = DEFAULT_PARAMS.tables;
+    return render();
+  }
+  if (d0(ev0).ov) {
+    const v = ev0.target.value;
+    if (v === '') delete S.schedule.override[ev0.target.dataset.ov]; else S.schedule.override[ev0.target.dataset.ov] = Math.max(0, +v);
+    return render();
+  }
   if (ev0.target.id === 'strong-all') { strongAll = ev0.target.checked; $('#strong-list').innerHTML = strongListHtml(); return; }
   const t = ev0.target;
   const d = t.dataset;
@@ -944,7 +1097,7 @@ $('#file-import').onchange = async e => {
     const s = JSON.parse(await f.text());
     if (s.version !== 1) throw new Error('版本不符');
     const b = blank();
-    S = { ...b, ...s, sheetSettings: fixTitle({ ...b.sheetSettings, ...(s.sheetSettings || {}) }), sheetUploads: s.sheetUploads || {} };
+    S = { ...b, ...s, sheetSettings: fixTitle({ ...b.sheetSettings, ...(s.sheetSettings || {}) }), sheetUploads: s.sheetUploads || {}, schedule: s.schedule || b.schedule };
     toast('已匯入');
     render();
   } catch (err) { toast('匯入失敗：' + err.message); }
