@@ -353,7 +353,7 @@ function whereOf(st, pos) {
   return s && s.letter ? `${s.letter}區` : '';
 }
 
-export function addListSheet(wb, sheetName, event, entries, assign, st) {
+export function addListSheet(wb, sheetName, event, entries, assign, st, meta) {
   const ws = wb.addWorksheet(sheetName);
   const nameCol = EVENT_TYPE[event] === 'team' ? event : event;
   const head = ['序號', event === '社團' ? '單位' : '學校', nameCol, '種子', '抽籤序號'];
@@ -371,6 +371,20 @@ export function addListSheet(wb, sheetName, event, entries, assign, st) {
   });
   ws.getRow(1).font = { bold: true };
   [6, 12, 22, 6, 9, 12, 13, 13].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  if (meta && meta.time) {
+    const d = new Date(meta.time);
+    const pad = x => String(x).padStart(2, '0');
+    const info = [['抽出時間', `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`]];
+    if (meta.seed) info.push(['亂數代碼', meta.seed]);
+    info.forEach(([k, v], i) => {
+      const a = ws.getCell(1 + i, 10), b = ws.getCell(1 + i, 11);
+      a.value = k; b.value = v;
+      a.font = { bold: true };
+      b.font = { bold: true };
+    });
+    ws.getColumn(10).width = 10;
+    ws.getColumn(11).width = 22;
+  }
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   return ws;
 }
@@ -390,26 +404,26 @@ export function sortForOrder(entries) {
 // ---------------- 對外 ----------------
 
 /** 籤表活頁簿：entries/assign 為空時是空白籤表 */
-export function bracketWorkbook(event, st, entries, assign, ExcelJSLib) {
+export function bracketWorkbook(event, st, entries, assign, ExcelJSLib, meta) {
   const wb = new (lib(ExcelJSLib).Workbook)();
   wb.creator = '交大盃抽籤系統';
   if (st.kind === 'ko') koSheets(wb, event, st, entries, assign);
   else rrSheet(wb, event, st, entries, assign);
   if (entries && assign) {
     const sorted = entries.slice().sort((a, b) => (assign[a.id] || 1e9) - (assign[b.id] || 1e9));
-    addListSheet(wb, event + '抽籤結果', event, sorted, assign, st);
+    addListSheet(wb, event + '抽籤結果', event, sorted, assign, st, meta);
   }
   return wb;
 }
 
 /** 完成籤表（最終格式） */
-export function finalWorkbook(event, st, entries, assign, ExcelJSLib) {
+export function finalWorkbook(event, st, entries, assign, ExcelJSLib, meta) {
   const wb = new (lib(ExcelJSLib).Workbook)();
   wb.creator = '交大盃抽籤系統';
   if (st.kind === 'ko') finalKoSheets(wb, event, st, entries, assign);
   else finalRrSheet(wb, event, st, entries, assign);
   const sorted = entries.slice().sort((a, b) => (assign[a.id] || 1e9) - (assign[b.id] || 1e9));
-  addListSheet(wb, event + '抽籤結果', event, sorted, assign, st);
+  addListSheet(wb, event + '抽籤結果', event, sorted, assign, st, meta);
   return wb;
 }
 

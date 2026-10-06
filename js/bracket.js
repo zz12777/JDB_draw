@@ -62,10 +62,9 @@ export function sectionTree(x, startPos = 1) {
 
 export function isPow2(n) { return n >= 1 && (n & (n - 1)) === 0; }
 
-/** 預設分區數：沿用歷屆習慣，16 人以下 1 區，否則 4 區，每區超過 32 人再加倍 */
+/** 預設分區數：每區越大越好（最多 32 人），所以取能讓每區不超過 32 人的最少分區數（1、2、4、8） */
 export function defaultSections(n) {
-  if (n <= 16) return 1;
-  let k = 4;
+  let k = 1;
   while (Math.ceil(n / k) > MAX_SECTION) k *= 2;
   return k;
 }

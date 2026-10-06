@@ -259,8 +259,8 @@ function koHalfHtml(title, event, s) {
         <td rowspan="6">${name(s.b)}</td><td rowspan="6" class="sch">${vtext(s.b.school)}</td></tr>
       ${games}
     </table>
-    <div class="line">比賽結果：<u>&emsp;&emsp;&emsp;&emsp;&emsp;</u>。</div>
-    <div class="line">勝方選手簽名：<u>&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;</u>。</div>
+    <div class="line">比賽結果：<span class="ul" style="width:22mm"></span>。</div>
+    <div class="line">勝方選手簽名：<span class="ul" style="width:40mm"></span>。</div>
     <div class="line">裁判簽名：</div>
   </div>`;
 }
@@ -311,6 +311,7 @@ body { margin: 0; font-family: "DFKai-SB", "BiauKai", "標楷體", "Kaiti TC", s
 .half + .half { border-top: 1px solid #000; padding-top: 4mm; }
 .t1 { text-align: center; font-size: 12pt; line-height: 1.6; }
 .item, .line { font-size: 11pt; line-height: 2; }
+.ul { display: inline-block; border-bottom: 1px solid #000; height: 1.2em; vertical-align: bottom; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0 1mm; font-size: 11pt; }
 .ko .hd td { height: 6mm; }
@@ -333,20 +334,40 @@ td { border: 1px solid #000; text-align: center; vertical-align: middle; padding
 @media print { .tip { display: none; } }
 `;
 
-/** 列印版 HTML（整份文件） */
-export function scoresheetHtml({ event, st, byPos, matches, title = DEFAULT_TITLE, blanks = 3, withFinal = true }) {
-  let pages = '';
+/** 每一頁的 HTML（個人賽一頁兩張，團體賽一頁一場） */
+export function scoresheetPages({ event, st, byPos, matches, title = DEFAULT_TITLE, blanks = 3, withFinal = true }) {
+  const pages = [];
   if (st.kind === 'ko') {
     const sheets = matches ? sheetsFromMatches(matches, byPos) : koSheets(st, byPos);
     const items = [...sheets, ...Array(blanks).fill(null)];
     const half = Math.ceil(items.length / 2);
     for (let i = 0; i < half; i++) {
-      pages += `<div class="page">${koHalfHtml(title, event, items[i])}${koHalfHtml(title, event, items[half + i])}</div>`;
+      pages.push(`<div class="page">${koHalfHtml(title, event, items[i])}${koHalfHtml(title, event, items[half + i])}</div>`);
     }
   } else {
     const items = [...rrSheets(st, byPos, withFinal), ...Array(blanks).fill(null)];
-    pages = items.map(s => rrPageHtml(title, event, s)).join('');
+    items.forEach(x => pages.push(rrPageHtml(title, event, x)));
   }
+  return pages;
+}
+
+/** 產生 PDF 用的版面樣式：每頁固定 A4 大小（210 x 297 mm，邊界 10 mm），限定在 .ssr 底下 */
+export const PDF_CSS = PRINT_CSS
+  .replace(/@page[^}]*}/, '')
+  .replace(/@media print[^}]*}\s*}/, '')
+  .replace(/^body\s*{/m, '.ssr {')
+  .replace(/^\* {/m, '.ssr * {')
+  .replace(/^\.page \{[^}]*}/m, '.ssr .page { width: 210mm; height: 297mm; padding: 10mm; overflow: hidden; background: #fff; }')
+  .replace(/^\.page:last-child[^}]*}/m, '')
+  .split('\n')
+  .map(line => (/^\.(?!ssr)[a-z]/.test(line) || /^(table|td) /.test(line) || /^(table|td)\{/.test(line) ? '.ssr ' + line : line))
+  .join('\n')
+  .replace('.ssr .item, .line', '.ssr .item, .ssr .line');
+
+/** 列印版 HTML（整份文件） */
+export function scoresheetHtml(opts) {
+  const pages = scoresheetPages(opts).join('');
+  const { event } = opts;
   return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${h(event)}點單</title><style>${PRINT_CSS}</style></head>
 <body><div class="tip">列印視窗開啟後，目的地選「另存為 PDF」，紙張 A4、邊界「預設」、縮放 100%，取消勾選「頁首及頁尾」。點單需再經人工檢查。</div>${pages}
 <script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script></body></html>`;

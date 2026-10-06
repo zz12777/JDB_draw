@@ -2,7 +2,7 @@
 import { parseResponses, buildEntries, EVENTS, ALL_EVENTS, EVENT_TYPE, KIND_LABEL } from './parse.js';
 import { readFormFile, readWorkbookValues } from './reader.js';
 import { parseFinalBracket } from './finalparse.js';
-import { scoresheetDocx, scoresheetHtml, DEFAULT_TITLE } from './scoresheet.js';
+import { scoresheetDocx, scoresheetPages, PDF_CSS, DEFAULT_TITLE } from './scoresheet.js';
 import { looseKey } from './schools.js';
 import * as B from './bracket.js';
 import { runDraw, checkDraw, swapPositions } from './draw.js';
@@ -498,7 +498,7 @@ function stepExport() {
 async function dlFinal(name) {
   const e = ev(name);
   const { st } = structureOf(name);
-  const wb = finalWorkbook(name, st, e.entries, e.draw.assign);
+  const wb = finalWorkbook(name, st, e.entries, e.draw.assign, undefined, { time: e.draw.time, seed: e.draw.seed });
   download(await workbookBlob(wb), `${name}_完成籤表.xlsx`);
   toast(`已下載${name}完成籤表，需再經人工檢查`);
 }
@@ -558,7 +558,7 @@ function stepSheets() {
       <li>個人賽：一頁兩張，上半是前半場次、下半是後半場次（例如 130 張時，第 1 頁是第一場和第六六場），整疊對半裁切後疊起來就是場次順序。</li>
       <li>團體賽：一場一頁，五點（單單雙單單）。</li>
       <li>最後會多附幾張空白點單，張數可在上方設定。</li>
-      <li>PDF：按「PDF」會開啟列印頁，在列印視窗的目的地選「另存為 PDF」（紙張 A4、縮放 100%、取消頁首及頁尾）。若瀏覽器擋住新視窗，請允許此網站開啟彈出視窗。</li>
+      <li>PDF：按「PDF」直接下載 A4 PDF 檔，版面與 Word 點單相同，頁數多時需要等幾十秒。</li>
     </ul>
   </section>`;
 }
@@ -575,18 +575,38 @@ async function dlSheet(name) {
   } catch (e) { toast('產生失敗：' + e.message); }
 }
 
-function pdfSheet(name) {
+let pdfBusy = false;
+async function pdfSheet(name) {
   const src = sheetSource(name);
   if (!src) return toast('這個項目還沒有籤表');
+  if (pdfBusy) return toast('正在產生 PDF，請稍候');
+  if (!globalThis.html2canvas || !globalThis.jspdf) return toast('PDF 元件載入失敗，請重新整理網頁');
+  pdfBusy = true;
   const s = S.sheetSettings;
-  const html = scoresheetHtml({ event: name, st: src.st, byPos: src.byPos, matches: src.matches,
+  const pages = scoresheetPages({ event: name, st: src.st, byPos: src.byPos, matches: src.matches,
     title: s.title || DEFAULT_TITLE, blanks: Math.max(0, +s.blanks || 0), withFinal: !!s.withFinal });
-  const w = window.open('', '_blank');
-  if (!w) return toast('瀏覽器擋住了新視窗，請允許此網站開啟彈出視窗');
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  toast(`已開啟${name}點單列印頁，選「另存為 PDF」即可，需再經人工檢查`);
+  const host = document.createElement('div');
+  host.className = 'ssr';
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:210mm;background:#fff;';
+  document.body.appendChild(host);
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const pdf = new globalThis.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    for (let i = 0; i < pages.length; i++) {
+      host.innerHTML = `<style>${PDF_CSS}</style>${pages[i]}`;
+      const canvas = await globalThis.html2canvas(host.querySelector('.page'), { scale: 2, backgroundColor: '#ffffff', logging: false });
+      if (i > 0) pdf.addPage();
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
+      if (i % 5 === 0) toast(`產生 PDF 中：${i + 1} / ${pages.length} 頁`);
+    }
+    pdf.save(`${name}點單.pdf`);
+    toast(`已下載${name}點單 PDF，需再經人工檢查`);
+  } catch (e) {
+    toast('PDF 產生失敗：' + e.message);
+  } finally {
+    host.remove();
+    pdfBusy = false;
+  }
 }
 
 async function handleSheetUpload(file, name) {
@@ -625,7 +645,7 @@ function stepHelp() {
   <section class="panel">
     <h2>籤表規劃</h2>
     <ul>
-      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設分區數：16 人以下不分區（1 張籤表）；17 到 128 人分 4 區（A 到 D，每區最多 32 人）。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
+      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
       <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。每區取前二晉級，決賽籤表另外處理。</li>
       <li><b>團體賽場次編號</b>：一輪一輪編，每輪由 A 組到最後一組。4 隊組：第一輪 1-3、2-4，第二輪 2-3、1-4，第三輪 1-2、3-4；3 隊組：1-2、1-3、2-3。</li>
     </ul>

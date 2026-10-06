@@ -220,17 +220,6 @@ export function buildEntries(kind, responses, aliases = {}) {
       });
     }
   }
-  // 一校只有一隊時，隊名用校名（第十屆慣例，例如 政治大學X 改為 政治大學）
-  if (kind !== 'social') {
-    const per = new Map();
-    events[teamEv].forEach(e => per.set(e.school, (per.get(e.school) || 0) + 1));
-    events[teamEv].forEach(e => {
-      if (per.get(e.school) === 1 && e.name !== e.school && e.name.startsWith(e.school) && e.name.length - e.school.length <= 2) {
-        e.flags.push(`只有一隊，隊名由「${e.name}」改為校名`);
-        e.name = e.school;
-      }
-    });
-  }
   // 同項目同名不同校
   for (const ev of Object.keys(events)) {
     const byName = new Map();
