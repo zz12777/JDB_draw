@@ -8,7 +8,7 @@ import * as B from './bracket.js';
 import { runDraw, checkDraw, swapPositions } from './draw.js';
 import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrder } from './excel.js';
 import { newSeed, uid, toCn } from './util.js';
-import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral } from './strong.js';
+import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage } from './strong.js';
 
 // ---------------- 圖示（線條） ----------------
 const ICON = {
@@ -633,7 +633,10 @@ async function handleSheetUpload(file, name) {
 // ---------------- 使用說明 ----------------
 // ---------------- 猛將資料庫 ----------------
 let strongQ = '', strongAll = false;
-const recText = list => list.map(recLabel).join('\n');
+const strongOpen = new Set();
+const KIND_TEXT = { 全大運: '全大運決賽前八', 分區預賽: '全大運分區預賽前四', 盃賽: '交大盃與其他盃賽前四' };
+/** 一串成績：全大運用藍色，其他用黑色 */
+const recHtml = list => list.map(r => `<span class="${r.k === '全大運' ? 'rec-top' : ''}">${esc(recLabel(r))}</span>`).join('、');
 /** 抽籤結果的亮燈：實心是個人賽得過名次，空心是只有團體賽名次 */
 function lampCell(x, isTeam) {
   const s = entryStrong(x, isTeam);
@@ -645,51 +648,65 @@ function lampCell(x, isTeam) {
 /** 團體：個人賽有名次的列成績，只有團體名次的列名字就好 */
 function teamDetail(list) {
   const a = list.filter(p => p.level === 2), b = list.filter(p => p.level === 1);
-  return [...a.map(p => `<b>${esc(p.name)}</b> ${esc(p.ind.map(recLabel).join('、'))}`),
+  return [...a.map(p => `<b>${esc(p.name)}</b> ${recHtml(p.ind)}`),
     ...(b.length ? [`<span class="muted">團體得名：</span>${esc(b.map(p => p.name).join('、'))}`] : [])].join('<br>');
 }
 function strongEntries() {
   return activeEvents().map(name => {
-    const isTeam = EVENT_TYPE[name] === 'team';
+    const type = EVENT_TYPE[name];
+    const isTeam = type === 'team';
     const rows = ev(name).entries.map(x => ({ x, s: entryStrong(x, isTeam) })).filter(r => r.s.list.length)
       .sort((a, b) => b.s.score - a.s.score);
-    return { name, isTeam, rows };
+    return { name, type, isTeam, rows };
   }).filter(g => g.rows.length);
 }
-function stepStrong() {
-  const groups = strongEntries();
+function detailOf(g, s) {
+  if (g.isTeam) return teamDetail(s.list);
+  if (g.type === 'single') return recHtml([...s.list[0].ind, ...s.list[0].team]); // 單打不用再寫名字
+  return s.list.map(p => `<b>${esc(p.name)}</b> ${recHtml([...p.ind, ...p.team])}`).join('<br>');
+}
+function strongListHtml() {
   const q = strongQ.trim();
   const people = allPlayers().map(p => ({ ...p, ind: p.ind.filter(isGeneral), team: p.team.filter(isGeneral) }))
     .filter(p => p.ind.length || (strongAll && p.team.length))
     .filter(p => !q || p.name.includes(q) || p.schools.some(u => u.includes(q)))
     .sort((a, b) => (b.ind.length - a.ind.length) || (b.team.length - a.team.length));
   const shown = people.slice(0, 300);
-  const who = p => `<b>${esc(p.name)}</b>${p.level === 2 ? '' : '<span class="muted small">（團體）</span>'}`;
+  return `<div class="tbl-wrap scroll"><table>
+      <thead><tr><th>姓名</th><th>學校</th><th>個人賽</th><th>團體賽</th></tr></thead>
+      <tbody>${shown.map(p => `<tr><td class="nowrap">${esc(p.name)}</td><td>${esc(p.schools.join('、'))}</td>
+        <td class="small">${recHtml(p.ind)}</td><td class="small">${recHtml(p.team)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <p class="small muted">共 ${people.length} 人${people.length > shown.length ? `，只顯示前 ${shown.length} 人，請用搜尋` : ''}。</p>`;
+}
+function stepStrong() {
+  const groups = strongEntries();
+  const cov = coverage();
   $('#main').innerHTML = `
   <section class="panel">
+    <h2>資料庫涵蓋範圍</h2>
+    <div class="kv">${cov.map(c => `<b>${esc(KIND_TEXT[c.k] || c.k)}</b><span>${esc(c.items.join('、'))}</span>`).join('')}</div>
+    <p class="small muted">用人名比對，換學校也找得到。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是分區預賽與盃賽。公開組選手只能報社會組，不列在下方資料庫，但一樣會用在社會組的燈號。</p>
+  </section>
+  <section class="panel">
     <h2>本屆名單裡的猛將</h2>
-    <p class="small muted"><span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。抽籤結果也會用同樣的燈號標示，用人名比對，換學校也找得到。</p>
     ${groups.length ? groups.map(g => `
-      <h3>${g.name}<span class="muted small">　${g.rows.length} ${g.isTeam ? '隊' : '筆'}</span></h3>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>${unitWord(g.name)}</th><th>${nameWord(g.name)}</th>${g.isTeam ? '<th class="num">猛將</th>' : ''}<th>成績</th></tr></thead>
-        <tbody>${g.rows.map(({ x, s }) => `<tr><td class="nowrap">${esc(x.school)}</td><td class="nowrap">${esc(x.name)}</td>
-          ${g.isTeam ? `<td class="num nowrap">${s.a ? `<span class="lamp on"></span>${s.a}` : ''} ${s.b ? `<span class="lamp half"></span>${s.b}` : ''}</td>` : ''}
-          <td class="small">${g.isTeam ? teamDetail(s.list) : s.list.map(p => `${who(p)} ${esc([...p.ind, ...p.team].map(recLabel).join('、'))}`).join('<br>')}</td></tr>`).join('')}</tbody>
-      </table></div>`).join('')
+      <details class="fold" data-fold="${g.name}" ${strongOpen.has(g.name) ? 'open' : ''}>
+        <summary>${g.name}<span class="muted small">　${g.rows.length} ${g.isTeam ? '隊' : '筆'}</span></summary>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>${unitWord(g.name)}</th><th>${nameWord(g.name)}</th>${g.isTeam ? '<th class="num">猛將</th>' : ''}<th>成績</th></tr></thead>
+          <tbody>${g.rows.map(({ x, s }) => `<tr><td class="nowrap">${esc(x.school)}</td><td class="nowrap">${esc(x.name)}</td>
+            ${g.isTeam ? `<td class="num nowrap">${s.a ? `<span class="lamp on"></span>${s.a}` : ''} ${s.b ? `<span class="lamp half"></span>${s.b}` : ''}</td>` : ''}
+            <td class="small">${detailOf(g, s)}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </details>`).join('')
     : '<div class="empty">名單裡還沒有找到資料庫中的選手（先完成步驟 1、2）。</div>'}
   </section>
   <section class="panel">
     <div class="row"><h2>資料庫（一般組）</h2><span class="spacer"></span>
       <input type="search" id="strong-q" placeholder="搜尋姓名或學校" value="${esc(strongQ)}" style="width:180px">
       <label class="small"><input type="checkbox" id="strong-all" ${strongAll ? 'checked' : ''}> 含只有團體賽名次的選手</label></div>
-    <p class="small muted">收錄全大運決賽前八（112 到 115 年）、全大運分區預賽前四、交大盃前四（第九到十二屆）。這裡只列一般組與交大盃大專組；公開組選手只能報社會組，資料一樣會用在社會組的燈號。</p>
-    <div class="tbl-wrap scroll"><table>
-      <thead><tr><th>姓名</th><th>學校</th><th>個人賽</th><th>團體賽</th></tr></thead>
-      <tbody>${shown.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.schools.join('、'))}</td>
-        <td class="small">${esc(p.ind.map(recLabel).join('、'))}</td><td class="small">${esc(p.team.map(recLabel).join('、'))}</td></tr>`).join('')}</tbody>
-    </table></div>
-    <p class="small muted">共 ${people.length} 人${people.length > shown.length ? `，只顯示前 ${shown.length} 人，請用搜尋` : ''}。</p>
+    <div id="strong-list">${strongListHtml()}</div>
   </section>`;
 }
 
@@ -798,17 +815,25 @@ document.addEventListener('click', async ev0 => {
   }
 });
 
+// 搜尋只更新結果表，不重畫整頁；中文輸入法選字中不更新
+function updateStrongList(t) {
+  strongQ = t.value;
+  const box = $('#strong-list');
+  if (box) box.innerHTML = strongListHtml();
+}
 document.addEventListener('input', ev0 => {
-  if (ev0.target.id === 'strong-q') {
-    strongQ = ev0.target.value;
-    const pos = ev0.target.selectionStart;
-    render();
-    const el = $('#strong-q'); el.focus(); el.setSelectionRange(pos, pos);
-  }
+  if (ev0.target.id === 'strong-q' && !ev0.isComposing) updateStrongList(ev0.target);
 });
+document.addEventListener('compositionend', ev0 => {
+  if (ev0.target.id === 'strong-q') updateStrongList(ev0.target);
+});
+document.addEventListener('toggle', ev0 => {
+  const f = ev0.target.dataset && ev0.target.dataset.fold;
+  if (f) { if (ev0.target.open) strongOpen.add(f); else strongOpen.delete(f); }
+}, true);
 
 document.addEventListener('change', ev0 => {
-  if (ev0.target.id === 'strong-all') { strongAll = ev0.target.checked; render(); return; }
+  if (ev0.target.id === 'strong-all') { strongAll = ev0.target.checked; $('#strong-list').innerHTML = strongListHtml(); return; }
   const t = ev0.target;
   const d = t.dataset;
   if (d.file) { if (t.files[0]) handleFile(t.files[0], d.file); return; }

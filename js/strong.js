@@ -18,7 +18,23 @@ for (const r of STRONG) {
     (TEAM_EV.has(r.e) ? p.team : p.ind).push(r);
   }
 }
+// 成績由近到遠；同一年全大運在前
+const KORD = { 全大運: 0, 分區預賽: 1, 盃賽: 2 };
+const byRecent = (x, y) => (y.y - x.y) || ((KORD[x.k] ?? 3) - (KORD[y.k] ?? 3)) || (x.r - y.r);
+INDEX.forEach(p => { p.ind.sort(byRecent); p.team.sort(byRecent); });
 const NAMES = [...INDEX.keys()].sort((a, b) => b.length - a.length);
+
+/** 資料涵蓋範圍，依資料自動產生：[{ k, items: ['112全大運', ...] }] */
+export function coverage() {
+  const m = new Map();
+  for (const r of STRONG) {
+    if (!m.has(r.k)) m.set(r.k, new Map());
+    m.get(r.k).set(r.s, r.y);
+  }
+  return [...m.entries()].sort((a, b) => (KORD[a[0]] ?? 3) - (KORD[b[0]] ?? 3))
+    .map(([k, items]) => ({ k, items: [...items.entries()].sort((a, b) => a[1] - b[1]).map(x => x[0]) }));
+}
+export const playerCount = () => INDEX.size;
 
 export const recLabel = r => `${r.s} ${r.d}${r.e} ${rankLabel(r.r)}`;
 export const allPlayers = () => [...INDEX.values()];

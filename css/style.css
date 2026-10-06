@@ -162,3 +162,8 @@ details summary { cursor: pointer; color: var(--accent); font-size: 14px; }
 .lamps { white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
 h3 { font-size: 15px; margin: 18px 0 8px; }
 .nowrap { white-space: nowrap; }
+.rec-top { color: var(--accent); }
+details.fold { border: 1px solid var(--line); border-radius: var(--radius); margin: 8px 0; }
+details.fold > summary { cursor: pointer; padding: 10px 14px; font-weight: 500; list-style: revert; }
+details.fold[open] > summary { border-bottom: 1px solid var(--line); }
+details.fold .tbl-wrap { border: 0; border-radius: 0; }
