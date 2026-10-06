@@ -8,6 +8,7 @@ import * as B from './bracket.js';
 import { runDraw, checkDraw, swapPositions } from './draw.js';
 import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrder } from './excel.js';
 import { newSeed, uid, toCn } from './util.js';
+import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral } from './strong.js';
 
 // ---------------- 圖示（線條） ----------------
 const ICON = {
@@ -23,6 +24,7 @@ const ICON = {
   open: '<path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
   reset: '<path d="M4 4v6h6"/><path d="M5 15a8 8 0 1 0 1-9L4 10"/>',
   swap: '<path d="M7 4 3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17v.5"/>',
 };
 const icon = n => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
@@ -115,15 +117,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '猛將資料庫', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 6 ? `<span class="n">${i + 1}</span>` : icon('help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 6 ? `<span class="n">${i + 1}</span>` : icon(i === 6 ? 'star' : 'help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepStrong, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -432,12 +434,12 @@ function stepDraw() {
     <p class="small muted">亂數代碼 <b>${esc(d.seed)}</b>，${new Date(d.time).toLocaleString('zh-TW')} 抽出${d.swaps ? `，之後手動對調 ${d.swaps} 次` : ''}。
       對調兩個籤位方式：先點一列，再點另一列。</p>
     <div class="tbl-wrap scroll"><table>
-      <thead><tr><th class="num">籤號</th><th>位置</th>${st.kind === 'ko' ? '<th>首場</th>' : ''}<th>${unitWord(name)}</th><th>${nameWord(name)}</th><th>種子</th></tr></thead>
+      <thead><tr><th class="num">籤號</th><th>位置</th>${st.kind === 'ko' ? '<th>首場</th>' : ''}<th>${unitWord(name)}</th><th>${nameWord(name)}</th><th>猛將</th><th>種子</th></tr></thead>
       <tbody>${Array.from({ length: st.positions }, (_, i) => i + 1).map(p => {
         const x = byPos.get(p);
         return `<tr class="click ${pick === p ? 'sel' : ''}" data-pos="${p}">
           <td class="num">${p}</td><td>${where(p)}</td>${st.kind === 'ko' ? `<td>${firstOf.get(p) || ''}</td>` : ''}
-          <td>${esc(x ? x.school : '')}</td><td>${esc(x ? x.name : '')}</td><td>${x && fmtSeed(x.seed) !== '' ? '<span class="tag info">種子</span>' : ''}</td></tr>`;
+          <td>${esc(x ? x.school : '')}</td><td>${esc(x ? x.name : '')}</td><td>${x ? lampCell(x, st.kind === 'rr') : ''}</td><td>${x && fmtSeed(x.seed) !== '' ? '<span class="tag info">種子</span>' : ''}</td></tr>`;
       }).join('')}</tbody></table></div>`;
   }
 
@@ -460,7 +462,11 @@ function doDraw(name) {
   if (err) return toast(err);
   const seed = ($('#seed').value || '').trim() || newSeed();
   try {
-    const assign = runDraw(e.entries, st, seed);
+    let assign = runDraw(e.entries, st, seed);
+    if (st.kind === 'rr') {
+      const score = new Map(e.entries.map(x => [x.id, entryStrong(x, true).score]));
+      assign = arrangeRR(e.entries, st, assign, x => score.get(x.id) || 0, a => checkDraw(e.entries, st, a));
+    }
     e.draw = { assign, seed, time: Date.now(), sig: sig(e.entries), swaps: 0 };
     pick = null;
     toast(`${name}抽籤完成`);
@@ -625,6 +631,68 @@ async function handleSheetUpload(file, name) {
 }
 
 // ---------------- 使用說明 ----------------
+// ---------------- 猛將資料庫 ----------------
+let strongQ = '', strongAll = false;
+const recText = list => list.map(recLabel).join('\n');
+/** 抽籤結果的亮燈：實心是個人賽得過名次，空心是只有團體賽名次 */
+function lampCell(x, isTeam) {
+  const s = entryStrong(x, isTeam);
+  if (!s.list.length) return '';
+  const tip = s.list.map(p => `${p.name}：${[...p.ind, ...p.team].map(recLabel).join('、')}`).join('\n');
+  if (!isTeam) return `<span class="lamp ${s.a ? 'on' : 'half'}" title="${esc(tip)}"></span>`;
+  return `<span class="lamps" title="${esc(tip)}">${s.a ? `<span class="lamp on"></span>${s.a}` : ''}${s.b ? `<span class="lamp half"></span>${s.b}` : ''}</span>`;
+}
+/** 團體：個人賽有名次的列成績，只有團體名次的列名字就好 */
+function teamDetail(list) {
+  const a = list.filter(p => p.level === 2), b = list.filter(p => p.level === 1);
+  return [...a.map(p => `<b>${esc(p.name)}</b> ${esc(p.ind.map(recLabel).join('、'))}`),
+    ...(b.length ? [`<span class="muted">團體得名：</span>${esc(b.map(p => p.name).join('、'))}`] : [])].join('<br>');
+}
+function strongEntries() {
+  return activeEvents().map(name => {
+    const isTeam = EVENT_TYPE[name] === 'team';
+    const rows = ev(name).entries.map(x => ({ x, s: entryStrong(x, isTeam) })).filter(r => r.s.list.length)
+      .sort((a, b) => b.s.score - a.s.score);
+    return { name, isTeam, rows };
+  }).filter(g => g.rows.length);
+}
+function stepStrong() {
+  const groups = strongEntries();
+  const q = strongQ.trim();
+  const people = allPlayers().map(p => ({ ...p, ind: p.ind.filter(isGeneral), team: p.team.filter(isGeneral) }))
+    .filter(p => p.ind.length || (strongAll && p.team.length))
+    .filter(p => !q || p.name.includes(q) || p.schools.some(u => u.includes(q)))
+    .sort((a, b) => (b.ind.length - a.ind.length) || (b.team.length - a.team.length));
+  const shown = people.slice(0, 300);
+  const who = p => `<b>${esc(p.name)}</b>${p.level === 2 ? '' : '<span class="muted small">（團體）</span>'}`;
+  $('#main').innerHTML = `
+  <section class="panel">
+    <h2>本屆名單裡的猛將</h2>
+    <p class="small muted"><span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。抽籤結果也會用同樣的燈號標示，用人名比對，換學校也找得到。</p>
+    ${groups.length ? groups.map(g => `
+      <h3>${g.name}<span class="muted small">　${g.rows.length} ${g.isTeam ? '隊' : '筆'}</span></h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>${unitWord(g.name)}</th><th>${nameWord(g.name)}</th>${g.isTeam ? '<th class="num">猛將</th>' : ''}<th>成績</th></tr></thead>
+        <tbody>${g.rows.map(({ x, s }) => `<tr><td class="nowrap">${esc(x.school)}</td><td class="nowrap">${esc(x.name)}</td>
+          ${g.isTeam ? `<td class="num nowrap">${s.a ? `<span class="lamp on"></span>${s.a}` : ''} ${s.b ? `<span class="lamp half"></span>${s.b}` : ''}</td>` : ''}
+          <td class="small">${g.isTeam ? teamDetail(s.list) : s.list.map(p => `${who(p)} ${esc([...p.ind, ...p.team].map(recLabel).join('、'))}`).join('<br>')}</td></tr>`).join('')}</tbody>
+      </table></div>`).join('')
+    : '<div class="empty">名單裡還沒有找到資料庫中的選手（先完成步驟 1、2）。</div>'}
+  </section>
+  <section class="panel">
+    <div class="row"><h2>資料庫（一般組）</h2><span class="spacer"></span>
+      <input type="search" id="strong-q" placeholder="搜尋姓名或學校" value="${esc(strongQ)}" style="width:180px">
+      <label class="small"><input type="checkbox" id="strong-all" ${strongAll ? 'checked' : ''}> 含只有團體賽名次的選手</label></div>
+    <p class="small muted">收錄全大運決賽前八（112 到 115 年）、全大運分區預賽前四、交大盃前四（第九到十二屆）。這裡只列一般組與交大盃大專組；公開組選手只能報社會組，資料一樣會用在社會組的燈號。</p>
+    <div class="tbl-wrap scroll"><table>
+      <thead><tr><th>姓名</th><th>學校</th><th>個人賽</th><th>團體賽</th></tr></thead>
+      <tbody>${shown.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.schools.join('、'))}</td>
+        <td class="small">${esc(p.ind.map(recLabel).join('、'))}</td><td class="small">${esc(p.team.map(recLabel).join('、'))}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <p class="small muted">共 ${people.length} 人${people.length > shown.length ? `，只顯示前 ${shown.length} 人，請用搜尋` : ''}。</p>
+  </section>`;
+}
+
 function stepHelp() {
   $('#main').innerHTML = `
   <section class="panel">
@@ -670,6 +738,7 @@ function stepHelp() {
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用抽籤結果或上傳最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
+      <li><b>猛將資料庫</b>：歷年全大運與交大盃得名的選手，抽籤結果會用燈號標出名單裡的猛將。</li>
     </ol>
   </section>`;
 }
@@ -729,7 +798,17 @@ document.addEventListener('click', async ev0 => {
   }
 });
 
+document.addEventListener('input', ev0 => {
+  if (ev0.target.id === 'strong-q') {
+    strongQ = ev0.target.value;
+    const pos = ev0.target.selectionStart;
+    render();
+    const el = $('#strong-q'); el.focus(); el.setSelectionRange(pos, pos);
+  }
+});
+
 document.addEventListener('change', ev0 => {
+  if (ev0.target.id === 'strong-all') { strongAll = ev0.target.checked; render(); return; }
   const t = ev0.target;
   const d = t.dataset;
   if (d.file) { if (t.files[0]) handleFile(t.files[0], d.file); return; }

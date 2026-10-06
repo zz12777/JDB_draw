@@ -154,3 +154,11 @@ textarea { width: 100%; min-height: 110px; font-family: inherit; }
 .empty { text-align: center; color: var(--muted); padding: 32px 0; }
 details summary { cursor: pointer; color: var(--accent); font-size: 14px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+
+/* 猛將燈號 */
+.lamp { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; border: 2px solid #c2410c; box-sizing: border-box; }
+.lamp.on { background: #c2410c; }
+.lamp.half { background: transparent; }
+.lamps { white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+h3 { font-size: 15px; margin: 18px 0 8px; }
+.nowrap { white-space: nowrap; }
