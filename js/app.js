@@ -715,14 +715,14 @@ function stepTime() {
         <h3>團體賽每場佔用桌子的分鐘（桌分鐘）</h3>
         <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
           ${num('tPre', '預賽')}${num('tFinal', '決賽（四強前）')}${num('tSemi', '四強起')}${num('tAfterDraw', '抽籤後第一輪')}
-          ${num('split', '一場最多拆幾桌', '桌')}${num('splitSemi', '四強起最多拆幾桌', '桌')}
+          ${num('splitSemi', '有空桌時一場最多拆幾桌', '桌')}${num('teamMinRound', '決賽一輪最短')}
         </div>
         <p class="small muted">桌分鐘：一場團體賽在一張桌子上打完要幾分鐘。拆成 2 桌同時打，實際只要一半時間，但佔用的桌分鐘不變。預賽約 95 到 105 分；抽籤後第一輪要等交點單，所以抓 120 分。</p>
         <h3>開始時機與其他</h3>
         <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
           <label class="field">大專團體預賽開始<select data-sp="teamStartStage">${[16, 8, 4].map(v => `<option value="${v}" ${+p.teamStartStage === v ? 'selected' : ''}>個人賽打到 ${v} 強時</option>`).join('')}</select></label>
           <label class="field">大專團體預賽每個時段叫<select data-sp="teamChunk">${[['auto', '自動'], ['full', '一整輪'], ['half', '半輪']].map(([v, t]) => `<option value="${v}" ${p.teamChunk === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-          <label class="field">社會組預賽開始<select data-sp="socialStartRound">${[1, 2, 3].map(v => `<option value="${v}" ${+p.socialStartRound === v ? 'selected' : ''}>大專決賽第 ${v} 輪時</option>`).join('')}</select></label>
+          <label class="field">社會組預賽開始<select data-sp="socialStartRound">${[['auto', '自動（大專決賽空出一半桌子時）'], ['1', '大專決賽第 1 輪時'], ['2', '大專決賽第 2 輪時'], ['3', '大專決賽第 3 輪時']].map(([v, t]) => `<option value="${v}" ${String(p.socialStartRound) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
           ${num('drawMin', '決賽抽籤')}${num('roundTo', '時段長度取整到')}
           <label class="field">第一天最晚結束<input type="time" value="${p.day1Latest}" data-sp="day1Latest"></label>
           <label class="field" style="flex-direction:row;align-items:center;gap:6px;margin-top:18px"><input type="checkbox" ${p.finalDay1 ? 'checked' : ''} data-sp="finalDay1">時間許可時，第一天先打大專團體決賽第一輪</label>
@@ -945,13 +945,13 @@ function stepHelp() {
         <ul>
           <li>時段長度 ＝ 這段所有比賽的分鐘加起來 ÷ 桌數。例：第一輪男單 64 場、女單 15 場，(64＋15)×20 ÷ 24 桌 ≒ 66 分，取整成 70 分。</li>
           <li>場次比桌子少的時候，不能只看平均，至少要等最久的一場打完。例：8 強每場 30 分，就算只有 16 場也要 30 分。</li>
-          <li>團體賽可以拆桌：一場拆成 2 桌同時打，實際時間減半（四強起最多拆 5 桌）。所以一個時段至少要「桌分鐘 ÷ 拆桌數」。</li>
+          <li>團體賽可以拆桌：有空桌時一場最多拆成 5 桌同時打，實際時間變短但佔用的桌分鐘不變。所以場次很少的時段，至少要「桌分鐘 ÷ 拆桌數」；決賽一輪至少抓 30 分。</li>
         </ul></li>
       <li><b>排成兩天</b>
         <ul>
           <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。之後每個時段男女團各叫下一批：通常一個時段叫一整輪；男女團一輪加起來比桌數多很多時（超過桌數的 1.25 倍，例如第十屆男團 24 場加女團 9 場），就把每輪拆成兩半，一個時段叫半輪，時段比較短、桌子不會塞爆。也可以在參數裡固定選一整輪或半輪。哪一項預賽打完，下一個時段就抽籤</li>
           <li>抽完籤如果時間還早，第一天就接著打那一項的決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完；放不下的那項留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
-          <li>第二天：大專團體決賽一輪一輪打（男女團各自從還沒打的那一輪開始），社會組預賽從大專決賽第 2 輪開始一起進行。打完後社會組決賽抽籤，接著社會組決賽。</li>
+          <li>第二天：大專團體決賽一輪一輪打（男女團各自從還沒打的那一輪開始）。大專決賽打到場數少於桌數一半、空出一半桌子時，社會組預賽第一輪開始，用空出來的桌子一起打，所以這一輪可能跨好幾列，直到打完。大專決賽結束後，社會組預賽剩下的輪次一輪一列，打完馬上決賽抽籤，接著社會組決賽。團體決賽場次少的時候可以拆桌，但一輪至少抓 30 分。</li>
         </ul></li>
       <li><b>手動調整</b>：每個時段的「長度」可以改，例如湊成整點或半點，後面的時間會跟著順延。時間差 ＝ 長度減估算，正數表示抓得比較寬鬆，紅字表示可能會延遲。參數（桌數、每場分鐘、開始時機）都可以改，按「參數改回預設」就回到往年數值。</li>
       <li><b>下載 Excel</b>：第一頁是時間預定表，格式比照往年；第二頁「估算明細」列出每個時段的場數、分鐘和時間差，方便核對。</li>

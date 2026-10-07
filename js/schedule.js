@@ -15,10 +15,10 @@ export const DEFAULT_PARAMS = {
   tFinal: 105,   // 決賽（四強前）
   tSemi: 150,    // 四強起
   tAfterDraw: 120, // 抽籤後第一輪（要等點單，社會組決賽第一輪）
-  split: 2,      // 一場團體賽最多拆幾桌（四強前）
-  splitSemi: 5,  // 四強起最多拆幾桌
+  splitSemi: 5,  // 一場團體賽有空桌時最多拆幾桌
+  teamMinRound: 30, // 團體決賽一輪最短幾分鐘
   teamStartStage: 8, // 個人賽打到幾強時，大專團體預賽開始
-  socialStartRound: 2, // 社會組預賽在大專團體決賽第幾輪開始
+  socialStartRound: 'auto', // 社會組預賽在大專團體決賽第幾輪開始（auto：大專場數少於桌數一半時）
   drawMin: 20,   // 決賽抽籤
   finalDay1: true, // 第一天時間許可時，先打大專團體決賽第一輪
   day1Latest: '20:00', // 第一天最晚結束
@@ -84,7 +84,7 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
     teams.forEach(e => {
       const x = structs[e].rounds[r];
       if (!x || !x.count) return;
-      items.push({ event: e, count: x.count, unit: p.tPre, text: range(x.from, x.to), tableMin: x.count * p.tPre, minLen: p.tPre / p.split });
+      items.push({ event: e, count: x.count, unit: p.tPre, text: range(x.from, x.to), tableMin: x.count * p.tPre, minLen: p.tPre / p.splitSemi });
     });
     return items;
   };
@@ -128,13 +128,14 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
   const finals = TEAM.filter(e => structs[e] && structs[e].kind === 'rr' && structs[e].groups.length >= 1);
   const ko = {}, top = {};
   finals.forEach(e => { ko[e] = buildKO([structs[e].groups.length * 2]); top[e] = Math.max(...ko[e].matches.map(m => m.depth)); });
-  const teamUnit = (depth, first) => (depth <= 1 ? { unit: p.tSemi, split: p.splitSemi } : first ? { unit: p.tAfterDraw, split: p.split } : { unit: p.tFinal, split: p.split });
+  // 一場團體賽有空桌時最多拆成幾桌同時打（場次少時一輪最短要多久）
+  const teamUnit = (depth, first) => ({ unit: depth <= 1 ? p.tSemi : first ? p.tAfterDraw : p.tFinal, split: p.splitSemi });
   const koItems = (e, k, d, afterDraw) => {
     const r = k.rounds.find(x => x.depth === d);
     if (!r) return null;
     const first = afterDraw && d === Math.max(...k.matches.map(m => m.depth));
     const { unit, split } = teamUnit(d, first);
-    return { event: e, count: r.count, unit, text: frange(r.from, r.to), tableMin: r.count * unit, minLen: unit / split };
+    return { event: e, count: r.count, unit, text: frange(r.from, r.to), tableMin: r.count * unit, minLen: Math.max(p.teamMinRound, unit / split) };
   };
 
   const s1 = toMin(p.day1Start), s2 = toMin(p.day2Start);
@@ -146,7 +147,7 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
     const chunksOf = e => structs[e].rounds.flatMap(x => {
       if (!x.count) return [];
       const parts = half && x.count >= 2 ? [[x.from, x.from + Math.ceil(x.count / 2) - 1], [x.from + Math.ceil(x.count / 2), x.to]] : [[x.from, x.to]];
-      return parts.map(([a, b]) => ({ event: e, count: b - a + 1, unit: p.tPre, text: range(a, b), tableMin: (b - a + 1) * p.tPre, minLen: p.tPre / p.split }));
+      return parts.map(([a, b]) => ({ event: e, count: b - a + 1, unit: p.tPre, text: range(a, b), tableMin: (b - a + 1) * p.tPre, minLen: p.tPre / p.splitSemi }));
     });
     const chunks = {};
     teams.forEach(e => { chunks[e] = chunksOf(e); });
@@ -212,17 +213,40 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
   });
   const day2 = [];
   const social = structs['社團'] && structs['社團'].kind === 'rr' ? structs['社團'] : null;
-  const socRounds = social ? social.rounds : [];
-  const socStart = Math.max(1, +p.socialStartRound || 1) - 1;
-  const nSlots = Math.max(uniRounds.length, socRounds.length ? socStart + socRounds.length : 0);
-  for (let j = 0; j < nSlots; j++) {
-    const items = [...(uniRounds[j] || [])];
-    const sr = j - (uniRounds.length ? socStart : 0);
-    if (sr >= 0 && sr < socRounds.length) {
-      const x = socRounds[sr];
-      items.push({ event: '社團', count: x.count, unit: p.tPre, text: range(x.from, x.to), tableMin: x.count * p.tPre, minLen: p.tPre / p.split });
-    }
-    if (items.length) day2.push(slot(`d2-s${j + 1}`, items));
+  const socQ = (social ? social.rounds : []).filter(x => x.count).map(x => ({
+    event: '社團', count: x.count, unit: p.tPre, text: range(x.from, x.to), tableMin: x.count * p.tPre, minLen: p.tPre / p.splitSemi }));
+  // 大專決賽每一輪一列
+  const uniRows = uniRounds.map((items, j) => slot(`d2-s${j + 1}`, items));
+  // 社會組預賽什麼時候開始：自動＝大專決賽那一輪的場數少於桌數一半（桌子空出一半以上）
+  let start = p.socialStartRound === 'auto' || p.socialStartRound == null
+    ? uniRows.findIndex(r => r.items.reduce((x, i) => x + i.count, 0) < T / 2)
+    : Math.max(0, +p.socialStartRound - 1);
+  if (start < 0 || start > uniRows.length) start = uniRows.length;
+  // 社會組每一輪用大專決賽沒用到的桌子打；一輪可能跨好幾列，打完才叫下一輪
+  let q = 0, rem = null, from = -1;
+  const close = (i, need) => {
+    const r = uniRows[i];
+    r.est = Math.max(r.est, need);
+    (uniRows[from].spanItems = uniRows[from].spanItems || []).push({ x: socQ[q], span: i - from + 1 });
+    q++; rem = null;
+  };
+  for (let i = start; i < uniRows.length && q < socQ.length; i++) {
+    const r = uniRows[i];
+    if (rem === null) { rem = socQ[q].tableMin; from = i; }
+    const free = T * r.est - r.tableMin;
+    if (rem <= free + 1e-6) close(i, Math.max((r.tableMin + rem) / T, socQ[q].minLen));
+    else rem -= Math.max(0, free);
+  }
+  if (rem !== null && q < socQ.length) {
+    // 大專決賽打完了這一輪還沒打完：延長最後一列
+    const i = uniRows.length - 1;
+    close(i, uniRows[i].est + rem / T);
+  }
+  day2.push(...uniRows);
+  // 剩下的社會組預賽，一輪一列，打完馬上抽籤
+  for (; q < socQ.length; q++) {
+    const r = slot(`d2-p${q + 1}`, [socQ[q]]);
+    day2.push(r);
   }
   if (social && social.groups.length) {
     day2.push({ id: 'd2-draw', items: [], est: p.drawMin, draw: '決賽抽籤', drawCol: '社團', tableMin: 0, minLen: p.drawMin });
@@ -244,6 +268,10 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
         const n = r.teamSpan || 1;
         r.cells[x.event] = { text: x.text, span: n, bold: !!x.draw };
         for (let k = 1; k < n; k++) rows[i + k].skip.add(x.event);
+      });
+      (r.spanItems || []).forEach(({ x, span }) => {
+        r.cells[x.event] = { text: x.text, span };
+        for (let k = 1; k < span; k++) rows[i + k].skip.add(x.event);
       });
       if (r.draw) r.cells[r.drawCol] = { text: r.draw, span: 1, bold: true };
     });
@@ -360,7 +388,7 @@ export function scheduleWorkbook(sch, p, ExcelJSLib = globalThis.ExcelJS) {
   const d = wb.addWorksheet('估算明細');
   d.addRow(['日', '開始', '結束', '表定(分)', '估算(分)', '時間差(分)', '累計時間差(分)', '內容', '桌分鐘', '說明']);
   const line = (day, x) => {
-    const parts = x.desc ? [x.desc] : [...(x.items || []), ...(x.teamItems || [])].map(i => `${i.event} ${i.text}（${i.count}場×${i.unit}分）`);
+    const parts = x.desc ? [x.desc] : [...(x.items || []), ...(x.teamItems || []), ...(x.spanItems || []).map(y => y.x)].map(i => `${i.event} ${i.text}（${i.count}場×${i.unit}分）`);
     if (x.draw) parts.push(x.draw);
     d.addRow([day, fmt(x.start), fmt(x.end), x.len, Math.round(x.est), Math.round(x.diff), Math.round(x.cumDiff), parts.join('、'), Math.round(x.tableMin || 0),
       x.block ? '與團體預賽第一輪重疊' : '']);

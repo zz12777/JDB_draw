@@ -8,7 +8,7 @@ const TEAM_SUBTITLE = { 男團: '大專男子團體組 出賽名單', 女團: '�
 // ---------------- 場次資料 ----------------
 
 /**
- * 個人賽：每場一張。籤號／校名／姓名：第一場是籤位上的人，之後是「X勝」。
+ * 個人賽：每場一張。籤號／校名／姓名：第一場是籤位上的人，之後還不知道是誰，留空手寫。
  * byPos: Map(籤號 -> {school, name})
  */
 export function koSheets(st, byPos) {
@@ -18,7 +18,7 @@ export function koSheets(st, byPos) {
         const e = byPos.get(c.pos);
         return { num: String(c.pos), school: e ? e.school : '', name: e ? e.name : '' };
       }
-      return { num: '', school: '', name: `${c.label}勝` };
+      return { num: '', school: '', name: '' }; // 還不知道是誰，留空手寫
     };
     return { label: m.label, a: side(m.children[0]), b: side(m.children[1]) };
   });
@@ -41,7 +41,7 @@ export function rrSheets(st, byPos, withFinal) {
   if (withFinal && n >= 2 && n <= 32) {
     const ko = buildKO([n]);
     ko.matches.forEach(m => {
-      const side = c => (c.kind === 'leaf' ? { slot: String(c.pos), team: '' } : { slot: `決(${c.label})勝`, team: '' });
+      const side = () => ({ slot: '', team: '' }); // 決賽隊伍要等抽籤，留空手寫
       out.push({ label: `決(${m.label})`, a: side(m.children[0]), b: side(m.children[1]) });
     });
   }
@@ -219,7 +219,7 @@ export function sheetsFromMatches(matches, byPos) {
       const e = byPos.get(x.pos);
       return { num: String(x.pos), school: e ? e.school : '', name: e ? e.name : '' };
     }
-    return { num: '', school: '', name: `${x.ref}勝` };
+    return { num: '', school: '', name: '' }; // 還不知道是誰，留空手寫
   };
   return matches.map(m => ({ label: m.label, a: side(m.a), b: side(m.b) }));
 }
