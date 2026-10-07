@@ -172,3 +172,5 @@ table.sched td, table.sched th { vertical-align: middle; }
 .tc { text-align: center; }
 .bad-t { color: var(--bad); }
 input.ovr { border-color: var(--warn); background: var(--warn-soft); }
+table.mini { margin: 6px 0; font-size: 13px; border-collapse: collapse; }
+table.mini th, table.mini td { border: 1px solid var(--line); padding: 3px 8px; text-align: left; }
