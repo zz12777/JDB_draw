@@ -43,8 +43,8 @@ export function indMinutes(event, nominal, p) {
   const t = event.endsWith('雙') ? p.double : p.single;
   return nominal >= 17 ? t[0] : nominal >= 5 ? t[1] : t[2];
 }
-const range = (a, b) => (a === b ? toCn(a) : `${toCn(a)}~${toCn(b)}`);
-const frange = (a, b) => (a === b ? `決${a}` : `決${a}-${b}`);
+export const range = (a, b) => (a === b ? toCn(a) : `${toCn(a)}~${toCn(b)}`);
+export const frange = (a, b) => (a === b ? `決${a}` : `決${a}-${b}`);
 
 /** 單淘汰各輪（由第一輪到決賽）：{ depth, count, from, to } */
 function koRounds(st) {
@@ -294,6 +294,14 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
     });
   });
   const e2 = place(day2, s2, 0);
+  // 每一格（項目＋場次範圍）的開始、結束時間，給輪次表標題用
+  const times = {};
+  [[day1, 1], [day2, 2]].forEach(([rows, day]) => rows.forEach((r, i) => {
+    Object.entries(r.cells).forEach(([ev, x]) => {
+      const last = rows[Math.min(rows.length - 1, i + (x.span || 1) - 1)];
+      times[`${ev}|${x.text}`] = { day, start: r.start, end: last.end };
+    });
+  }));
   let cum = 0;
   [...day1, ...day2].forEach(r => { cum += r.diff; r.cumDiff = cum; });
 
@@ -303,7 +311,7 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
     teamPre: count(teams), teamFinal: finals.reduce((s, e) => s + ko[e].matches.length, 0),
     socialPre: social ? social.matchCount : 0, socialFinal: social ? social.groups.length * 2 - 1 : 0,
   };
-  return { day1, day2, end1: e1, end2: e2, start1: s1, start2: s2, summary, notes, tables: T };
+  return { day1, day2, end1: e1, end2: e2, start1: s1, start2: s2, summary, notes, tables: T, times };
 }
 
 // ---------------- Excel ----------------

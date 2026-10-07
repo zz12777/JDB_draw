@@ -10,6 +10,7 @@ import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrd
 import { newSeed, uid, toCn } from './util.js';
 import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage, setData, recordsFromRows } from './strong.js';
 import { parseCsvText } from './reader.js';
+import { computeOverlaps, roundsWorkbook, hitText } from './rounds.js';
 import { buildSchedule, scheduleWorkbook, DEFAULT_PARAMS, DAY1_COLS, DAY2_COLS, COL_TITLE, fmt as fmtTime } from './schedule.js';
 
 // ---------------- 圖示（線條） ----------------
@@ -121,15 +122,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '猛將資料庫', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '重疊名單與輪次表', '猛將資料庫', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 7 ? `<span class="n">${i + 1}</span>` : icon(i === 7 ? 'star' : 'help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 8 ? `<span class="n">${i + 1}</span>` : icon(i === 8 ? 'star' : 'help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepStrong, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepRounds, stepStrong, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -744,6 +745,52 @@ async function dlSched() {
   download(await workbookBlob(scheduleWorkbook(sch, p)), '賽程時間預定表.xlsx');
 }
 
+// ---------------- 重疊名單與輪次表 ----------------
+function overlapData() {
+  const evs = {};
+  ['男團', '女團', '社團', '男單', '女單', '男雙', '女雙'].forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
+  return computeOverlaps(evs);
+}
+function roundSources() {
+  const out = {};
+  ['男團', '女團', '社團'].forEach(e => { const src = sheetSource(e); if (src && src.st.kind === 'rr') out[e] = src; });
+  return out;
+}
+function stepRounds() {
+  const ov = overlapData();
+  const srcs = roundSources();
+  const head = ev => (ev === '社團' ? '也打大專團體' : '也打個人賽');
+  const lists = ['男團', '女團', '社團'].filter(ev => ov[ev]).map(ev => {
+    const n = ov[ev].filter(o => o.hits.length).length;
+    return `<details class="fold" data-fold="ov-${ev}" ${strongOpen.has('ov-' + ev) ? 'open' : ''}>
+      <summary>${ev}<span class="muted small">　${n} / ${ov[ev].length} 隊有重疊</span></summary>
+      <div class="tbl-wrap"><table><thead><tr><th>隊名</th><th>${head(ev)}</th></tr></thead><tbody>
+      ${ov[ev].map(o => `<tr><td class="nowrap">${esc(o.team)}</td><td>${o.hits.length ? esc(hitText(o.hits)) : `<span class="muted">${ev === '社團' ? '無大專組' : '無'}</span>`}</td></tr>`).join('')}
+      </tbody></table></div></details>`;
+  }).join('');
+  const srcRow = ev => `<b>${ev}</b><span>${srcs[ev] ? esc(srcs[ev].label) : '<span class="muted">沒有籤表（到點單頁上傳最終籤表，或完成抽籤）</span>'}</span>`;
+  $('#main').innerHTML = `
+  <section class="panel">
+    <h2>重疊名單</h2>
+    <p class="small muted">男團、女團：列出隊員裡也有報個人賽的人，括號寫單打或雙打。社團：列出隊員裡也有打大專團體的人，括號寫哪一隊。名單來自報名表單；大專組用姓名加學校比對，社團用姓名比對。</p>
+    ${lists || '<div class="empty">還沒有團體賽名單，請先完成步驟 1、2。</div>'}
+  </section>
+  <section class="panel">
+    <div class="row"><h2>輪次表</h2><span class="spacer"></span>
+      <button class="btn" data-dlrounds ${Object.keys(srcs).length ? '' : 'disabled'}>${icon('download')}下載輪次表 Excel</button></div>
+    <p class="small muted">照往年輪次表的版面：第一天預賽各輪並排，第二天決賽與社會組兩輪一排。已填好場次、籤位、隊名，重疊名單寫在「開始時間、尚有大專組、備註等」欄；時段取自賽程時間表。勾選欄留空，上傳到雲端用 Google 試算表開啟後，選取勾選欄按「插入 &gt; 核取方塊」即可。決賽的隊名要等決賽抽籤後再填。</p>
+    <div class="kv">${['男團', '女團', '社團'].map(srcRow).join('')}</div>
+  </section>`;
+}
+async function dlRounds() {
+  const { structs } = scheduleStructs();
+  const p = schParams();
+  let sch = null;
+  try { sch = Object.keys(structs).length ? buildSchedule(structs, p, S.schedule.override || {}) : null; } catch { sch = null; }
+  const wb = roundsWorkbook(roundSources(), overlapData(), sch, p);
+  download(await workbookBlob(wb), '輪次表.xlsx');
+}
+
 // ---------------- 猛將資料庫 ----------------
 let strongQ = '', strongAll = false;
 // 共用試算表：大家在這裡新增成績，網頁打開時讀「發布到網路」的 CSV
@@ -765,7 +812,7 @@ async function loadSheet() {
   } catch (err) {
     sheetStatus = { state: 'fail', msg: err.name === 'AbortError' ? '逾時' : err.message };
   }
-  if (S.step === 3 || S.step === 7) render();
+  if (S.step === 3 || S.step === 8) render();
 }
 const strongOpen = new Set();
 const KIND_TEXT = { 全大運: '全大運決賽前八', 盃賽: '交大盃與其他盃賽前四' };
@@ -895,6 +942,7 @@ function stepHelp() {
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
       <li><b>賽程時間表</b>：依完成籤表或籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
+      <li><b>重疊名單與輪次表</b>：列出男團、女團裡有打個人賽的人，社團裡有打大專團體的人；下載照往年版面的輪次表 Excel，場次、隊名、重疊名單都已填好，上傳到雲端用 Google 試算表開啟後加上核取方塊即可使用。</li>
     </ol>
   </section>
   <section class="panel">
@@ -927,10 +975,11 @@ function stepHelp() {
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-dlrounds],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
   if (d.dlsched !== undefined) return dlSched();
+  if (d.dlrounds !== undefined) return dlRounds();
   if (d.ovreset !== undefined) { S.schedule.override = {}; return render(); }
   if (d.spreset !== undefined) { S.schedule.params = {}; S.schedule.override = {}; return render(); }
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }
