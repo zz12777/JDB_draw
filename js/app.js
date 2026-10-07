@@ -501,7 +501,7 @@ function stepExport() {
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
     <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名與籤位等。</div>
-    <p class="small muted">完成籤表比照往年最終 Excel：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表並附決賽籤表（各組冠亞軍，決賽另外抽），另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
+    <p class="small muted">完成籤表：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表並附決賽籤表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
@@ -656,7 +656,7 @@ function stepTime() {
     ${S.sheetUploads[name] ? `<button class="btn ghost sm" data-sheetclear="${name}">${icon('reset')}改用籤表規劃</button>` : ''}</div></td></tr>`).join('');
   const srcPanel = `<section class="panel"><details class="fold" data-fold="sched-src" ${strongOpen.has('sched-src') || !Object.keys(structs).length ? 'open' : ''}>
     <summary>籤表來源（${Object.keys(structs).length} 項）</summary>
-    <div style="padding:12px 14px"><p class="small muted">可以上傳各項目的完成籤表 Excel（跟點單共用）；沒上傳的項目用步驟 3 的籤表規劃。</p>
+    <div style="padding:12px 14px"><p class="small muted">可以上傳各項目的完成籤表 Excel；沒上傳的項目會使用步驟 3 的籤表規劃版本。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th>來源</th><th></th></tr></thead><tbody>${srcRows}</tbody></table></div></div></details></section>`;
   if (!Object.keys(structs).length) {
     $('#main').innerHTML = `${srcPanel}<section class="panel"><div class="empty">還沒有籤表：請上傳完成籤表，或先完成步驟 1 到 3。</div></section>`;
@@ -688,7 +688,7 @@ function stepTime() {
     <div class="row"><h2>賽程時間表</h2><span class="spacer"></span>
       ${Object.keys(ov).length ? `<button class="btn ghost" data-ovreset>${icon('reset')}長度全部改回估算</button>` : ''}
       <button class="btn" data-dlsched>${icon('download')}下載 Excel</button></div>
-    <p class="small muted">依完成籤表或步驟 3 的籤表規劃自動排。每個時段：把這段所有比賽佔用桌子的分鐘數加起來，除以桌數，就是這段要多久；場次少的時候，至少要等最久的一場打完。第一天個人賽＋大專團體預賽（時間許可時再打大專團體決賽第一輪），第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
+    <p class="small muted">第一天個人賽＋大專團體預賽（時間許可時再打大專團體決賽第一輪），第二天大專團體決賽＋社會組。「長度」可以手動改，改完後面的時間會跟著順延。</p>
     ${problems.length ? `<div class="note warn"><b>這些項目沒有排進來</b><ul>${problems.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     <div class="kv">
       <b>第一天</b><span>${fmtTime(sch.start1)} 開打，預估 <b>${fmtTime(sch.end1)}</b> 結束（單打 ${sm.singles} 場、雙打 ${sm.doubles} 場、大專團體預賽 ${sm.teamPre} 場）</span>
@@ -737,7 +737,7 @@ function stepTime() {
     ${table(sch.day1, DAY1_COLS)}
     <h2 style="margin-top:20px">第二天${p.day2Date ? `（${esc(p.day2Date)}）` : ''}</h2>
     ${table(sch.day2, DAY2_COLS)}
-    <p class="small muted">估算：照公式算出的分鐘。時間差：長度減估算，正數表示抓得比較寬鬆，<span class="bad-t">紅字</span>表示可能會延遲。團體欄跨好幾列，表示和個人賽同時進行。</p>
+    <p class="small muted">估算：照公式算出的分鐘。時間差：長度減估算，正數表示抓得比較寬鬆。</p>
   </section>`;
 }
 async function dlSched() {
@@ -763,13 +763,13 @@ function stepOverlap() {
       : `<tr><td class="nowrap">${esc(o.team)}</td><td>${o.hits.length ? esc(hitText(o.hits)) : '<span class="muted">無大專組</span>'}</td></tr>`).join('');
     return `<details class="fold" data-fold="ov-${ev}" ${strongOpen.has('ov-' + ev) ? 'open' : ''}>
       <summary>${ev}<span class="muted small">　${n} / ${ov[ev].length} 隊有重疊</span></summary>
-      <div class="tbl-wrap"><table><thead><tr><th>隊名</th>${uni ? '<th>兼單打</th><th>兼雙打</th>' : '<th>兼大專團體</th>'}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
+      <div class="tbl-wrap"><table><thead><tr><th>隊名</th>${uni ? '<th>有打單打</th><th>有打雙打</th>' : '<th>有打大專團體</th>'}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
   }).join('');
   $('#main').innerHTML = `
   <section class="panel">
     <div class="row"><h2>重疊名單</h2><span class="spacer"></span>
       <button class="btn" data-dlov ${lists ? '' : 'disabled'}>${icon('download')}下載重疊名單 Excel</button></div>
-    <p class="small muted">男團、女團：隊員裡也有報單打或雙打的人。社團：隊員裡也有打大專男團、女團的人，括號寫哪一隊。名單來自報名表單；大專組用姓名加學校比對，社團用姓名比對。</p>
+    <p class="small muted">男團、女團：同時也有報名個人賽的隊員。社團：同時也有打大專男女團的隊員。</p>
     ${lists || '<div class="empty">還沒有團體賽名單，請先完成步驟 1、2。</div>'}
   </section>`;
 }
@@ -928,17 +928,17 @@ function stepHelp() {
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
       <li><b>賽程時間表</b>：依完成籤表或籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
-      <li><b>重疊名單</b>：列出男團、女團裡有打單打或雙打的人，社團裡有打大專團體的人，可下載 Excel。</li>
+      <li><b>重疊名單</b>：列出男女團裡有打個賽的人，社團裡有打大專團體的人，可下載 Excel。</li>
     </ol>
   </section>
   <section class="panel">
     <h2>賽程時間表怎麼算</h2>
-    <p>沿用往年「交大盃時間估算模型」的公式，場數、輪次、場次號碼自動帶入：有上傳完成籤表 Excel 的項目用上傳的，沒有的用籤表規劃。</p>
+    <p>沿用往年「交大盃時間估算模型」的公式，場數、輪次、場次號碼自動帶入。</p>
     <ol>
       <li><b>先算每場要多久</b>
         <ul>
-          <li>個人賽看「這一輪有幾場」：17 場以上每場 20 分（雙打 25），5 到 16 場 25 分，1 到 4 場 30 分。越後面的輪次打得越久，因為選手比較接近、休息也比較長。</li>
-          <li>第一輪是資格賽（人數不是 2 的次方）時，照它所在那一級算。例：女單 79 人，第一輪只有 15 場，但它是 64 場那一級，所以每場 20 分。</li>
+          <li>個人賽看「這一輪有幾場」：17 場以上每場 20 分（雙打 25），5 到 16 場 25 分，1 到 4 場 30 分。越後面的輪次打得越久。</li>
+          <li>第一輪照它所在那一級算。例：女單 79 人，第一輪只有 15 場，但它是 64 場那一級，所以每場 20 分。</li>
           <li>團體賽用「桌分鐘」：一場在一張桌子上打完要幾分鐘。預賽 100、決賽 105、四強起 150、抽籤後第一輪 120（要等交點單）。</li>
         </ul></li>
       <li><b>再算每個時段要多久</b>
@@ -946,12 +946,6 @@ function stepHelp() {
           <li>時段長度 ＝ 這段所有比賽的分鐘加起來 ÷ 桌數。例：第一輪男單 64 場、女單 15 場，(64＋15)×20 ÷ 24 桌 ≒ 66 分，取整成 70 分。</li>
           <li>場次比桌子少的時候，不能只看平均，至少要等最久的一場打完。例：8 強每場 30 分，就算只有 16 場也要 30 分。</li>
           <li>團體賽可以拆桌：有空桌時一場最多拆成 5 桌同時打，實際時間變短但佔用的桌分鐘不變。所以場次很少的時段，至少要「桌分鐘 ÷ 拆桌數」；決賽一輪至少抓 30 分。</li>
-        </ul></li>
-      <li><b>排成兩天</b>
-        <ul>
-          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。之後每個時段男女團各叫下一批：通常一個時段叫一整輪；男女團一輪加起來比桌數多很多時（超過桌數的 1.25 倍，例如第十屆男團 24 場加女團 9 場），就把每輪拆成兩半，一個時段叫半輪，時段比較短、桌子不會塞爆。也可以在參數裡固定選一整輪或半輪。哪一項預賽打完，下一個時段就抽籤</li>
-          <li>抽完籤如果時間還早，第一天就接著打那一項的決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完；放不下的那項留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
-          <li>第二天：大專團體決賽一輪一輪打（男女團各自從還沒打的那一輪開始）。大專決賽打到場數少於桌數一半、空出一半桌子時，社會組預賽第一輪開始，用空出來的桌子一起打，所以這一輪可能跨好幾列，直到打完。大專決賽結束後，社會組預賽剩下的輪次一輪一列，打完馬上決賽抽籤，接著社會組決賽。團體決賽場次少的時候可以拆桌，但一輪至少抓 30 分。</li>
         </ul></li>
       <li><b>手動調整</b>：每個時段的「長度」可以改，例如湊成整點或半點，後面的時間會跟著順延。時間差 ＝ 長度減估算，正數表示抓得比較寬鬆，紅字表示可能會延遲。參數（桌數、每場分鐘、開始時機）都可以改，按「參數改回預設」就回到往年數值。</li>
       <li><b>下載 Excel</b>：第一頁是時間預定表，格式比照往年；第二頁「估算明細」列出每個時段的場數、分鐘和時間差，方便核對。</li>
