@@ -366,7 +366,7 @@ function stepPlan() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">3 隊區排在前面，4 隊區排在後面。3 × 3 隊區數 + 4 × 4 隊區數 要等於 ${n}。</p>`;
+    <p class="small muted">3 循環排前面，4 循環排後面。3 × 3 循環數 + 4 × 4 循環數 要等於 ${n}。</p>`;
   }
 
   let preview = '';
