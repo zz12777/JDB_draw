@@ -263,14 +263,14 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
   [day1, day2].forEach(rows => {
     rows.forEach(r => { r.cells = r.cells || {}; r.skip = r.skip || new Set(); });
     rows.forEach((r, i) => {
-      (r.items || []).forEach(x => { r.cells[x.event] = { text: x.text, span: 1 }; });
+      (r.items || []).forEach(x => { r.cells[x.event] = { text: x.text, span: 1, item: x }; });
       (r.teamItems || []).forEach(x => {
         const n = r.teamSpan || 1;
-        r.cells[x.event] = { text: x.text, span: n, bold: !!x.draw };
+        r.cells[x.event] = { text: x.text, span: n, bold: !!x.draw, item: x };
         for (let k = 1; k < n; k++) rows[i + k].skip.add(x.event);
       });
       (r.spanItems || []).forEach(({ x, span }) => {
-        r.cells[x.event] = { text: x.text, span };
+        r.cells[x.event] = { text: x.text, span, item: x };
         for (let k = 1; k < span; k++) rows[i + k].skip.add(x.event);
       });
       if (r.draw) r.cells[r.drawCol] = { text: r.draw, span: 1, bold: true };
@@ -387,14 +387,29 @@ export function scheduleWorkbook(sch, p, ExcelJSLib = globalThis.ExcelJS) {
   // 估算明細
   const d = wb.addWorksheet('估算明細');
   d.addRow(['日', '開始', '結束', '表定(分)', '估算(分)', '時間差(分)', '累計時間差(分)', '內容', '桌分鐘', '說明']);
-  const line = (day, x) => {
-    const parts = x.desc ? [x.desc] : [...(x.items || []), ...(x.teamItems || []), ...(x.spanItems || []).map(y => y.x)].map(i => `${i.event} ${i.text}（${i.count}場×${i.unit}分）`);
-    if (x.draw) parts.push(x.draw);
-    d.addRow([day, fmt(x.start), fmt(x.end), x.len, Math.round(x.est), Math.round(x.diff), Math.round(x.cumDiff), parts.join('、'), Math.round(x.tableMin || 0),
-      x.block ? '與團體預賽第一輪重疊' : '']);
-  };
-  sch.day1.forEach(x => line('第一天', x));
-  sch.day2.forEach(x => line('第二天', x));
+  const what = it => (it.draw ? `${it.event} 抽籤` : `${it.event} ${it.text}（${it.count}場×${it.unit}分）`);
+  // 跨好幾列的輪次：每一列都寫出來；時間算在最後一列，所以最後一列註明並把桌分鐘算進去
+  const lines = (day, rows) => rows.forEach((x, i) => {
+    const parts = [], going = [], notes = [];
+    let tm = 0;
+    rows.forEach((r, j) => {
+      if (j > i) return;
+      Object.entries(r.cells).forEach(([ev, c]) => {
+        const span = c.span || 1, last = j + span - 1;
+        if (last < i) return; // 這一格在這列之前就結束了
+        if (j === i) {
+          parts.push(c.item ? `${what(c.item)}${span > 1 ? '，開始' : ''}` : `${ev} ${c.text}`);
+          if (span === 1 && c.item) tm += c.item.tableMin || 0;
+        } else {
+          going.push(`${ev} ${c.text}（進行中）`);
+          if (last === i && c.item) { notes.push(`含${ev} ${c.text}剩下的時間`); tm += c.item.tableMin || 0; }
+        }
+      });
+    });
+    d.addRow([day, fmt(x.start), fmt(x.end), x.len, Math.round(x.est), Math.round(x.diff), Math.round(x.cumDiff), [...parts, ...going].join('、'), Math.round(tm), notes.join('；')]);
+  });
+  lines('第一天', sch.day1);
+  lines('第二天', sch.day2);
   d.getRow(1).font = { bold: true };
   [8, 8, 8, 9, 9, 10, 13, 60, 9, 20].forEach((w, i) => { d.getColumn(i + 1).width = w; });
   d.addRow([]);
