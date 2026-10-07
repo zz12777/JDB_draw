@@ -23,6 +23,7 @@ export const DEFAULT_PARAMS = {
   finalDay1: true, // 第一天時間許可時，先打大專團體決賽第一輪
   day1Latest: '20:00', // 第一天最晚結束
   roundTo: 10,   // 時段長度取整（分鐘）
+  teamChunk: 'auto', // 團體預賽每個時段叫：auto 自動、full 一整輪、half 半輪
 };
 
 const IND = ['男單', '女單', '男雙', '女雙'];
@@ -49,47 +50,6 @@ export const frange = (a, b) => (a === b ? `決${a}` : `決${a}-${b}`);
 /** 單淘汰各輪（由第一輪到決賽）：{ depth, count, from, to } */
 function koRounds(st) {
   return st.rounds.slice().sort((a, b) => b.depth - a.depth);
-}
-
-/**
- * 男女團各自一串工作（預賽各輪、抽籤、決賽第一輪），同時進行、共用桌子。
- * 每項工作要用的桌分鐘固定；桌子先讓每場比賽都有一張（女團先），還有空桌再拆桌，最多「場數 × 拆桌數」張。
- * 抽籤不用桌子，固定幾分鐘。算出每項工作的開始與結束時間。
- */
-function simulate(tracks, t0, T) {
-  const idx = tracks.map(() => 0);
-  const rem = tracks.map(tr => (tr[0] ? (tr[0].draw ? tr[0].dur : tr[0].tm) : 0));
-  tracks.forEach(tr => { if (tr[0]) tr[0].start = t0; });
-  let t = t0;
-  for (let guard = 0; guard < 1000 && tracks.some((tr, i) => idx[i] < tr.length); guard++) {
-    // 先讓每場比賽都有一張桌子（排前面的項目先），還有空桌再拆桌
-    let free = T;
-    const rate = tracks.map(() => 0);
-    [k => k.count, k => k.cap].forEach(limit => {
-      tracks.forEach((tr, i) => {
-        const k = tr[idx[i]];
-        if (!k || k.draw) return;
-        const a = Math.max(0, Math.min(free, limit(k) - rate[i]));
-        rate[i] += a; free -= a;
-      });
-    });
-    tracks.forEach((tr, i) => { if (tr[idx[i]] && tr[idx[i]].draw) rate[i] = 1; });
-    let dt = Infinity;
-    tracks.forEach((tr, i) => { if (tr[idx[i]] && rate[i] > 0) dt = Math.min(dt, rem[i] / rate[i]); });
-    if (!Number.isFinite(dt)) break;
-    t += dt;
-    tracks.forEach((tr, i) => {
-      const k = tr[idx[i]];
-      if (!k) return;
-      rem[i] -= rate[i] * dt;
-      if (rem[i] <= 1e-6) {
-        k.end = t;
-        idx[i]++;
-        const n = tr[idx[i]];
-        if (n) { n.start = t; rem[i] = n.draw ? n.dur : n.tm; }
-      }
-    });
-  }
 }
 
 /**
@@ -180,66 +140,61 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
   const s1 = toMin(p.day1Start), s2 = toMin(p.day2Start);
   const moved = new Set();
   if (teams.length && nPreRounds) {
-    const r1 = preRound(0);
+    // 預賽一輪一輪叫；男女團一輪加起來比桌數多很多時（超過 1.25 倍），每輪拆成兩半叫，一個時段叫半輪
+    const sumRound = Math.max(...structs[teams[0]].rounds.map((_, r) => teams.reduce((x, e) => x + ((structs[e].rounds[r] || {}).count || 0), 0)));
+    const half = p.teamChunk === 'half' || (p.teamChunk !== 'full' && sumRound > T * 1.25);
+    const chunksOf = e => structs[e].rounds.flatMap(x => {
+      if (!x.count) return [];
+      const parts = half && x.count >= 2 ? [[x.from, x.from + Math.ceil(x.count / 2) - 1], [x.from + Math.ceil(x.count / 2), x.to]] : [[x.from, x.to]];
+      return parts.map(([a, b]) => ({ event: e, count: b - a + 1, unit: p.tPre, text: range(a, b), tableMin: (b - a + 1) * p.tPre, minLen: p.tPre / p.split }));
+    });
+    const chunks = {};
+    teams.forEach(e => { chunks[e] = chunksOf(e); });
     const blockRows = day1.filter(s => s.block);
-    let firstPre = 0;
+    let first = 0;
     if (blockRows.length) {
-      // 重疊時段：個人賽各輪照順序打，團體預賽第一輪用其他桌子同時進行
+      // 重疊時段：個人賽 8 強以後各輪照順序打，團體預賽第一批用其他桌子同時進行
+      const r1 = teams.map(e => chunks[e][0]).filter(Boolean);
       const indTm = blockRows.reduce((s, x) => s + x.tableMin, 0);
       const teamTm = r1.reduce((s, x) => s + x.tableMin, 0);
       blockRows[0].teamItems = r1;
       blockRows[0].teamSpan = blockRows.length;
       day1.blockNeed = Math.max((indTm + teamTm) / T, Math.max(0, ...r1.map(x => x.minLen)));
-      firstPre = 1;
+      first = 1;
     }
-    const t0 = place(day1, s1, day1.blockNeed);
-    // 之後男女團各自往下打：預賽剩下的輪次、抽籤、（時間許可）決賽第一輪；兩項共用桌子，女團先打
-    const order = ['女團', '男團'].filter(e => teams.includes(e));
-    const mkTracks = withFinal => order.map(e => {
-      const tasks = [];
-      structs[e].rounds.slice(firstPre).forEach(x => {
-        if (x.count) tasks.push({ event: e, text: range(x.from, x.to), count: x.count, unit: p.tPre, tm: x.count * p.tPre, cap: x.count * p.split });
-      });
-      if (finals.includes(e)) {
-        tasks.push({ event: e, text: '抽籤', draw: true, dur: p.drawMin });
-        if (withFinal.has(e)) {
-          const x = koItems(e, ko[e], top[e], true);
-          tasks.push({ event: e, text: x.text, count: x.count, unit: x.unit, tm: x.tableMin, cap: x.count * p.split, final: true });
-        }
-      }
-      return tasks;
-    });
+    // 之後每個時段：男女團各叫下一批；打完預賽的那項接著抽籤，時間許可再打決賽第一輪
     const latest = toMin(p.day1Latest || '20:00');
     const withFinal = new Set(p.finalDay1 ? finals.filter(e => teams.includes(e)) : []);
-    let tracks;
+    let rows;
     for (;;) {
-      tracks = mkTracks(withFinal);
-      simulate(tracks, t0, T);
-      const over = tracks.flat().filter(x => x.final && x.end > latest + 0.01).sort((a, b) => b.end - a.end);
-      if (!over.length) break;
-      withFinal.delete(over[0].event); // 最晚打完的那項留到第二天
+      const queue = {};
+      teams.forEach(e => {
+        const q = chunks[e].slice(first);
+        if (finals.includes(e)) {
+          q.push({ event: e, text: '抽籤', draw: true, tableMin: 0, minLen: p.drawMin, count: 0, unit: 0 });
+          if (withFinal.has(e)) { const x = koItems(e, ko[e], top[e], true); q.push({ ...x, final: true }); }
+        }
+        queue[e] = q;
+      });
+      const n = Math.max(0, ...teams.map(e => queue[e].length));
+      rows = [];
+      for (let k = 0; k < n; k++) {
+        const items = teams.map(e => queue[e][k]).filter(Boolean);
+        const r = slot(`d1-q${k}`, items);
+        r.items = []; r.teamItems = items; r.teamSpan = 1;
+        r.desc = items.map(x => (x.draw ? `${x.event} 抽籤` : `${x.event} ${x.text}（${x.count}場×${x.unit}分）`)).join('、');
+        rows.push(r);
+      }
+      const tmp = [...day1, ...rows];
+      place(tmp, s1, day1.blockNeed);
+      const over = rows.filter(r => r.teamItems.some(x => x.final) && r.end > latest + 0.01);
+      if (!over.length || !withFinal.size) break;
+      // 決賽第一輪放不下：比較晚打完的那項留到第二天
+      const last = rows.filter(r => r.teamItems.some(x => x.final)).pop();
+      withFinal.delete(last.teamItems.find(x => x.final).event);
     }
     withFinal.forEach(e => moved.add(e));
-    // 依每項工作的開始、結束時間切成時段
-    const all = tracks.flat();
-    const snap = x => t0 + Math.round((x - t0) / p.roundTo) * p.roundTo;
-    all.forEach(x => { x.s = snap(x.start); x.e = Math.max(x.s + p.roundTo, snap(x.end)); });
-    const pts = [...new Set(all.flatMap(x => [x.s, x.e]))].sort((a, b) => a - b);
-    const rows = [];
-    for (let q = 0; q + 1 < pts.length; q++) {
-      const len = pts[q + 1] - pts[q];
-      const live = all.filter(x => x.s < pts[q + 1] && x.e > pts[q]);
-      rows.push({ id: `d1-x${q}`, items: [], est: len, tableMin: 0, minLen: 0, cells: {}, skip: new Set(), at: pts[q],
-        desc: live.map(x => (x.draw ? `${x.event} 抽籤` : `${x.event} ${x.text}（${x.count}場×${x.unit}分）`)).join('、') });
-    }
-    all.forEach(x => {
-      const a = rows.findIndex(r => r.at === x.s);
-      let n = 0;
-      while (a + n < rows.length && rows[a + n].at < x.e) n++;
-      if (a < 0 || !n) return;
-      rows[a].cells[x.event] = { text: x.text, span: n, bold: !!x.draw };
-      for (let q = 1; q < n; q++) rows[a + q].skip.add(x.event);
-    });
+    rows.forEach(r => { r.teamItems.forEach(x => { if (x.draw) x.bold = true; }); });
     day1.push(...rows);
   }
 
@@ -287,7 +242,7 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
       (r.items || []).forEach(x => { r.cells[x.event] = { text: x.text, span: 1 }; });
       (r.teamItems || []).forEach(x => {
         const n = r.teamSpan || 1;
-        r.cells[x.event] = { text: x.text, span: n };
+        r.cells[x.event] = { text: x.text, span: n, bold: !!x.draw };
         for (let k = 1; k < n; k++) rows[i + k].skip.add(x.event);
       });
       if (r.draw) r.cells[r.drawCol] = { text: r.draw, span: 1, bold: true };

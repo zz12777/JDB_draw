@@ -721,10 +721,12 @@ function stepTime() {
         <h3>開始時機與其他</h3>
         <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
           <label class="field">大專團體預賽開始<select data-sp="teamStartStage">${[16, 8, 4].map(v => `<option value="${v}" ${+p.teamStartStage === v ? 'selected' : ''}>個人賽打到 ${v} 強時</option>`).join('')}</select></label>
+          <label class="field">大專團體預賽每個時段叫<select data-sp="teamChunk">${[['auto', '自動'], ['full', '一整輪'], ['half', '半輪']].map(([v, t]) => `<option value="${v}" ${p.teamChunk === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
           <label class="field">社會組預賽開始<select data-sp="socialStartRound">${[1, 2, 3].map(v => `<option value="${v}" ${+p.socialStartRound === v ? 'selected' : ''}>大專決賽第 ${v} 輪時</option>`).join('')}</select></label>
-          ${num('drawMin', '決賽抽籤')}${num('roundTo', '時段取整到')}
+          ${num('drawMin', '決賽抽籤')}${num('roundTo', '時段長度取整到')}
           <label class="field">第一天最晚結束<input type="time" value="${p.day1Latest}" data-sp="day1Latest"></label>
           <label class="field" style="flex-direction:row;align-items:center;gap:6px;margin-top:18px"><input type="checkbox" ${p.finalDay1 ? 'checked' : ''} data-sp="finalDay1">時間許可時，第一天先打大專團體決賽第一輪</label>
+          <span class="small muted" style="flex-basis:100%">時段長度取整：算出來的分鐘數四捨五入到這個單位，例如設 10 分，66 分會變成 70 分，時間表上的時間就會落在整十分。</span>
           <button class="btn ghost" data-spreset>${icon('reset')}參數改回預設</button>
         </div>
       </div>
@@ -947,8 +949,8 @@ function stepHelp() {
         </ul></li>
       <li><b>排成兩天</b>
         <ul>
-          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。之後男女團各自往下打：預賽第二、三輪，打完就各自抽籤，所以兩項的抽籤會錯開。桌子先讓每場比賽都有一張（女團先叫），還有空桌再拆桌。</li>
-          <li>哪一項抽完籤時間還早，第一天就先打那一項的決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完。兩項都排會超過時，比較晚打完的那項留到第二天；還是超過就都留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
+          <li>第一天：個人賽四個項目一輪一輪往前打。打到 8 強時桌子開始空出來，大專團體預賽第一輪同時開打，這段會一直延到預賽第一輪打完。之後每個時段男女團各叫下一批：通常一個時段叫一整輪；男女團一輪加起來比桌數多很多時（超過桌數的 1.25 倍，例如第十屆男團 24 場加女團 9 場），就把每輪拆成兩半，一個時段叫半輪，時段比較短、桌子不會塞爆。也可以在參數裡固定選一整輪或半輪。哪一項預賽打完，下一個時段就抽籤</li>
+          <li>抽完籤如果時間還早，第一天就接著打那一項的決賽第一輪，但最多只打這一輪，而且要在「第一天最晚結束」（預設晚上 8 點）前打完；放不下的那項留到第二天。抽完籤馬上打要等交點單，所以這一輪每場抓 120 分。</li>
           <li>第二天：大專團體決賽一輪一輪打（男女團各自從還沒打的那一輪開始），社會組預賽從大專決賽第 2 輪開始一起進行。打完後社會組決賽抽籤，接著社會組決賽。</li>
         </ul></li>
       <li><b>手動調整</b>：每個時段的「長度」可以改，例如湊成整點或半點，後面的時間會跟著順延。時間差 ＝ 長度減估算，正數表示抓得比較寬鬆，紅字表示可能會延遲。參數（桌數、每場分鐘、開始時機）都可以改，按「參數改回預設」就回到往年數值。</li>
