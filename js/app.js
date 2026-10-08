@@ -10,7 +10,8 @@ import { bracketWorkbook, finalWorkbook, orderWorkbook, workbookBlob, sortForOrd
 import { newSeed, uid, toCn } from './util.js';
 import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage, setData, recordsFromRows } from './strong.js';
 import { parseCsvText } from './reader.js';
-import { computeOverlaps, overlapWorkbook, hitText, namesOf } from './overlap.js';
+import { computeOverlaps, overlapWorkbook } from './overlap.js';
+import { participantsDocx } from './participants.js';
 import { buildSchedule, scheduleWorkbook, DEFAULT_PARAMS, DAY1_COLS, DAY2_COLS, COL_TITLE, fmt as fmtTime } from './schedule.js';
 
 // ---------------- 圖示（線條） ----------------
@@ -122,15 +123,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '重疊名單', '猛將資料庫', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '猛將資料庫', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 8 ? `<span class="n">${i + 1}</span>` : icon(i === 8 ? 'star' : 'help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 7 ? `<span class="n">${i + 1}</span>` : icon(i === 7 ? 'star' : 'help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepOverlap, stepStrong, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepStrong, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -260,7 +261,9 @@ function stepEdit() {
     <div class="row"><h2>${name}名單</h2><span class="muted small">${e.entries.length} ${EVENT_TYPE[name] === 'team' ? '隊' : EVENT_TYPE[name] === 'double' ? '組' : '人'}</span>
       <span class="spacer"></span>
       <button class="btn ghost sm" data-addrow>${icon('plus')}新增一列</button>
-      <button class="btn ghost sm" data-dlorder>${icon('download')}下載抽籤順序表</button></div>
+      <button class="btn ghost sm" data-dlorder>${icon('download')}下載抽籤順序表</button>
+      <button class="btn ghost sm" data-dlpart>${icon('download')}參賽名單 Word</button>
+      <button class="btn ghost sm" data-dlov>${icon('download')}重疊名單 Excel</button></div>
     <div class="note small">若陽明交大保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。
       種子欄填固定籤號（例如 1），抽籤時會固定在那個位置。</div>
     ${flagged ? `<div class="note warn small">有 ${flagged} 筆需要確認（看提醒欄）。</div>` : ''}
@@ -357,7 +360,7 @@ function stepPlan() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，人多的分區放前面，可以手動調整，總數要等於 ${n}。</p>`;
+    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，<b>人多的分區放中間</b>（例：70 人分 4 區為 17、18、18、17），因為種子通常排在 1 號和最後一號，兩端的分區人少，種子要打的場次就少。可以手動調整，總數要等於 ${n}。</p>`;
   } else {
     body = `
     <div class="row">
@@ -366,7 +369,8 @@ function stepPlan() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">3 循環排前面，4 循環排後面。3 × 3 循環數 + 4 × 4 循環數 要等於 ${n}。</p>`;
+    <p class="small muted">3 循環排前面，4 循環排後面。3 × 3 循環數 + 4 × 4 循環數 要等於 ${n}。</p>
+    ${rrOptions(n, plan)}`;
   }
 
   let preview = '';
@@ -397,6 +401,26 @@ function stepPlan() {
     ${body}
     ${preview}
   </section>`;
+}
+
+/** 團體賽各種 3 循環、4 循環組合的比較（只提醒，不自動改） */
+function rrOptions(n, plan) {
+  const opts = [];
+  for (let n4 = 0; n4 * 4 <= n; n4++) {
+    const rest = n - n4 * 4;
+    if (rest % 3) continue;
+    const n3 = rest / 3, g = n3 + n4;
+    if (!g) continue;
+    const pre = n3 * 3 + n4 * 6, fin = 2 * g;
+    opts.push({ n3, n4, pre, fin, total: pre + fin - 1, pow2: (fin & (fin - 1)) === 0 });
+  }
+  if (opts.length < 2) return '';
+  const min = Math.min(...opts.map(o => o.total));
+  return `<div class="note small"><b>組合比較（僅供參考）</b>：可以選總場數比較少的，或決賽籤表比較整齊的（例如決賽 16 隊比 18 隊好排）。
+    <div class="tbl-wrap" style="margin-top:6px"><table class="mini"><thead><tr><th>3 隊循環</th><th>4 隊循環</th><th>預賽場數</th><th>決賽隊數</th><th>總場數</th><th></th></tr></thead><tbody>
+    ${opts.map(o => `<tr${o.n3 === plan.n3 && o.n4 === plan.n4 ? ' style="font-weight:600"' : ''}><td>${o.n3}</td><td>${o.n4}</td><td>${o.pre}</td><td>${o.fin}</td><td>${o.total}</td>
+      <td>${[o.total === min ? '場數最少' : '', o.pow2 ? '決賽籤表整齊' : '', o.n3 === plan.n3 && o.n4 === plan.n4 ? '目前設定' : ''].filter(Boolean).join('、')}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
 }
 
 function summarizeSizes(sizes) {
@@ -488,8 +512,18 @@ function stepExport() {
   const rows = list.map(name => {
     const e = ev(name);
     const ok = e.draw && e.draw.sig === sig(e.entries);
+    let check = '';
+    if (ok) {
+      const { st } = structureOf(name);
+      const chk = st ? checkDraw(e.entries, st, e.draw.assign) : { errors: ['籤表規劃有誤'], warnings: [] };
+      const all = [...chk.errors, ...chk.warnings];
+      check = all.length
+        ? `<details><summary class="small">${all.length} 則要看</summary><ul class="small">${all.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`
+        : '<span class="tag ok">通過</span>';
+    }
     return `<tr><td>${name}</td><td class="num">${e.entries.length}</td>
       <td>${ok ? '<span class="tag ok">已抽籤</span>' : e.draw ? '<span class="tag">名單有變更，需重抽</span>' : '<span class="tag">未抽籤</span>'}</td>
+      <td>${check}</td>
       <td><div class="row">
         <button class="btn sm" data-dlfinal="${name}" ${ok ? '' : 'disabled'}>${icon('download')}完成籤表</button>
         <button class="btn ghost sm" data-dlblank-ev="${name}">${icon('file')}空白籤表</button>
@@ -502,7 +536,8 @@ function stepExport() {
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
     <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名與籤位等。</div>
     <p class="small muted">完成籤表：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表並附決賽籤表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
-    <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small">人工檢查時請特別看兩件事：<b>第一場（小籤）是不是同一學校對打</b>，以及<b>同校是不是排得太近、太早相遇</b>。系統已經自動檢查，結果在「檢查」欄；有問題可以回步驟 4 手動對調籤位，對調後會重新檢查。</p>
+    <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th>檢查</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
 
@@ -753,28 +788,14 @@ function overlapData() {
   ['男團', '女團', '社團', '男單', '女單', '男雙', '女雙'].forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
   return computeOverlaps(evs);
 }
-function stepOverlap() {
-  const ov = overlapData();
-  const lists = ['男團', '女團', '社團'].filter(ev => ov[ev]).map(ev => {
-    const n = ov[ev].filter(o => o.hits.length).length;
-    const uni = ev !== '社團';
-    const rows = ov[ev].map(o => uni
-      ? `<tr><td class="nowrap">${esc(o.team)}</td><td>${esc(namesOf(o.hits, '單')) || '<span class="muted">無</span>'}</td><td>${esc(namesOf(o.hits, '雙')) || '<span class="muted">無</span>'}</td></tr>`
-      : `<tr><td class="nowrap">${esc(o.team)}</td><td>${o.hits.length ? esc(hitText(o.hits)) : '<span class="muted">無大專組</span>'}</td></tr>`).join('');
-    return `<details class="fold" data-fold="ov-${ev}" ${strongOpen.has('ov-' + ev) ? 'open' : ''}>
-      <summary>${ev}<span class="muted small">　${n} / ${ov[ev].length} 隊有重疊</span></summary>
-      <div class="tbl-wrap"><table><thead><tr><th>隊名</th>${uni ? '<th>有打單打</th><th>有打雙打</th>' : '<th>有打大專團體</th>'}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
-  }).join('');
-  $('#main').innerHTML = `
-  <section class="panel">
-    <div class="row"><h2>重疊名單</h2><span class="spacer"></span>
-      <button class="btn" data-dlov ${lists ? '' : 'disabled'}>${icon('download')}下載重疊名單 Excel</button></div>
-    <p class="small muted">男團、女團：同時也有報名個人賽的隊員。社團：同時也有打大專男女團的隊員。</p>
-    ${lists || '<div class="empty">還沒有團體賽名單，請先完成步驟 1、2。</div>'}
-  </section>`;
-}
 async function dlOverlap() {
   download(await workbookBlob(overlapWorkbook(overlapData())), '重疊名單.xlsx');
+}
+async function dlParticipants() {
+  const evs = {};
+  ALL_EVENTS.forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
+  const title = (S.sheetSettings && S.sheetSettings.title) || DEFAULT_TITLE;
+  download(await participantsDocx(evs, title.replace(/全國大專校院桌球錦標賽$/, '') + '參賽名單', new Date()), `${title.replace(/全國大專校院桌球錦標賽$/, '')}參賽名單.docx`);
 }
 
 // ---------------- 猛將資料庫 ----------------
@@ -798,7 +819,7 @@ async function loadSheet() {
   } catch (err) {
     sheetStatus = { state: 'fail', msg: err.name === 'AbortError' ? '逾時' : err.message };
   }
-  if (S.step === 3 || S.step === 8) render();
+  if (S.step === 3 || S.step === 7) render();
 }
 const strongOpen = new Set();
 const KIND_TEXT = { 全大運: '全大運決賽前八', 盃賽: '交大盃與其他盃賽前四' };
@@ -902,8 +923,8 @@ function stepHelp() {
   <section class="panel">
     <h2>籤表規劃</h2>
     <ul>
-      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，人多的分區放前面，也可以手動改各區人數。</li>
-      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。每區取前二晉級，完成籤表會附決賽籤表（冠、亞位置），決賽另外抽。</li>
+      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，人多的分區放中間（例：女單 70 人分 4 區為 17、18、18、17），因為種子通常排在 1 號和最後一號，兩端的分區人少，種子要打的場次就少。也可以手動改各區人數。</li>
+      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。頁面會列出各種組合的總場數和決賽隊數，可以選場數比較少、或決賽籤表比較整齊（例如 16 隊）的組合。每區取前二晉級，完成籤表會附決賽籤表（冠、亞位置），決賽另外抽。</li>
       <li><b>團體賽場次編號</b>：一輪一輪編，每輪由 A 組到最後一組。4 隊組：第一輪 1-3、2-4，第二輪 2-3、1-4，第三輪 1-2、3-4；3 隊組：1-2、1-3、2-3。</li>
     </ul>
   </section>
@@ -919,7 +940,7 @@ function stepHelp() {
         </tbody></table>
         例：男單分 A、B、C、D 四區，A、B 是上半區，C、D 是下半區。只報 2 人的學校，會一人在 A 或 B、另一人在 C 或 D。人多的學校先放，但每放一人都會優先放到空位比較多的那邊，所以人少的學校最後放時，上下半區都還有位置。</li>
       <li><b>種子也算進同校分布</b>：已固定的種子會先佔位，同校其他人會避開種子所在的區域。</li>
-      <li><b>抽完自動檢查</b>：每人都有籤號且不重複；各區同校人數超過理想值、第一場就同校對戰、學校隊數比區數多（一定同區）都會列出提醒。</li>
+      <li><b>抽完自動檢查</b>：每人都有籤號且不重複；各區同校人數超過理想值、第一場就同校對戰、學校隊數比區數多（一定同區）都會列出提醒；「下載完成籤表」頁也會顯示每個項目的檢查結果。</li>
       <li><b>團體賽</b>：同一學校的隊伍分在不同組，例如臺灣大學報 3 隊，就會在 3 個不同的組，預賽不會自己人打自己人。學校隊數比組數還多時才會有同組，抽完會提醒。</li>
     </ul>
   </section>
@@ -927,13 +948,12 @@ function stepHelp() {
     <h2>流程</h2>
     <ol>
       <li><b>上傳表單回應</b>：Google 試算表「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，男子組、女子組、社會組各一份。整列劃掉的回應預設不採用，格子裡劃掉的名字直接排除。</li>
-      <li><b>名單校正</b>：檢查名單、統一校名、加入保留名額、設定種子籤號。</li>
+      <li><b>名單校正</b>：檢查名單、統一校名、加入保留名額、設定種子籤號。校正完可在這頁下載「參賽名單 Word」（團體賽各隊的領隊、教練、隊長、隊員，個人賽各校的單打、雙打）和「重疊名單 Excel」（男團、女團裡也打單打或雙打的人，雙打寫成甲/乙一組；社團裡也打大專團體的人）。</li>
       <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
       <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
       <li><b>賽程時間表</b>：依完成籤表或籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
-      <li><b>重疊名單</b>：列出男女團裡有打個賽的人，社團裡有打大專團體的人，可下載 Excel。</li>
     </ol>
   </section>
   <section class="panel">
@@ -960,11 +980,12 @@ function stepHelp() {
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-dlov],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-dlpart],[data-dlov],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
   if (d.dlsched !== undefined) return dlSched();
   if (d.dlov !== undefined) return dlOverlap();
+  if (d.dlpart !== undefined) return dlParticipants();
   if (d.ovreset !== undefined) { S.schedule.override = {}; return render(); }
   if (d.spreset !== undefined) { S.schedule.params = {}; S.schedule.override = {}; return render(); }
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }

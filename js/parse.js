@@ -94,6 +94,9 @@ export function parseResponses(rows, aliases = {}) {
     singleWait: findCol(headers, /單候補/),
     unit: findCol(headers, /單位名稱|校名及隊伍名稱/),
     contact: findCol(headers, /聯絡人姓名/),
+    coach: findCol(headers, /^教練/),
+    leader: findCol(headers, /^領隊/),
+    captain: findCol(headers, /^隊長/),
   };
   // 隊名與隊員名單成對；隊員欄標「候補」者為候補隊伍
   const teamCols = [];
@@ -132,6 +135,7 @@ export function parseResponses(rows, aliases = {}) {
       email: get(col.email).toLowerCase(),
       contact: get(col.contact),
       unitRaw: get(col.unit),
+      coach: get(col.coach), leader: get(col.leader), captain: get(col.captain),
       teams: [], singles: [], singlesWait: [], doubles: [], notes: [],
     };
     const nameHints = []; // 推校名用，包含略過的隊名
@@ -202,19 +206,20 @@ export function buildEntries(kind, responses, aliases = {}) {
   const mk = (school, name, src, extra = {}) => ({ id: uid(), school, name, seed: '', src, flags: [], ...extra });
 
   for (const r of responses.filter(x => x.include)) {
+    const staff = { coach: r.coach || '', leader: r.leader || '', captain: r.captain || '' }; // 參賽名單用
     for (const t of r.teams) {
       const school = kind === 'social' ? r.school : (extractSchool(t.name, aliases) || r.school);
       const target = t.waitlist ? waitlist[teamEv] : events[teamEv];
-      add(teamEv, target, mk(school, t.name, r.rowNo, { members: t.members }), (t.waitlist ? 'W:' : '') + t.name);
+      add(teamEv, target, mk(school, t.name, r.rowNo, { members: t.members, ...staff }), (t.waitlist ? 'W:' : '') + t.name);
     }
     if (singleEv) {
-      r.singles.forEach(n => add(singleEv, events[singleEv], mk(r.school, n, r.rowNo), r.school + '|' + n));
+      r.singles.forEach(n => add(singleEv, events[singleEv], mk(r.school, n, r.rowNo, staff), r.school + '|' + n));
       r.singlesWait.forEach(n => add(singleEv, waitlist[singleEv], mk(r.school, n, r.rowNo), 'W:' + r.school + '|' + n));
     }
     if (doubleEv) {
       r.doubles.forEach(p => {
         const name = p.ok ? `${p.a}/${p.b}` : p.raw;
-        const e = mk(r.school, name, r.rowNo);
+        const e = mk(r.school, name, r.rowNo, staff);
         if (!p.ok) e.flags.push('不是兩人');
         add(doubleEv, events[doubleEv], e, r.school + '|' + [p.a, p.b].sort().join('/'));
       });

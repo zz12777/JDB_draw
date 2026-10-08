@@ -69,10 +69,16 @@ export function defaultSections(n) {
   return k;
 }
 
-/** 平均分配各區人數，人多的分區放前面 */
+/**
+ * 平均分配各區人數，人多的分區往中間放（例：70 人分 4 區為 17、18、18、17）。
+ * 種子通常排在 1 號和最後一號，靠兩端的分區人少，種子要打的場次就少。
+ */
 export function splitSizes(n, k) {
   const base = Math.floor(n / k), extra = n % k;
-  return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
+  const mid = (k - 1) / 2;
+  const order = Array.from({ length: k }, (_, i) => i).sort((a, b) => (Math.abs(a - mid) - Math.abs(b - mid)) || (a - b));
+  const big = new Set(order.slice(0, extra));
+  return Array.from({ length: k }, (_, i) => base + (big.has(i) ? 1 : 0));
 }
 
 function annotate(root) {

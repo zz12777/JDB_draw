@@ -18,10 +18,11 @@ export function splitMembers(text) {
 export function computeOverlaps(events) {
   const out = {};
   const indexOf = (ev, splitDouble) => {
-    const m = new Map(); // 姓名|學校 -> true
+    const m = new Map(); // 姓名|學校 -> 雙打的那一組（甲/乙）
     (events[ev] || []).forEach(e => {
       const names = splitDouble ? String(e.name).split(/[/／、]/) : [e.name];
-      names.map(cleanName).filter(Boolean).forEach(n => m.set(`${n}|${e.school}`, true));
+      const pair = names.map(cleanName).filter(Boolean).join('/');
+      names.map(cleanName).filter(Boolean).forEach(n => m.set(`${n}|${e.school}`, pair));
     });
     return m;
   };
@@ -32,7 +33,7 @@ export function computeOverlaps(events) {
       const hits = [];
       splitMembers(t.members).forEach(n => {
         if (si.has(`${n}|${t.school}`)) hits.push({ name: n, tag: '單' });
-        else if (di.has(`${n}|${t.school}`)) hits.push({ name: n, tag: '雙' });
+        else if (di.has(`${n}|${t.school}`)) hits.push({ name: n, tag: '雙', pair: di.get(`${n}|${t.school}`) });
       });
       return { team: t.name, school: t.school, hits };
     });
@@ -56,7 +57,8 @@ export function computeOverlaps(events) {
 
 export const hitText = hits => hits.map(h => `${h.name}（${h.tag}）`).join('、');
 /** 某一類（單、雙）的名字 */
-export const namesOf = (hits, tag) => hits.filter(h => h.tag === tag).map(h => h.name).join('、');
+// 雙打寫成一組一組（甲/乙），同一組的兩人都在隊上時只寫一次
+export const namesOf = (hits, tag) => [...new Set(hits.filter(h => h.tag === tag).map(h => (tag === '雙' && h.pair ? h.pair : h.name)))].join('、');
 
 /** 重疊名單 Excel：男團、女團、社團各一頁 */
 export function overlapWorkbook(overlaps, ExcelJSLib = globalThis.ExcelJS) {
