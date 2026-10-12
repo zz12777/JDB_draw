@@ -377,7 +377,7 @@ function stepPlan() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，多出來的人加在 B、C、D 區，<b>A 區最後加</b>（A 區有 1 號種子，人少一點）。分 4 區時：多 1 人加在 B 區；多 2 人加在 B、C 區；多 3 人加在 B、C、D 區（例：70 人為 17、18、18、17）。分 2 區多 1 人加在 B 區；分 8 區由中間往外加。可以手動調整，總數要等於 ${n}。</p>`;
+    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，多出來的人依序加在 B、C、D、A 區（例：70 人為 17、18、18、17）。分 2 區多 1 人加在 B 區；分 8 區由中間往外加。可以手動調整，總數要等於 ${n}。</p>`;
   } else {
     body = `
     <div class="row">
