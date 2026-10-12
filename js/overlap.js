@@ -43,12 +43,13 @@ export function computeOverlaps(events) {
     ['男團', '女團'].forEach(ev => (events[ev] || []).forEach(t => {
       splitMembers(t.members).forEach(n => {
         if (!who.has(n)) who.set(n, []);
-        who.get(n).push(`${ev} ${t.name}`);
+        who.get(n).push({ ev, team: t.name });
       });
     }));
     out['社團'] = events['社團'].map(t => {
       const hits = [];
-      splitMembers(t.members).forEach(n => { if (who.has(n)) hits.push({ name: n, tag: who.get(n).join('、') }); });
+      // 分男團、女團兩欄：tag 寫那一項，team 寫哪一隊
+      splitMembers(t.members).forEach(n => { (who.get(n) || []).forEach(w => hits.push({ name: n, tag: w.ev, team: w.team })); });
       return { team: t.name, school: t.school, hits };
     });
   }
@@ -80,9 +81,10 @@ export function overlapWorkbook(overlaps, ExcelJSLib = globalThis.ExcelJS) {
   });
   if (overlaps['社團']) {
     const ws = wb.addWorksheet('社團');
-    ws.columns = [{ width: 20 }, { width: 70 }];
-    head(ws.addRow(['隊名', '兼大專團體']));
-    overlaps['社團'].forEach(o => ws.addRow([o.team, o.hits.length ? hitText(o.hits) : '無大專組']));
+    ws.columns = [{ width: 20 }, { width: 45 }, { width: 45 }];
+    head(ws.addRow(['隊名', '兼大專男團', '兼大專女團']));
+    const col = (o, ev) => o.hits.filter(h => h.tag === ev).map(h => `${h.name}（${h.team}）`).join('、');
+    overlaps['社團'].forEach(o => ws.addRow([o.team, col(o, '男團'), col(o, '女團')]));
     fit(ws);
     ws.views = [{ state: 'frozen', ySplit: 1 }];
   }

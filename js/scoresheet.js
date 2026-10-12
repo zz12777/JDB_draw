@@ -164,16 +164,17 @@ function rrPage(title, event, sheet, first) {
     { h: 360, cells: [{ paras: [cp('點', 22)] }, { span: 2, paras: [cp('姓名', 22)] }, { paras: [cp('勝局數', 22)] }, { paras: [cp('比分', 22)] }, { paras: [cp('比分', 22)] }, { paras: [cp('勝局數', 22)] }, { span: 2, paras: [cp('姓名', 22)] }, { paras: [cp('點', 22)] }] },
   ];
   POINTS.forEach((p, pi) => {
+    // 每點 5 局（5 戰 3 勝）。雙打切成 10 個半格：比分每 2 格合成 1 局，姓名上下各一人（各 5 格）
     const doubles = pi === 2;
-    const n = doubles ? 6 : 5;
+    const n = doubles ? 10 : 5;
     for (let k = 0; k < n; k++) {
       const vm = k === 0 ? 'restart' : 'continue';
-      // 雙打：姓名欄上下各一人
-      const nameVm = doubles ? (k === 0 || k === 3 ? 'restart' : 'continue') : vm;
-      rows.push({ h: 380, cells: [
+      const nameVm = doubles ? (k === 0 || k === 5 ? 'restart' : 'continue') : vm;
+      const scoreVm = doubles ? (k % 2 === 0 ? 'restart' : 'continue') : undefined;
+      rows.push({ h: doubles ? 190 : 380, cells: [
         { vm, paras: k === 0 ? vertical(`第${p}點`, 20) : undefined },
         { span: 2, vm: nameVm }, { vm },
-        {}, {},
+        { vm: scoreVm }, { vm: scoreVm },
         { vm }, { span: 2, vm: nameVm },
         { vm, paras: k === 0 ? vertical(`第${p}點`, 20) : undefined },
       ] });
@@ -270,18 +271,15 @@ function rrPageHtml(title, event, s) {
   const team = x => h([x.slot, x.team].filter(Boolean).join(' '));
   let pts = '';
   POINTS.forEach((p, pi) => {
-    const n = pi === 2 ? 6 : 5;
+    // 每點 5 局（5 戰 3 勝）；雙打的姓名格中間畫一條線，上下各寫一人
+    const dbl = pi === 2;
+    const n = 5;
+    const nameCell = dbl ? '<td colspan="2" rowspan="5" class="dbl"><div class="dn"></div></td>' : '<td colspan="2" rowspan="5"></td>';
     for (let k = 0; k < n; k++) {
       let row = '';
-      if (k === 0) row += `<td rowspan="${n}" class="pt">第<br>${p}<br>點</td>`;
-      if (pi === 2) { if (k === 0 || k === 3) row += '<td colspan="2" rowspan="3"></td>'; }
-      else if (k === 0) row += `<td colspan="2" rowspan="${n}"></td>`;
-      if (k === 0) row += `<td rowspan="${n}"></td>`;
+      if (k === 0) row += `<td rowspan="${n}" class="pt">第<br>${p}<br>點</td>${nameCell}<td rowspan="${n}"></td>`;
       row += '<td></td><td></td>';
-      if (k === 0) row += `<td rowspan="${n}"></td>`;
-      if (pi === 2) { if (k === 0 || k === 3) row += '<td colspan="2" rowspan="3"></td>'; }
-      else if (k === 0) row += `<td colspan="2" rowspan="${n}"></td>`;
-      if (k === 0) row += `<td rowspan="${n}" class="pt">第<br>${p}<br>點</td>`;
+      if (k === 0) row += `<td rowspan="${n}"></td>${nameCell}<td rowspan="${n}" class="pt">第<br>${p}<br>點</td>`;
       pts += `<tr class="p">${row}</tr>`;
     }
   });
@@ -314,6 +312,7 @@ body { margin: 0; font-family: "DFKai-SB", "BiauKai", "標楷體", "Kaiti TC", s
 .ul { display: inline-block; border-bottom: 1px solid #000; height: 1.2em; vertical-align: bottom; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 0 1mm; font-size: 11pt; }
+.ko { border: 1px solid #000; } /* html2canvas 有時畫不出最後一列的下框線 */
 .ko .hd td { height: 6mm; }
 .ko .hd2 td { height: 11mm; }
 .ko .g td { height: 8.2mm; }
@@ -328,6 +327,8 @@ td { border: 1px solid #000; text-align: center; vertical-align: middle; padding
 .rr .r td { height: 8.5mm; }
 .rr .hd td { height: 6.5mm; font-size: 11pt; }
 .rr .p td { height: 6.6mm; }
+.rr td.dbl { padding: 0; vertical-align: top; }
+.rr .dn { height: 16.5mm; border-bottom: 1px solid #000; }
 .rr .pt { font-size: 10pt; line-height: 1.2; }
 .rr .sg td { height: 11mm; text-align: left; vertical-align: top; }
 .tip { font-family: system-ui, sans-serif; background: #fff4e0; border-left: 3px solid #9a5b00; padding: 10px 14px; margin: 0 0 8mm; font-size: 14px; }

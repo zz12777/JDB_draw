@@ -173,7 +173,24 @@ function stepUpload() {
     </div>
     <p class="small muted">只上傳一份也可以，上傳後檢查下面的回應，再按「產生名單」。</p>
   </section>
-  ${kinds.filter(k => S.sources[k]).map(responsePanel).join('')}`;
+  ${kinds.filter(k => S.sources[k]).map(responsePanel).join('')}
+  <section class="panel">
+    <h2>會讀取的表單欄位</h2>
+    <p class="small muted">系統是用<b>欄位標題的開頭或關鍵字</b>找資料。修改報名表單的題目名稱時，請保留下面的關鍵字，不然會讀不到。欄位順序可以調整，多出來的欄位（匯款、停車證等）不影響。</p>
+    <div class="tbl-wrap"><table class="mini"><thead><tr><th>資料</th><th>標題要包含</th><th>例</th></tr></thead><tbody>
+      <tr><td>判斷是哪一組</td><td>有「男單」或「男雙」＝男子組；有「女單」或「女雙」＝女子組；都沒有但有「隊名」＝社會組</td><td></td></tr>
+      <tr><td>填表時間</td><td>時間戳記</td><td>時間戳記</td></tr>
+      <tr><td>信箱</td><td>開頭是「電子郵件」</td><td>電子郵件地址</td></tr>
+      <tr><td>學校／單位</td><td>單位名稱、或 校名及隊伍名稱</td><td>單位名稱</td></tr>
+      <tr><td>聯絡人</td><td>聯絡人姓名</td><td>聯絡人姓名</td></tr>
+      <tr><td>教練、領隊、隊長</td><td>開頭是「教練」「領隊」「隊長」</td><td>教練</td></tr>
+      <tr><td>團體隊名</td><td>開頭是「隊名」，每隊一欄</td><td>隊名_1、隊名_2</td></tr>
+      <tr><td>團體隊員</td><td>開頭是「隊員」，放在對應的隊名欄後面；標題有「候補」的是候補隊</td><td>隊員名單_1、隊員名單1 (候補)</td></tr>
+      <tr><td>單打</td><td>「單參賽名單」</td><td>男單參賽名單</td></tr>
+      <tr><td>單打候補</td><td>「單候補」</td><td>男單候補名單</td></tr>
+      <tr><td>雙打</td><td>「雙參賽名單」，每組兩人用 / 隔開，組與組用逗號或換行隔開</td><td>男雙參賽名單</td></tr>
+    </tbody></table></div>
+  </section>`;
 }
 
 function responsePanel(k) {
@@ -360,7 +377,7 @@ function stepPlan() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，<b>人多的分區放中間</b>（例：70 人分 4 區為 17、18、18、17），因為種子通常排在 1 號和最後一號，兩端的分區人少，種子要打的場次就少。可以手動調整，總數要等於 ${n}。</p>`;
+    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，多出來的人加在 B、C、D 區，<b>A 區最後加</b>（A 區有 1 號種子，人少一點）。分 4 區時：多 1 人加在 B 區；多 2 人加在 B、C 區；多 3 人加在 B、C、D 區（例：70 人為 17、18、18、17）。分 2 區多 1 人加在 B 區；分 8 區由中間往外加。可以手動調整，總數要等於 ${n}。</p>`;
   } else {
     body = `
     <div class="row">
@@ -431,6 +448,8 @@ function summarizeSizes(sizes) {
 
 // ---------------- 步驟 4：抽籤 ----------------
 let pick = null; // 對調用
+let drawMode = 'view'; // 檢視模式／編輯模式（編輯才能對調）
+let pendingSwap = null; // 等確認的對調 [籤號, 籤號]
 
 function stepDraw() {
   const list = activeEvents();
@@ -460,13 +479,24 @@ function stepDraw() {
     ${chk.errors.length ? `<div class="note bad"><b>錯誤</b><ul>${chk.errors.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
     ${chk.warnings.length ? `<div class="note warn"><b>需要留意</b><ul>${chk.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
       : (!chk.errors.length ? `<div class="note ok">${icon('check')} 檢查通過：每個人都有籤號，同校都已盡量分開。</div>` : '')}
-    <p class="small muted">亂數代碼 <b>${esc(d.seed)}</b>，${new Date(d.time).toLocaleString('zh-TW')} 抽出${d.swaps ? `，之後手動對調 ${d.swaps} 次` : ''}。
-      對調兩個籤位方式：先點一列，再點另一列。</p>
+    <div class="row" style="align-items:center">
+      <p class="small muted" style="margin:0">亂數代碼 <b>${esc(d.seed)}</b>，${new Date(d.time).toLocaleString('zh-TW')} 抽出${d.swaps ? `，之後手動對調 ${d.swaps} 次` : ''}。</p>
+      <span class="spacer"></span>
+      <div class="pill" role="group"><button class="${drawMode === 'view' ? 'on' : ''}" data-dmode="view">檢視模式</button><button class="${drawMode === 'edit' ? 'on' : ''}" data-dmode="edit">編輯模式</button></div>
+    </div>
+    ${drawMode === 'edit' ? '<p class="small">編輯模式：先點一列，再點另一列，確認後兩個籤位會對調。</p>' : ''}
+    ${pendingSwap ? (() => {
+      const who = q => { const x = byPos.get(q); return `${q} 號${x ? `（${esc(x.school)} ${esc(x.name)}）` : ''}`; };
+      return `<div class="note warn row" style="align-items:center">要對調 ${who(pendingSwap[0])} 和 ${who(pendingSwap[1])} 嗎？<span class="spacer"></span>
+        <button class="btn sm" data-swapok>確認對調</button><button class="btn ghost sm" data-swapno>取消</button></div>`;
+    })() : ''}
+    <p class="small muted">猛將欄：<span class="lamp on"></span>實心＝在猛將資料庫有個人賽名次（全大運前八或交大盃前四）；<span class="lamp half"></span>空心＝只有團體賽名次。團體賽後面的數字是隊上有幾位。滑鼠移到燈號上可以看成績。</p>
     <div class="tbl-wrap scroll"><table>
       <thead><tr><th class="num">籤號</th><th>位置</th>${st.kind === 'ko' ? '<th>首場</th>' : ''}<th>${unitWord(name)}</th><th>${nameWord(name)}</th><th>猛將</th><th>種子</th></tr></thead>
       <tbody>${Array.from({ length: st.positions }, (_, i) => i + 1).map(p => {
         const x = byPos.get(p);
-        return `<tr class="click ${pick === p ? 'sel' : ''}" data-pos="${p}">
+        const sel = pick === p || (pendingSwap && pendingSwap.includes(p));
+        return `<tr class="${drawMode === 'edit' ? 'click' : ''} ${sel ? 'sel' : ''}" ${drawMode === 'edit' ? `data-pos="${p}"` : ''}>
           <td class="num">${p}</td><td>${where(p)}</td>${st.kind === 'ko' ? `<td>${firstOf.get(p) || ''}</td>` : ''}
           <td>${esc(x ? x.school : '')}</td><td>${esc(x ? x.name : '')}</td><td>${x ? lampCell(x, st.kind === 'rr') : ''}</td><td>${x && fmtSeed(x.seed) !== '' ? '<span class="tag info">種子</span>' : ''}</td></tr>`;
       }).join('')}</tbody></table></div>`;
@@ -497,7 +527,7 @@ function doDraw(name) {
       assign = arrangeRR(e.entries, st, assign, x => score.get(x.id) || 0, a => checkDraw(e.entries, st, a));
     }
     e.draw = { assign, seed, time: Date.now(), sig: sig(e.entries), swaps: 0 };
-    pick = null;
+    pick = null; pendingSwap = null;
     toast(`${name}抽籤完成`);
   } catch (ex) {
     toast('抽籤失敗：' + ex.message);
@@ -923,7 +953,7 @@ function stepHelp() {
   <section class="panel">
     <h2>籤表規劃</h2>
     <ul>
-      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，人多的分區放中間（例：女單 70 人分 4 區為 17、18、18、17），因為種子通常排在 1 號和最後一號，兩端的分區人少，種子要打的場次就少。也可以手動改各區人數。</li>
+      <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，多出來的人加在 B、C、D 區，A 區（有 1 號種子）最後加：分 4 區時，多 1 人加在 B 區，多 2 人加在 B、C 區，多 3 人加在 B、C、D 區（例：女單 70 人分 4 區為 17、18、18、17）。也可以手動改各區人數。</li>
       <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。頁面會列出各種組合的總場數和決賽隊數，可以選場數比較少、或決賽籤表比較整齊（例如 16 隊）的組合。每區取前二晉級，完成籤表會附決賽籤表（冠、亞位置），決賽另外抽。</li>
       <li><b>團體賽場次編號</b>：一輪一輪編，每輪由 A 組到最後一組。4 隊組：第一輪 1-3、2-4，第二輪 2-3、1-4，第三輪 1-2、3-4；3 隊組：1-2、1-3、2-3。</li>
     </ul>
@@ -950,7 +980,7 @@ function stepHelp() {
       <li><b>上傳表單回應</b>：Google 試算表「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，男子組、女子組、社會組各一份。整列劃掉的回應預設不採用，格子裡劃掉的名字直接排除。</li>
       <li><b>名單校正</b>：檢查名單、統一校名、加入保留名額、設定種子籤號。校正完可在這頁下載「參賽名單 Word」（團體賽各隊的領隊、教練、隊長、隊員，個人賽各校的單打、雙打）和「重疊名單 Excel」（男團、女團裡也打單打或雙打的人，雙打寫成甲/乙一組；社團裡也打大專團體的人）。</li>
       <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
-      <li><b>抽籤</b>：同校分開抽籤，可重抽、可手動對調籤位。記下亂數代碼可以重現結果。</li>
+      <li><b>抽籤</b>：同校分開抽籤，可重抽。切到「編輯模式」可手動對調籤位，點兩列後會先跳出確認才對調。猛將欄的實心燈號是有個人賽名次的選手，空心是只有團體賽名次。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
       <li><b>賽程時間表</b>：依完成籤表或籤表規劃估算兩天的時間，下載 Excel 時間預定表。</li>
@@ -980,7 +1010,7 @@ function stepHelp() {
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-dlpart],[data-dlov],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-dmode],[data-swapok],[data-swapno],[data-dlpart],[data-dlov],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
   if (d.dlsched !== undefined) return dlSched();
@@ -991,8 +1021,8 @@ document.addEventListener('click', async ev0 => {
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }
   else if (d.dlsheet) dlSheet(d.dlsheet);
   else if (d.pdfsheet) pdfSheet(d.pdfsheet);
-  else if (d.step !== undefined) { S.step = +d.step; pick = null; render(); }
-  else if (d.ev) { S.event = d.ev; pick = null; render(); }
+  else if (d.step !== undefined) { S.step = +d.step; pick = null; pendingSwap = null; render(); }
+  else if (d.ev) { S.event = d.ev; pick = null; pendingSwap = null; render(); }
   else if (d.build) buildFromSource(d.build);
   else if (d.del) {
     const e = ev(S.event);
@@ -1018,15 +1048,20 @@ document.addEventListener('click', async ev0 => {
     doDraw(S.event);
   } else if (d.pos) {
     const p = +d.pos;
-    const e = ev(S.event);
+    if (pendingSwap) return;
     if (pick === null) pick = p;
     else if (pick === p) pick = null;
-    else {
-      e.draw.assign = swapPositions(e.draw.assign, pick, p);
-      e.draw.swaps = (e.draw.swaps || 0) + 1;
-      toast(`已對調籤號 ${pick} 和 ${p}`);
-      pick = null;
-    }
+    else { pendingSwap = [pick, p]; pick = null; }
+    render();
+  } else if (d.dmode) { drawMode = d.dmode; pick = null; pendingSwap = null; render(); }
+  else if (d.swapno !== undefined) { pendingSwap = null; render(); }
+  else if (d.swapok !== undefined) {
+    const e = ev(S.event);
+    const [a1, b1] = pendingSwap;
+    e.draw.assign = swapPositions(e.draw.assign, a1, b1);
+    e.draw.swaps = (e.draw.swaps || 0) + 1;
+    toast(`已對調籤號 ${a1} 和 ${b1}`);
+    pendingSwap = null;
     render();
   } else if (d.dlfinal) dlFinal(d.dlfinal);
   else if (d.dlblankEv) dlBlank(d.dlblankEv);

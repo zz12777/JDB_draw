@@ -148,7 +148,9 @@ export function checkDraw(entries, structure, assign) {
         const lim = Math.min(Math.ceil(v / kids.length), c.cap);
         cs.set(school, lim);
         const have = counts.get(c).get(school) || 0;
-        if (have > lim && c.kind !== 'leaf') over.push({ node: c, school, have, lim });
+        // 團體賽只看同一組；組與組之間的上下半區不用提醒（決賽會重新抽籤）
+        const skip = structure.kind === 'rr' && c.kind !== 'group';
+        if (have > lim && c.kind !== 'leaf' && !skip) over.push({ node: c, school, have, lim });
       });
       walk(c, cs);
     });

@@ -172,7 +172,7 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
       teams.forEach(e => {
         const q = chunks[e].slice(first);
         if (finals.includes(e)) {
-          q.push({ event: e, text: '抽籤', draw: true, tableMin: 0, minLen: p.drawMin, count: 0, unit: 0 });
+          q.push({ event: e, text: '決賽抽籤', draw: true, tableMin: 0, minLen: p.drawMin, count: 0, unit: 0 });
           if (withFinal.has(e)) { const x = koItems(e, ko[e], top[e], true); q.push({ ...x, final: true }); }
         }
         queue[e] = q;
@@ -183,7 +183,7 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
         const items = teams.map(e => queue[e][k]).filter(Boolean);
         const r = slot(`d1-q${k}`, items);
         r.items = []; r.teamItems = items; r.teamSpan = 1;
-        r.desc = items.map(x => (x.draw ? `${x.event} 抽籤` : `${x.event} ${x.text}（${x.count}場×${x.unit}分）`)).join('、');
+        r.desc = items.map(x => (x.draw ? `${x.event} 決賽抽籤` : `${x.event} ${x.text}（${x.count}場×${x.unit}分）`)).join('、');
         rows.push(r);
       }
       const tmp = [...day1, ...rows];
@@ -387,7 +387,7 @@ export function scheduleWorkbook(sch, p, ExcelJSLib = globalThis.ExcelJS) {
   // 估算明細
   const d = wb.addWorksheet('估算明細');
   d.addRow(['日', '開始', '結束', '表定(分)', '估算(分)', '時間差(分)', '累計時間差(分)', '內容', '桌分鐘', '說明']);
-  const what = it => (it.draw ? `${it.event} 抽籤` : `${it.event} ${it.text}（${it.count}場×${it.unit}分）`);
+  const what = it => (it.draw ? `${it.event} 決賽抽籤` : `${it.event} ${it.text}（${it.count}場×${it.unit}分）`);
   // 跨好幾列的輪次：每一列都寫出來；時間算在最後一列，所以最後一列註明並把桌分鐘算進去
   const lines = (day, rows) => rows.forEach((x, i) => {
     const parts = [], going = [], notes = [];
