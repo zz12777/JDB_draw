@@ -35,3 +35,9 @@
 python3 -m http.server   # 本機預覽
 node tests/draw.test.js <順序表 json>   # 抽籤測試（需要測試資料，不在 repo 內）
 ```
+
+## 授權
+
+本專案程式碼以 MIT License 授權，見 `LICENSE`。
+
+猛將資料庫中的選手成績（`js/strongdata.js` 與共用試算表）整理自各賽事公開成績，不在 MIT 授權範圍內，權利屬於原賽事單位。
