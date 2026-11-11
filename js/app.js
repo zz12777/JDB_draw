@@ -402,7 +402,7 @@ function stepPlan() {
     <div class="stats">
       <div class="stat"><div class="k">總隊數</div><div class="v">${st.positions}</div></div>
       <div class="stat"><div class="k">組數</div><div class="v">${st.groups.length}</div></div>
-      <div class="stat"><div class="k">預賽總場數</div><div class="v">${st.matchCount} 場</div></div>
+      <div class="stat"><div class="k">總場數（預賽+決賽）</div><div class="v">${st.matchCount} + ${st.groups.length * 2 - 1} = ${st.matchCount + st.groups.length * 2 - 1} 場</div></div>
     </div>`;
   }
 
@@ -898,8 +898,7 @@ function stepStrong() {
     <div class="row"><h2>資料庫涵蓋範圍</h2><span class="spacer"></span>
       <a class="btn ghost" href="${SHEET_EDIT}" target="_blank" rel="noopener">${icon('open')}開啟共用試算表</a></div>
     <p class="small">可於共用試算表新增成績（請用交大盃信箱帳號開啟），存檔後重新整理這個網頁就會更新。</p>
-    <p class="small muted">${sheetStatus.state === 'ok' ? `目前資料：共用試算表，${sheetStatus.count} 筆，${new Date(sheetStatus.time).toLocaleString('zh-TW')} 讀取。`
-      : sheetStatus.state === 'loading' ? '正在讀取共用試算表，先顯示網頁內建資料。'
+    <p class="small muted">${sheetStatus.state === 'ok' ? '' : sheetStatus.state === 'loading' ? '正在讀取共用試算表，先顯示網頁內建資料。'
       : `讀不到共用試算表（${esc(sheetStatus.msg)}），先用網頁內建資料。`}</p>
     <div class="kv">${cov.map(c => `<b>${esc(KIND_TEXT[c.k] || c.k)}</b><span>${esc(c.items.join('、'))}</span>`).join('')}</div>
     <p class="small muted">用人名比對。<span class="lamp on"></span>個人賽得過名次　<span class="lamp half"></span>只有團體賽名次。成績<span class="rec-top">藍色</span>是全大運決賽，黑色是交大盃等盃賽。</p>
