@@ -555,9 +555,11 @@ function stepExport() {
   <section class="panel">
     <div class="row"><h2>下載</h2><span class="spacer"></span>
       <button class="btn" data-dlall>${icon('download')}下載全部完成籤表</button></div>
-    <div class="note warn"><b>完成籤表需再經人工檢查</b>：下載後請核對名單、校名與籤位等。</div>
-    <p class="small muted">完成籤表：個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表並附決賽籤表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
-    <p class="small">人工檢查時請特別看兩件事：<b>第一場（小籤）是不是同一學校對打</b>，以及<b>同校是不是排得太近、太早相遇</b>。系統已經自動檢查，結果在「檢查」欄；有問題可以回步驟 4 手動對調籤位，對調後會重新檢查。</p>
+    <div class="note warn"><b>完成籤表務必再經人工檢查（若有錯系統不背鍋喔）</b></div>
+    <h3>完成籤表檔案內容</h3>
+    <p class="small muted">個人賽每個分區一個分頁並附決賽頁，團體賽為預賽分組表並附決賽籤表，另附「抽籤結果」工作表（含學校、選手出現次數供核對）。</p>
+    <h3>人工檢查特別注意</h3>
+    <p class="small">第一場是不是同一學校對打、同校是不是太早相遇、<b>確定有報名的選手及隊伍都有在籤表上</b>。系統已經自動檢查，結果在「檢查」欄；有問題可以回步驟 4 手動對調籤位，對調後會重新檢查。</p>
     <div class="tbl-wrap"><table><thead><tr><th>項目</th><th class="num">數量</th><th>狀態</th><th>檢查</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </section>`;
 }
@@ -606,13 +608,13 @@ function stepSheets() {
         <label class="btn ghost sm">${icon('upload')}上傳最終籤表<input type="file" accept=".xlsx" hidden data-sheetup="${name}"></label>
         ${up && drawnSource(name) ? `<button class="btn ghost sm" data-sheetclear="${name}">${icon('reset')}改用抽籤結果</button>` : ''}
         <button class="btn sm" data-dlsheet="${name}" ${src ? '' : 'disabled'}>${icon('download')}下載點單 Word</button>
-        <button class="btn ghost sm" data-pdfsheet="${name}" ${src ? '' : 'disabled'}>${icon('file')}PDF</button>
+        <button class="btn ghost sm" data-pdfsheet="${name}" ${src ? '' : 'disabled'}>${icon('file')}下載點單 PDF</button>
       </div></td></tr>`;
   }).join('');
   $('#main').innerHTML = `
   <section class="panel">
     <h2>產生點單</h2>
-    <div class="note warn"><b>點單需再經人工檢查</b>：下載後請與籤表核對場次、籤號、校名與姓名等。</div>
+    <div class="note warn"><b>點單需再經人工檢查（若有錯系統不背鍋喔）</b>：請與籤表核對場次、籤號、校名與姓名等。</div>
     <div class="row">
       <label class="field grow">賽事名稱（點單標題）<input type="text" value="${esc(st0.title)}" data-sset="title"></label>
       <label class="field">空白點單張數<input type="number" min="0" value="${st0.blanks}" data-sset="blanks"></label>
@@ -624,7 +626,7 @@ function stepSheets() {
       <li>個人賽：一頁兩張，上半是前半場次、下半是後半場次（例如 130 張時，第 1 頁是第一場和第六六場），整疊對半裁切後疊起來就是場次順序。</li>
       <li>團體賽：一場一頁，五點（單單雙單單）。</li>
       <li>最後會多附幾張空白點單，張數可在上方設定。</li>
-      <li>PDF：按「PDF」直接下載 A4 PDF 檔，版面與 Word 點單相同，頁數多時需要等幾十秒。</li>
+      <li>PDF：按「下載點單 PDF」直接下載 A4 PDF 檔，版面與 Word 點單相同，頁數多時需要等幾十秒。</li>
     </ul>
   </section>`;
 }
