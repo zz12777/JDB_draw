@@ -112,7 +112,7 @@ function planError(name) {
   const sum = p.sizes.reduce((a, b) => a + b, 0);
   if (sum === n) return '';
   return p.kind === 'rr'
-    ? `3 隊區 ${p.n3} 個 + 4 隊區 ${p.n4} 個 = ${sum} 隊，與報名 ${n} 隊不符`
+    ? `3 隊組 ${p.n3} 個 + 4 隊組 ${p.n4} 個 = ${sum} 隊，與報名 ${n} 隊不符`
     : `各區人數合計 ${sum}，與報名 ${n} 不符`;
 }
 function structureOf(name) {
@@ -281,8 +281,7 @@ function stepEdit() {
       <button class="btn ghost sm" data-dlorder>${icon('download')}下載抽籤順序表</button>
       <button class="btn ghost sm" data-dlpart>${icon('download')}參賽名單 Word</button>
       <button class="btn ghost sm" data-dlov>${icon('download')}重疊名單 Excel</button></div>
-    <div class="note small">若陽明交大保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。
-      種子欄填固定籤號（例如 1），抽籤時會固定在那個位置。</div>
+    <div class="note small">若陽明交大保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。</div>
     ${flagged ? `<div class="note warn small">有 ${flagged} 筆需要確認（看提醒欄）。</div>` : ''}
     <div class="tbl-wrap scroll"><table>
       <thead><tr><th class="num">#</th><th>${unitWord(name)}</th><th>${nameWord(name)}</th><th>種子</th><th>提醒</th><th></th></tr></thead>
@@ -301,7 +300,6 @@ function stepEdit() {
   <aside>
     <section class="panel">
       <h2>${unitWord(name)}統計</h2>
-      <p class="small muted">直接改名稱會套用到所有項目，例如把「台大」改成「臺灣大學」。</p>
       <div class="tbl-wrap scroll" style="max-height:300px"><table><tbody>
         ${schools.map(([s, c]) => `<tr><td><input type="text" value="${esc(s)}" data-rename="${esc(s)}"></td><td class="num">${c}</td></tr>`).join('')}
       </tbody></table></div>
@@ -309,7 +307,7 @@ function stepEdit() {
     </section>
     <section class="panel">
       <h2>貼上名單</h2>
-      <p class="small muted">每行一筆：${unitWord(name)}、${nameWord(name)}、種子（可省略），用 Tab 或逗號隔開。可直接從 Excel 複製兩欄貼上。</p>
+      <p class="small muted">每行一筆：${unitWord(name)}、${nameWord(name)}、種子（可省略）。可直接從 Excel 複製兩欄貼上。</p>
       <textarea id="paste" placeholder="陽明交大\t陽明交大紅\t1"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" data-paste>${icon('plus')}加入</button></div>
     </section>
@@ -377,16 +375,16 @@ function stepPlan() {
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，多出來的人依序加在 B、C、D、A 區（例：70 人為 17、18、18、17）。分 2 區多 1 人加在 B 區；分 8 區由中間往外加。可以手動調整，總數要等於 ${n}。</p>`;
+    <p class="small muted">每區用一張「X 單敗」籤表（X 為 2 到 32），各區冠軍再進${plan.sizes.length > 1 ? '決賽頁' : '決賽'}。人數除不盡時，多出來的人依序由中間往外加，以四區舉例：加在 B、C、D、A 區（例：70 人為 17、18、18、17）。可以手動調整，總數要等於 ${n}。</p>`;
   } else {
     body = `
     <div class="row">
-      <label class="field">3 隊循環（區數）<input type="number" min="0" value="${plan.n3}" data-plan="n3"></label>
-      <label class="field">4 隊循環（區數）<input type="number" min="0" value="${plan.n4}" data-plan="n4"></label>
+      <label class="field">3 隊循環（組數）<input type="number" min="0" value="${plan.n3}" data-plan="n3"></label>
+      <label class="field">4 隊循環（組數）<input type="number" min="0" value="${plan.n4}" data-plan="n4"></label>
       <span class="spacer"></span>
       <button class="btn ghost sm" data-plan-reset>${icon('reset')}依人數重設</button>
     </div>
-    <p class="small muted">3 循環排前面，4 循環排後面。3 × 3 循環數 + 4 × 4 循環數 要等於 ${n}。</p>
+    <p class="small muted">3 循環排前面，4 循環排後面。</p>
     ${rrOptions(n, plan)}`;
   }
 
@@ -403,8 +401,7 @@ function stepPlan() {
     preview = `
     <div class="stats">
       <div class="stat"><div class="k">總隊數</div><div class="v">${st.positions}</div></div>
-      <div class="stat"><div class="k">區數</div><div class="v">${st.groups.length}</div></div>
-      <div class="stat"><div class="k">各區隊數</div><div class="v">${summarizeSizes(st.groups.map(g => g.size))}</div></div>
+      <div class="stat"><div class="k">組數</div><div class="v">${st.groups.length}</div></div>
       <div class="stat"><div class="k">預賽總場數</div><div class="v">${st.matchCount} 場</div></div>
     </div>`;
   }
@@ -440,12 +437,6 @@ function rrOptions(n, plan) {
     </tbody></table></div></div>`;
 }
 
-function summarizeSizes(sizes) {
-  const m = new Map();
-  sizes.forEach(s => m.set(s, (m.get(s) || 0) + 1));
-  return [...m.entries()].map(([s, c]) => `${s}隊×${c}`).join('、');
-}
-
 // ---------------- 步驟 4：抽籤 ----------------
 let pick = null; // 對調用
 let drawMode = 'view'; // 檢視模式／編輯模式（編輯才能對調）
@@ -468,7 +459,7 @@ function stepDraw() {
     const where = p => {
       if (st.kind === 'rr') {
         const g = st.groups.find(x => p >= x.startPos && p < x.startPos + x.size);
-        return `${g.letter}區 ${p - g.startPos + 1}`;
+        return `${g.letter}組 ${p - g.startPos + 1}`;
       }
       const s = st.sections.find(x => p >= x.startPos && p < x.startPos + x.size);
       return s.letter ? `${s.letter}區` : '';
@@ -490,7 +481,7 @@ function stepDraw() {
       return `<div class="note warn row" style="align-items:center">要對調 ${who(pendingSwap[0])} 和 ${who(pendingSwap[1])} 嗎？<span class="spacer"></span>
         <button class="btn sm" data-swapok>確認對調</button><button class="btn ghost sm" data-swapno>取消</button></div>`;
     })() : ''}
-    <p class="small muted">猛將欄：<span class="lamp on"></span>實心＝在猛將資料庫有個人賽名次（全大運前八或交大盃前四）；<span class="lamp half"></span>空心＝只有團體賽名次。團體賽後面的數字是隊上有幾位。滑鼠移到燈號上可以看成績。</p>
+    <p class="small muted">猛將欄：<span class="lamp on"></span>實心＝在猛將資料庫有個人賽名次（全大運前八或交大盃前四）；<span class="lamp half"></span>空心＝只有團體賽名次。${st.kind === 'rr' ? '後面的數字是隊上有幾位。' : ''}滑鼠移到燈號上可以看成績。</p>
     <div class="tbl-wrap scroll"><table>
       <thead><tr><th class="num">籤號</th><th>位置</th>${st.kind === 'ko' ? '<th>首場</th>' : ''}<th>${unitWord(name)}</th><th>${nameWord(name)}</th><th>猛將</th><th>種子</th></tr></thead>
       <tbody>${Array.from({ length: st.positions }, (_, i) => i + 1).map(p => {
@@ -954,7 +945,7 @@ function stepHelp() {
     <h2>籤表規劃</h2>
     <ul>
       <li><b>個人賽</b>：人數切成數個分區（A、B、C…），每區一張「X 單敗」籤表，X 為 2 到 32。預設每區越大越好（每區最多 32 人）：32 人以下不分區，33 到 64 人分 2 區，65 到 128 人分 4 區，129 人以上分 8 區。人數除不盡時各區差一人，多出來的人加在 B、C、D 區，A 區（有 1 號種子）最後加：分 4 區時，多 1 人加在 B 區，多 2 人加在 B、C 區，多 3 人加在 B、C、D 區（例：女單 70 人分 4 區為 17、18、18、17）。也可以手動改各區人數。</li>
-      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾區，3 隊區排前面。頁面會列出各種組合的總場數和決賽隊數，可以選場數比較少、或決賽籤表比較整齊（例如 16 隊）的組合。每區取前二晉級，完成籤表會附決賽籤表（冠、亞位置），決賽另外抽。</li>
+      <li><b>團體賽</b>：預賽分組循環，可設定 3 隊循環與 4 隊循環各幾組，3 隊組排前面。頁面會列出各種組合的總場數和決賽隊數，可以選場數比較少、或決賽籤表比較整齊（例如 16 隊）的組合。每組取前二晉級，完成籤表會附決賽籤表（冠、亞位置），決賽另外抽。</li>
       <li><b>團體賽場次編號</b>：一輪一輪編，每輪由 A 組到最後一組。4 隊組：第一輪 1-3、2-4，第二輪 2-3、1-4，第三輪 1-2、3-4；3 隊組：1-2、1-3、2-3。</li>
     </ul>
   </section>
@@ -970,7 +961,7 @@ function stepHelp() {
         </tbody></table>
         例：男單分 A、B、C、D 四區，A、B 是上半區，C、D 是下半區。只報 2 人的學校，會一人在 A 或 B、另一人在 C 或 D。人多的學校先放，但每放一人都會優先放到空位比較多的那邊，所以人少的學校最後放時，上下半區都還有位置。</li>
       <li><b>種子也算進同校分布</b>：已固定的種子會先佔位，同校其他人會避開種子所在的區域。</li>
-      <li><b>抽完自動檢查</b>：每人都有籤號且不重複；各區同校人數超過理想值、第一場就同校對戰、學校隊數比區數多（一定同區）都會列出提醒；「下載完成籤表」頁也會顯示每個項目的檢查結果。</li>
+      <li><b>抽完自動檢查</b>：每人都有籤號且不重複；各區同校人數超過理想值、第一場就同校對戰、團體賽學校隊數比組數多（一定同組）都會列出提醒；「下載完成籤表」頁也會顯示每個項目的檢查結果。</li>
       <li><b>團體賽</b>：同一學校的隊伍分在不同組，例如臺灣大學報 3 隊，就會在 3 個不同的組，預賽不會自己人打自己人。學校隊數比組數還多時才會有同組，抽完會提醒。</li>
     </ul>
   </section>
@@ -979,7 +970,7 @@ function stepHelp() {
     <ol>
       <li><b>上傳表單回應</b>：Google 試算表「檔案 &gt; 下載 &gt; Microsoft Excel (.xlsx)」，男子組、女子組、社會組各一份。整列劃掉的回應預設不採用，格子裡劃掉的名字直接排除。</li>
       <li><b>名單校正</b>：檢查名單、統一校名、加入保留名額、設定種子籤號。校正完可在這頁下載「參賽名單 Word」（團體賽各隊的領隊、教練、隊長、隊員，個人賽各校的單打、雙打）和「重疊名單 Excel」（男團、女團裡也打單打或雙打的人，雙打寫成甲/乙一組；社團裡也打大專團體的人）。</li>
-      <li><b>籤表規劃</b>：設定分區人數或每區隊數，下載空白籤表檢查。</li>
+      <li><b>籤表規劃</b>：設定分區人數或每組隊數，下載空白籤表檢查。</li>
       <li><b>抽籤</b>：同校分開抽籤，可重抽。切到「編輯模式」可手動對調籤位，點兩列後會先跳出確認才對調。猛將欄的實心燈號是有個人賽名次的選手，空心是只有團體賽名次。記下亂數代碼可以重現結果。</li>
       <li><b>下載完成籤表</b>：各項目的 Excel 籤表與抽籤結果，需再經人工檢查。</li>
       <li><b>點單</b>：用最終籤表，產生 Word 點單或 PDF，需再經人工檢查。</li>
