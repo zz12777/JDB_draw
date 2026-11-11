@@ -802,7 +802,7 @@ async function dlSched() {
   const { structs } = scheduleStructs();
   const p = schParams();
   const sch = buildSchedule(structs, p, S.schedule.override || {});
-  download(await workbookBlob(scheduleWorkbook(sch, p)), '賽程時間預定表.xlsx');
+  download(await workbookBlob(scheduleWorkbook(sch, p)), '賽程時間表.xlsx');
 }
 
 // ---------------- 重疊名單 ----------------

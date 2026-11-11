@@ -298,88 +298,79 @@ export function buildSchedule(structs, p = DEFAULT_PARAMS, override = {}) {
 }
 
 // ---------------- Excel ----------------
-const KAI = '標楷體';
-const thin = { style: 'thin', color: { argb: 'FF808080' } };
+// 版面比照往年的賽程時間表：左邊直寫日期（第一天黃底、第二天藍底），時間寫「開始-結束」
+const MING = '新細明體';
+const thin = { style: 'thin', color: { argb: 'FF000000' } };
 const B = { top: thin, left: thin, bottom: thin, right: thin };
+const XL_TITLE = { 1: { 男單: '男單', 女單: '女單', 男雙: '男雙', 女雙: '女雙', 男團: '男團', 女團: '女團' },
+  2: { 男團: '大專男團', 女團: '大專女團', 社團: '社會組' } };
+const NCOL = 6; // 項目欄數；第二天 3 個項目各佔 2 欄
 
-function dayBlock(ws, row, title, cols, rows, isDay1) {
-  const nc = cols.length;
+function dayBlock(ws, row, title, cols, rows, dayNo) {
   const c0 = 3;
-  const head = ws.getRow(row);
-  ws.getCell(row, 2).value = '時間';
-  cols.forEach((c, i) => { ws.getCell(row, c0 + i).value = COL_TITLE[c]; });
-  head.height = 34;
-  for (let c = 2; c < c0 + nc; c++) {
-    const cell = ws.getCell(row, c);
-    cell.font = { name: KAI, size: 12, bold: true };
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.border = B;
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
-  }
-  const first = row + 1;
-  rows.forEach((r, i) => {
-    const rr = first + i;
-    ws.getCell(rr, 2).value = fmt(r.start);
-    for (let c = 2; c < c0 + nc; c++) {
-      const cell = ws.getCell(rr, c);
-      cell.font = { name: KAI, size: 12 };
+  const w = NCOL / cols.length; // 每個項目佔幾欄
+  const colOf = i => c0 + i * w;
+  const last = row + rows.length;
+  for (let r = row; r <= last; r++) {
+    for (let c = 2; c < c0 + NCOL; c++) {
+      const cell = ws.getCell(r, c);
+      cell.font = c === 2 ? { name: '細明體', size: 11 } : { name: MING, size: r === row ? 16 : 12, bold: r === row };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = B;
     }
-    ws.getRow(rr).height = 24;
+    ws.getRow(r).height = r === row ? 38 : 27;
+  }
+  cols.forEach((c, i) => {
+    ws.getCell(row, colOf(i)).value = XL_TITLE[dayNo][c];
+    if (w > 1) ws.mergeCells(row, colOf(i), row, colOf(i) + w - 1);
   });
   rows.forEach((r, i) => {
-    const rr = first + i;
+    const rr = row + 1 + i;
+    ws.getCell(rr, 2).value = `${fmt(r.start)}-${fmt(r.end)}`;
     cols.forEach((c, ci) => {
       const x = r.cells[c];
-      if (!x) return;
-      const cell = ws.getCell(rr, c0 + ci);
-      cell.value = x.text;
-      if (x.bold) cell.font = { name: KAI, size: 12, bold: true };
-      if (x.span > 1) ws.mergeCells(rr, c0 + ci, rr + x.span - 1, c0 + ci);
+      if (r.skip && r.skip.has(c)) return; // 被上面跨列的格子蓋住
+      const span = x && x.span > 1 ? x.span : 1;
+      if (x) ws.getCell(rr, colOf(ci)).value = x.text;
+      if (span > 1 || w > 1) ws.mergeCells(rr, colOf(ci), rr + span - 1, colOf(ci) + w - 1);
     });
   });
-  const last = first + rows.length - 1;
-  if (rows.length) {
-    ws.mergeCells(first, 1, last, 1);
-    const t = ws.getCell(first, 1);
-    t.value = title;
-    t.font = { name: KAI, size: 12, bold: true };
-    t.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2EAC8' } };
-    for (let r = first; r <= last; r++) ws.getCell(r, 1).border = B;
-  }
-  void isDay1;
+  ws.mergeCells(row, 1, last, 1);
+  const t = ws.getCell(row, 1);
+  t.value = title;
+  t.font = { name: MING, size: 11, bold: true };
+  t.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: dayNo === 1 ? 'FFF2E6B0' : 'FFDDEBF7' } };
   return last + 2;
 }
 
+// 直寫：11 / 月 / 30 / 日 / 星 / 期 / 六（數字不拆開）
 function dayTitle(date, n) {
-  if (!date) return `第${n === 1 ? '一' : '二'}天`;
-  const d = new Date(date + 'T00:00:00');
-  if (Number.isNaN(d.getTime())) return date;
-  return `${d.getMonth() + 1}月${d.getDate()}日\n星期${'日一二三四五六'[d.getDay()]}`;
+  const d = date ? new Date(date + 'T00:00:00') : null;
+  if (!d || Number.isNaN(d.getTime())) return ['第', n === 1 ? '一' : '二', '天'].join('\n');
+  return [d.getMonth() + 1, '月', d.getDate(), '日', '星', '期', '日一二三四五六'[d.getDay()]].join('\n');
 }
 
 export function scheduleWorkbook(sch, p, ExcelJSLib = globalThis.ExcelJS) {
   const wb = new ExcelJSLib.Workbook();
   wb.creator = '交大盃抽籤系統';
-  const ws = wb.addWorksheet('賽程時間預定表');
-  ws.columns = [{ width: 11 }, { width: 9 }, ...Array(6).fill({ width: 16 })];
+  const ws = wb.addWorksheet('賽程時間表');
+  ws.columns = [{ width: 4.5 }, { width: 16 }, ...Array(NCOL).fill({ width: 15 })];
   ws.mergeCells(1, 1, 1, 8);
   const t = ws.getCell(1, 1);
-  t.value = '賽程時間預定表';
-  t.font = { name: KAI, size: 20, bold: true };
+  t.value = '賽程時間表';
+  t.font = { name: MING, size: 26 };
   t.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 36;
-  let r = dayBlock(ws, 3, dayTitle(p.day1Date, 1), DAY1_COLS, sch.day1, true);
-  r = dayBlock(ws, r, dayTitle(p.day2Date, 2), DAY2_COLS, sch.day2, false);
+  ws.getRow(1).height = 46;
+  let r = dayBlock(ws, 3, dayTitle(p.day1Date, 1), DAY1_COLS, sch.day1, 1);
+  r = dayBlock(ws, r, dayTitle(p.day2Date, 2), DAY2_COLS, sch.day2, 2);
   ['一、本表為時間預定表，請各隊於預定比賽時間前一小時到場，並留意大會廣播。',
     '二、因賽程緊湊，必要時大會得採分桌進行比賽，請各隊配合。',
     '三、若賽程提前，大會有權利提前進行比賽。'].forEach((v, i) => {
     ws.mergeCells(r + i, 1, r + i, 8);
     const c = ws.getCell(r + i, 1);
     c.value = v;
-    c.font = { name: KAI, size: 11 };
+    c.font = { name: MING, size: 11 };
   });
   ws.views = [{ showGridLines: false }];
   ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
