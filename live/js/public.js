@@ -1,6 +1,6 @@
 // 公開頁：即時桌況、賽程與成績
 import { derive, sideText, EVENT_FULL, fmtTime, POINTS, gameWinner } from './model.js';
-import { getState, subscribe } from './store.js';
+import { getState, subscribe, auth, onAuth } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
 import { bracketSvg } from './tree.js';
 
@@ -17,7 +17,7 @@ function render() {
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = '<input id="q" class="search" type="text" placeholder="輸入學校、隊名或姓名，查詢相關場次"><div style="height:12px"></div><div id="content"></div>';
   if ($('#q').value !== q && !composing) $('#q').value = q;
-  $('#content').innerHTML = !D.events.length ? '<div class="panel"><p class="muted">賽程尚未公布。</p></div>'
+  $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
     : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : viewSched();
   drawDetail();
 }
@@ -72,21 +72,21 @@ function drawDetail() {
   const host = $('#modal');
   const m = detail && D.byId.get(detail);
   if (!m) { host.hidden = true; host.innerHTML = ''; return; }
-  const games = g => (g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null).map(x => `${x[0]}:${x[1]}`).join('　');
+  const games = g => (g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null).map(x => `${x[0]}-${x[1]}`).join('　');
+  const block = (title, an, bn, r, gs) => `<div class="drow ${r.a + r.b || r.winner ? '' : 'idle'}"><div class="dn r ${r.winner === 'a' ? 'w' : ''}">${an}</div>
+    <div class="dc"><div class="small muted">${title}</div><div class="ds">${r.a + r.b || r.winner ? `${r.a} : ${r.b}` : '<span class="small muted">未進行</span>'}</div></div>
+    <div class="dn ${r.winner === 'b' ? 'w' : ''}">${bn}</div><div class="dg">${gs}</div></div>`;
+  const stack = v => (Array.isArray(v) ? v.filter(Boolean).map(esc).join('<br>') : esc(v || ''));
   let body;
   if (m.team) {
     const lu = m.rec.start ? (m.rec.lineup || {}) : {};
-    body = `<table class="dt"><thead><tr><th></th><th>${esc(sideText(m.A, true))}</th><th>局數</th><th>${esc(sideText(m.B, true))}</th><th>各局比分</th></tr></thead><tbody>
-      ${POINTS.map((p, i) => { const r = m.result.pts[i]; const pt = (m.rec.pts || [])[i] || {};
-        return `<tr><td class="nowrap">第${'一二三四五'[i]}點</td><td class="${r.winner === 'a' ? 'w' : ''}">${esc(lineName(lu.a, i))}</td><td class="nowrap">${r.a + r.b || r.winner ? `${r.a}:${r.b}` : ''}</td><td class="${r.winner === 'b' ? 'w' : ''}">${esc(lineName(lu.b, i))}</td><td class="small">${games(pt.g)}</td></tr>`; }).join('')}</tbody></table>`;
+    body = `<div class="dlist">${POINTS.map((p, i) => block(`第${'一二三四五'[i]}點`, stack((lu.a || [])[i]), stack((lu.b || [])[i]), m.result.pts[i], games(((m.rec.pts || [])[i] || {}).g))).join('')}</div>`;
   } else {
-    const gs = (m.rec.g || []).filter(x => x && x[0] !== '' && x[0] != null);
-    body = gs.length ? `<table class="dt"><thead><tr><th></th><th>${esc(sideText(m.A))}</th><th>${esc(sideText(m.B))}</th></tr></thead><tbody>
-      ${gs.map((g, i) => { const w = gameWinner(g); return `<tr><td>第${'一二三四五'[i]}局</td><td class="${w === 'a' ? 'w' : ''}">${g[0]}</td><td class="${w === 'b' ? 'w' : ''}">${g[1] ?? ''}</td></tr>`; }).join('')}</tbody></table>` : '';
+    body = games(m.rec.g) ? `<div class="dg" style="margin-top:10px;font-size:15px">${games(m.rec.g)}</div>` : '';
   }
   if (m.rec.wo) body = `<p class="small muted">${esc(sideText(m.rec.wo === 'a' ? m.B : m.A, m.team))} 棄權</p>`;
   host.hidden = false;
-  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(640px,100%)"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}</h2>${chip(m)}${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
+  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(640px,100%)"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}</h2>${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
     <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="s">${shown(m) ? `${m.score[0]} : ${m.score[1]}` : 'vs'}</div><div class="n">${esc(sideText(m.B, m.team))}</div></div>${shown(m) ? body : ''}</div></div>`;
 }
 
@@ -108,5 +108,6 @@ document.addEventListener('compositionend', ev => { if (ev.target.id === 'q') { 
 document.addEventListener('input', ev => { if (ev.target.id === 'q' && !composing && !ev.isComposing) { q = ev.target.value; render(); } });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && detail) { detail = null; drawDetail(); } });
 subscribe(render);
+onAuth(render);
 setInterval(render, 30000);
 render();

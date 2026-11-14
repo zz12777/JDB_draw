@@ -1,6 +1,6 @@
 // 大會台
 import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState } from './model.js';
-import { getState, subscribe, update, updateMatch, replaceState } from './store.js';
+import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL } from './store.js';
 import { esc, $, $$, icon, toast, chip, board, header, names, shortEv, lineName, mins } from './ui.js';
 import { demoState } from './demo.js';
 import { readWorkbookValues } from '../../js/reader.js';
@@ -21,11 +21,19 @@ let rosterMiss = [], rosterGuess = [];
 function render() {
   const s = getState();
   D = derive(s);
-  $('#top').innerHTML = header(s, '大會台', [['公開頁', 'index.html'], ['裁判頁', 'ref.html']]);
+  $('#top').innerHTML = header(s, '大會台', [['公開頁', 'index.html'], ['裁判頁', 'ref.html'], ...(auth.cloud && auth.user ? [[`<a href="#" data-signout>登出 ${esc(auth.user)}</a>`, '']] : [])]);
+  if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
   $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : viewSetup(s);
+}
+
+function viewLogin() {
+  if (!auth.ready) return `<div class="panel"><p class="muted">${auth.error ? esc(auth.error) : '連線中。'}</p></div>`;
+  return `<div class="panel" style="max-width:480px;margin:40px auto;text-align:center"><h2>大會台登入</h2>
+    ${auth.user ? `<p class="small" style="color:var(--red)">${esc(auth.user)} 沒有大會台權限。</p><button class="btn ghost" data-signout>改用其他帳號</button>` : '<button class="btn" data-signin>以 Google 帳號登入</button>'}
+    ${auth.error ? `<p class="small" style="color:var(--red)">${esc(auth.error)}</p>` : ''}</div>`;
 }
 
 // ---------------- 賽程控制 ----------------
@@ -335,7 +343,7 @@ function viewSetup(s) {
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
-      <button class="btn ghost" data-demo>載入示範資料</button>
+      ${LOCAL || !s.events.length ? '<button class="btn ghost" data-demo>載入示範資料</button>' : ''}
       <button class="btn ghost danger" data-wipe>清除全部資料</button></div></div>`;
 }
 
@@ -421,9 +429,12 @@ async function importRoster(file) {
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('button, [data-table]');
+  const t = ev.target.closest('button, [data-table], [data-signout]');
+  if (t && 'signout' in t.dataset) ev.preventDefault();
   if (!t) { if (ev.target.classList.contains('modal-bg')) { modal = null; drawModal(); } return; }
   const d = t.dataset;
+  if ('signin' in d) { auth.signIn(); return; }
+  if ('signout' in d) { auth.signOut(); return; }
   if (d.tab) { tab = d.tab; render(); }
   else if (d.reftab) { refTab = d.reftab; render(); }
   else if (d.ev) { curEv = d.ev; render(); }
@@ -510,5 +521,6 @@ subscribe((s, local) => {
     if (local || inModal) refreshScore(); else drawModal();
   }
 });
+onAuth(a => { if (a.error && (a.isAdmin || !a.cloud)) toast(a.error); render(); });
 setInterval(() => { const a = document.activeElement; if (!modal && !(a && /INPUT|SELECT/.test(a.tagName))) render(); }, 30000);
 render();

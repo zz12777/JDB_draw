@@ -119,6 +119,6 @@ export function refOf(m, t) {
 
 export function header(state, role, links) {
   return `<img src="img/logo.png" alt=""><div><h1>${esc(state.title || '交大盃')}</h1><div class="sub">${esc(state.edition || '')}${role ? `　${role}` : ''}</div></div>
-    <span class="spacer"></span>${links.map(l => `<a href="${l[1]}">${l[0]}</a>`).join('')}`;
+    <span class="spacer"></span>${links.map(l => (l[1] ? `<a href="${l[1]}${location.search}">${l[0]}</a>` : l[0])).join('')}`;
 }
 export { EVENT_FULL };

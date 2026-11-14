@@ -1,37 +1,204 @@
-// 資料存取。目前存在這台電腦的瀏覽器（同一台電腦的各分頁會同步）；
-// 之後接上雲端資料庫時只換這個檔案，其餘程式不用動。
+// 資料存取：畫面只跟這個檔案要資料、改資料，實際存放的地方由下面三種連線方式負責。
+//   雲端（大會台、裁判頁）：Firebase 即時連線，改動立刻同步到所有裝置
+//   雲端（公開頁）：每隔幾秒抓一次有變動的場次，不佔即時連線名額
+//   本機（網址加 ?local）：存在這台電腦的瀏覽器，示範與測試用
+//
+// 雲端的資料分成：pub/meta（賽事設定）、pub/events（籤表與名單）、pub/m/場次/欄位（每場的紀錄，
+// 一個欄位一格，裁判與大會台同時改不同欄位不會互相蓋掉）、desk/…（只有大會台看得到）。
 import { emptyState } from './model.js';
+import { FIREBASE, ROOT, ADMINS, POLL_SECONDS } from './config.js';
 
-const KEY = 'jdb-live-v1';
-const listeners = new Set();
-let state = read();
+const ROLE = document.documentElement.dataset.role || 'public';
+export const LOCAL = new URLSearchParams(location.search).has('local') || !FIREBASE;
+const listeners = new Set(), authListeners = new Set();
+const raw = { meta: null, events: null, m: {}, calls: null, staff: null };
+let state = emptyState();
+let remote = null;
+export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, error: '', loaded: false };
 
-function read() {
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    return s && s.v === 1 ? s : emptyState();
-  } catch (e) { return emptyState(); }
+// ---------------- 狀態 <-> 資料庫格式 ----------------
+const parse = (s, d) => { if (s == null) return d; try { const v = JSON.parse(s); return v == null ? d : v; } catch (e) { return d; } };
+const clone = x => JSON.parse(JSON.stringify(x));
+const META_KEYS = ['title', 'edition', 'tables', 'notice', 'rosterFile', 'rev'];
+const games = g => (Array.isArray(g) ? g.slice(0, 5).map(x => (Array.isArray(x) ? [x[0] ?? '', x[1] ?? ''] : ['', ''])) : undefined);
+
+function nodeToRec(node) {
+  const rec = {};
+  for (const k of Object.keys(node || {})) {
+    if (k === 'u') continue;
+    if (k === 'pts') {
+      rec.pts = [];
+      for (const i of Object.keys(node.pts || {})) {
+        const p = {};
+        for (const kk of Object.keys(node.pts[i] || {})) { const v = parse(node.pts[i][kk]); if (v !== undefined) p[kk] = kk === 'g' ? games(v) : v; }
+        rec.pts[Number(i)] = p;
+      }
+      for (let i = 0; i < rec.pts.length; i++) if (!rec.pts[i]) rec.pts[i] = {};
+    } else { const v = parse(node[k]); if (v !== undefined) rec[k] = k === 'g' ? games(v) : v; }
+  }
+  return rec;
 }
+function flatten(rec) {
+  const out = {};
+  for (const k of Object.keys(rec || {})) {
+    const v = rec[k];
+    if (v === undefined || v === null) continue;
+    if (k === 'pts') (v || []).forEach((p, i) => { for (const kk of Object.keys(p || {})) if (p[kk] !== undefined && p[kk] !== null) out[`pts/${i}/${kk}`] = JSON.stringify(p[kk]); });
+    else out[k] = JSON.stringify(v);
+  }
+  return out;
+}
+function recToNode(rec, ts) {
+  const node = { u: ts };
+  for (const [path, v] of Object.entries(flatten(rec))) {
+    const parts = path.split('/'); let o = node;
+    parts.slice(0, -1).forEach(p => { o = o[p] = o[p] || {}; });
+    o[parts[parts.length - 1]] = v;
+  }
+  return node;
+}
+function assemble() {
+  const meta = parse(raw.meta, {});
+  const m = {};
+  for (const id of Object.keys(raw.m || {})) m[id] = nodeToRec(raw.m[id]);
+  state = { ...emptyState(), ...Object.fromEntries(META_KEYS.filter(k => meta[k] !== undefined).map(k => [k, meta[k]])),
+    events: parse(raw.events, []), m, calls: parse(raw.calls, []), staff: parse(raw.staff, []) };
+}
+const metaOf = s => JSON.stringify(Object.fromEntries(META_KEYS.map(k => [k, s[k] ?? null])));
 
 export const getState = () => state;
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export function onAuth(fn) { authListeners.add(fn); return () => authListeners.delete(fn); }
 function emit(local) { listeners.forEach(fn => fn(state, local)); }
+function emitAuth() { authListeners.forEach(fn => fn(auth)); }
 
-/** 修改資料：fn 直接改傳入的 state */
+/** 修改資料：fn 直接改傳入的 state；只把有變動的部分寫回去 */
 export function update(fn) {
-  state = read(); // 先取最新的，避免蓋掉其他分頁的修改
-  fn(state);
-  state.ts = Date.now();
-  localStorage.setItem(KEY, JSON.stringify(state));
+  const before = state, next = clone(state);
+  fn(next);
+  const up = {};
+  if (JSON.stringify(next.events) !== JSON.stringify(before.events)) { next.rev = Date.now(); up['pub/events'] = JSON.stringify(next.events); }
+  if (metaOf(next) !== metaOf(before)) up['pub/meta'] = metaOf(next);
+  if (JSON.stringify(next.calls || []) !== JSON.stringify(before.calls || [])) up['desk/calls'] = JSON.stringify(next.calls || []);
+  if (JSON.stringify(next.staff || []) !== JSON.stringify(before.staff || [])) up['desk/staff'] = JSON.stringify(next.staff || []);
+  const ids = new Set([...Object.keys(before.m || {}), ...Object.keys(next.m || {})]);
+  ids.forEach(id => {
+    const a = flatten((before.m || {})[id]), b = flatten((next.m || {})[id]);
+    let changed = false;
+    new Set([...Object.keys(a), ...Object.keys(b)]).forEach(k => { if (a[k] !== b[k]) { up[`pub/m/${id}/${k}`] = b[k] === undefined ? null : b[k]; changed = true; } });
+    if (changed) up[`pub/m/${id}/u`] = remote.stamp();
+  });
+  state = next;
   emit(true);
+  if (Object.keys(up).length) remote.write(up).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
-/** 修改某一場的紀錄 */
 export function updateMatch(id, fn) {
   update(s => { s.m[id] = s.m[id] || {}; fn(s.m[id], s); });
 }
+/** 整份換掉（還原備份、載入示範資料、清除） */
 export function replaceState(s) {
-  state = s; state.ts = Date.now();
-  localStorage.setItem(KEY, JSON.stringify(state));
+  const next = { ...emptyState(), ...clone(s), rev: Date.now() };
+  const tree = {};
+  for (const id of Object.keys(next.m || {})) tree[id] = recToNode(next.m[id], remote.stamp());
+  state = next;
   emit(true);
+  remote.write({ 'pub/meta': metaOf(next), 'pub/events': JSON.stringify(next.events || []), 'pub/m': Object.keys(tree).length ? tree : null,
+    'desk/calls': JSON.stringify(next.calls || []), 'desk/staff': JSON.stringify(next.staff || []) })
+    .catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
-window.addEventListener('storage', e => { if (e.key === KEY) { state = read(); emit(false); } });
+function receive(part, value) {
+  raw[part] = part === 'm' ? (value || {}) : value;
+  auth.loaded = true;
+  assemble();
+  emit(false);
+}
+
+// ---------------- 本機 ----------------
+function localRemote() {
+  const KEY = 'jdb-live-tree';
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
+  const push = () => { const t = load(); const pub = t.pub || {}, desk = t.desk || {};
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null;
+    auth.loaded = true; assemble(); };
+  window.addEventListener('storage', e => { if (e.key === KEY) { push(); emit(false); } });
+  push();
+  return {
+    stamp: () => Date.now(),
+    async write(up) {
+      const t = load();
+      for (const [path, v] of Object.entries(up)) {
+        const parts = path.split('/'); let o = t;
+        parts.slice(0, -1).forEach(p => { o = o[p] = (o[p] && typeof o[p] === 'object') ? o[p] : {}; });
+        if (v === null) delete o[parts[parts.length - 1]]; else o[parts[parts.length - 1]] = v;
+      }
+      localStorage.setItem(KEY, JSON.stringify(t));
+    },
+  };
+}
+
+// ---------------- 雲端：即時連線（大會台、裁判頁） ----------------
+const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+async function sdkRemote() {
+  const [{ initializeApp }, db, au] = await Promise.all([import(`${SDK}firebase-app.js`), import(`${SDK}firebase-database.js`), ROLE === 'desk' ? import(`${SDK}firebase-auth.js`) : Promise.resolve(null)]);
+  const app = initializeApp(FIREBASE);
+  const database = db.getDatabase(app);
+  const at = p => db.ref(database, `${ROOT}/${p}`);
+  const fail = err => { auth.error = `讀取失敗：${err.message}`; emitAuth(); };
+  db.onValue(at('pub/meta'), s => receive('meta', s.val()), fail);
+  db.onValue(at('pub/events'), s => receive('events', s.val()), fail);
+  db.onValue(at('pub/m'), s => receive('m', s.val()), fail);
+  if (au) {
+    const a = au.getAuth(app);
+    let offs = [];
+    au.onAuthStateChanged(a, user => {
+      auth.ready = true; auth.user = user ? user.email : null; auth.isAdmin = !!user && ADMINS.includes(user.email); auth.error = '';
+      offs.forEach(f => f()); offs = [];
+      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail)];
+      emitAuth();
+    });
+    auth.signIn = () => au.signInWithPopup(a, new au.GoogleAuthProvider()).catch(err => { auth.error = `登入失敗：${err.message}`; emitAuth(); });
+    auth.signOut = () => au.signOut(a);
+  }
+  return {
+    stamp: () => db.serverTimestamp(),
+    write: up => db.update(db.ref(database, ROOT), up),
+  };
+}
+
+// ---------------- 雲端：定時更新（公開頁，只讀） ----------------
+function pollRemote() {
+  const base = `${FIREBASE.databaseURL}/${ROOT}/pub`;
+  const get = async path => { const r = await fetch(`${base}${path}`); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); };
+  let maxU = 0, rev = null, busy = false;
+  const seen = node => { Object.values(node || {}).forEach(n => { if (n && typeof n.u === 'number' && n.u > maxU) maxU = n.u; }); };
+  async function full() {
+    const pub = (await get('.json')) || {};
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {};
+    maxU = 0; seen(raw.m); rev = parse(raw.meta, {}).rev ?? null;
+    auth.loaded = true; assemble(); emit(false);
+  }
+  async function tick() {
+    if (busy || document.hidden) return;
+    busy = true;
+    try {
+      if (!auth.loaded) { await full(); return; }
+      const meta = await get('/meta.json');
+      if ((parse(meta, {}).rev ?? null) !== rev) { await full(); return; }
+      if (meta !== raw.meta) { raw.meta = meta; assemble(); emit(false); }
+      let changed;
+      try { changed = await get(`/m.json?orderBy=%22u%22&startAt=${maxU + 1}`); } catch (e) { await full(); return; }
+      if (changed && Object.keys(changed).length) { Object.assign(raw.m, changed); seen(changed); assemble(); emit(false); }
+      auth.error = '';
+    } catch (err) { auth.error = '連線中斷，稍後自動重試'; emitAuth(); } finally { busy = false; }
+  }
+  tick();
+  setInterval(tick, POLL_SECONDS * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+  return { stamp: () => Date.now(), write: async () => { throw new Error('公開頁不可修改資料'); } };
+}
+
+// 連線建立前先放一個暫存的，避免畫面一開始就呼叫 update 時出錯
+remote = { stamp: () => Date.now(), write: async () => { throw new Error('尚未連線'); } };
+if (LOCAL) remote = localRemote();
+else if (ROLE === 'public') remote = pollRemote();
+else sdkRemote().then(r => { remote = r; }).catch(err => { auth.error = `無法連線資料庫：${err.message}`; emitAuth(); });

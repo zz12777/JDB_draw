@@ -1,6 +1,6 @@
 // 裁判頁：輸入姓名、選球桌、記錄每局比分、回報未到
 import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner } from './model.js';
-import { getState, subscribe, updateMatch } from './store.js';
+import { getState, subscribe, updateMatch, onAuth } from './store.js';
 import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
 
 const NAME_KEY = 'jdb-ref-name';
@@ -109,6 +109,7 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'rn') $('[data-setname]').click(); });
 
+onAuth(a => { if (a.error) toast(a.error); });
 subscribe((s, local) => {
   D = derive(s);
   const a = document.activeElement;
