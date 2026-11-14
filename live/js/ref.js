@@ -33,7 +33,7 @@ function viewMatch() {
   const an = sideText(m.A, m.team), bn = sideText(m.B, m.team);
   const ab = m.rec.absent || {};
   const head = `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div>
-    <div class="small muted">${EVENT_FULL[m.ev]} ${esc(m.no)} ${esc(m.round)}</div>
+    <div class="small muted">${EVENT_FULL[m.ev]} ${esc(m.no)}</div>
     <div class="duel"><div class="n r">${esc(an)}</div><div class="s" id="tot"></div><div class="n">${esc(bn)}</div></div></div>`;
   const absent = `<div class="panel"><h2>未到回報</h2>
     ${ab.a || ab.b ? `<div class="alertbox">已回報：${esc([ab.a ? an : '', ab.b ? bn : ''].filter(Boolean).join('、'))} 未到</div><button class="btn ghost" data-absent="none">${icon('check')}已到場，取消回報</button>`
@@ -72,7 +72,7 @@ function refresh() {
   });
   const r = m.team ? m.result.pts[point] : m.result;
   const msg = $('#msg');
-  if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc(m.team ? lineName((m.rec.lineup || {})[r.winner], point) : sideText(r.winner === 'a' ? m.A : m.B))} 獲勝。</b>`
+  if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc((m.team && lineName((m.rec.lineup || {})[r.winner], point)) || sideText(r.winner === 'a' ? m.A : m.B, m.team))} 獲勝。</b>`
     : '';
 }
 

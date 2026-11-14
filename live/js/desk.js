@@ -6,6 +6,8 @@ import { demoState } from './demo.js';
 import { readWorkbookValues } from '../../js/reader.js';
 import { parseFinalBracket } from '../../js/finalparse.js';
 import { readRosterDocx } from './roster.js';
+import { bracketSvg } from './tree.js';
+import { normalizeTeamName, unitFromTeam } from '../../js/schools.js';
 
 let tab = 'ctrl';
 let curEv = null;
@@ -14,7 +16,7 @@ let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
 let refTab = 'avail';
-let rosterMiss = [];
+let rosterMiss = [], rosterGuess = [];
 
 function render() {
   const s = getState();
@@ -37,10 +39,9 @@ function viewCtrl(s) {
   const calls = (s.calls || []).slice(-4).reverse();
   return `<div class="desk"><div>
     <div class="panel">
-      <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}${readyN(x) ? `<span class="n">${readyN(x)}</span>` : ''}</button>`).join('')}</div></div>
+      <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div></div>
       <div class="legend">
         <span><span class="dot on"></span>前一輪已完賽</span>
-        <span><span class="chip ready" style="padding:0 6px">3</span>項目旁的數字為可開賽場數</span>
         ${e.team ? `<span><input type="checkbox" checked disabled>已發點單</span><span>${icon('list')}已收點單</span>` : ''}
         
       </div>
@@ -56,7 +57,6 @@ function viewCtrl(s) {
       }).join('')}</div>` : ''}
       <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
       <div class="panel"><h2>待確認成績（${reported.length}）</h2>${reported.length ? reported.map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}　${m.score[0]}:${m.score[1]}</span><span class="spacer"></span><button class="btn sm" data-score="${esc(m.id)}">核對</button></div>`).join('') : '<p class="small muted">目前沒有待確認的成績。</p>'}</div>
-      <div class="panel"><h2>可開賽（${ready.length}）</h2>${ready.length ? ready.slice(0, 12).map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}</span></div>`).join('') + (ready.length > 12 ? `<p class="small muted">另有 ${ready.length - 12} 場</p>` : '') : '<p class="small muted">目前沒有可開賽的場次。</p>'}</div>
     </div></div>`;
 }
 function viewTables(s) {
@@ -245,10 +245,11 @@ function viewDraw(s) {
   return `<div class="panel"><div class="row"><div class="pills">${teams.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
       <span class="spacer"></span><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
     <p class="small muted">名次試算僅比勝場，同勝場請以選單指定。</p>
-    <p class="small">冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}　亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}　上半區為 1 到 ${half} 號</p>
+    <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
     <div style="overflow-x:auto"><table class="list"><thead><tr><th>組別</th><th>預賽戰績</th><th>冠軍</th><th>點名</th><th>籤號</th><th>亞軍</th><th>點名</th><th>籤號</th></tr></thead><tbody>
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
+    <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
     <div class="panel"><h2>決賽第一輪對戰</h2><table class="list"><thead><tr><th>場次</th><th>對戰</th></tr></thead><tbody>
       ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => `<tr><td>${esc(m.label)}</td><td>${names(m)}</td></tr>`).join('')}</tbody></table>
 </div>`;
@@ -321,7 +322,8 @@ function viewSetup(s) {
       <p class="small muted">供排點選單使用。</p>
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇參賽名單 Word 檔<input type="file" accept=".docx" hidden data-roster></label>
       <span class="small muted">${D.events.filter(e => e.team).map(e => { const se = s.events.find(x => x.name === e.name); const n = Object.keys(se.rosters || {}).length; const total = e.groups.reduce((a, g) => a + g.teams.length, 0); return `${e.name} ${n}/${total} 隊`; }).join('　')}</span></div>
-      ${rosterMiss.length ? `<p class="small" style="color:var(--red)">以下隊名與名單不一致，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
+      ${rosterGuess.length ? `<p class="small">隊名寫法不同，已依校名對應，請確認：${esc(rosterGuess.join('、'))}</p>` : ''}
+      ${rosterMiss.length ? `<p class="small" style="color:var(--red)">名單中找不到以下隊伍，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
@@ -380,15 +382,26 @@ async function importAll(files) {
 async function importRoster(file) {
   let found;
   try { found = await readRosterDocx(file); } catch (err) { toast(`讀取失敗：${err.message}`); return; }
-  const key = t => String(t).replace(/\s+/g, '');
+  // 比對時統一校名寫法（國立虎尾科技大學 → 虎尾科大），並忽略空格與括號
+  const key = t => normalizeTeamName(String(t)).replace(/[\s()（）]/g, '');
   let hit = 0, total = 0;
-  const miss = [];
+  const miss = [], guess = [];
   update(s => s.events.forEach(e => {
     if (e.kind !== 'rr') return;
-    const src = new Map(Object.entries(found[e.name] || {}).map(([t, v]) => [key(t), v]));
-    e.rosters = e.rosters || {};
-    e.groups.forEach(g => g.teams.forEach(t => { total++; if (src.has(key(t))) { e.rosters[t] = src.get(key(t)); hit++; } else miss.push(t); }));
+    const src = new Map(Object.entries(found[e.name] || {}).map(([t, v]) => [key(t), { t, v }]));
+    const used = new Set();
+    e.rosters = {};
+    const left = [];
+    e.groups.forEach(g => g.teams.forEach(t => { total++; const x = src.get(key(t)); if (x) { e.rosters[t] = x.v; used.add(key(t)); hit++; } else left.push(t); }));
+    // 同一所學校在籤表與名單各只剩一隊對不上時，視為同一隊（例：籤表「中興大學」、名單「中興大學 藍」）
+    const rest = [...src.entries()].filter(([k]) => !used.has(k)).map(([, x]) => x);
+    left.forEach(t => {
+      const u = unitFromTeam(t);
+      const same = rest.filter(x => unitFromTeam(x.t) === u), mine = left.filter(o => unitFromTeam(o) === u);
+      if (u && same.length === 1 && mine.length === 1) { e.rosters[t] = same[0].v; hit++; guess.push(`${t}（名單：${same[0].t}）`); } else miss.push(t);
+    });
   }));
+  rosterGuess = guess;
   rosterMiss = miss;
   const n = Object.values(found).reduce((a, x) => a + Object.keys(x).length, 0);
   toast(n ? `名單已匯入：檔案內 ${n} 隊，籤表 ${total} 隊中 ${hit} 隊對應成功` : '檔案內找不到團體賽名單');

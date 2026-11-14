@@ -5,12 +5,13 @@ import { esc } from './ui.js';
 const RH = 30, COL = 92;
 
 /** matches：同一張單淘汰表的所有場次（derive 的結果）；回傳 { svg, width, height } */
-export function bracketSvg(matches, team) {
+export function bracketSvg(matches, team, opt = {}) {
   if (!matches.length) return { svg: '', width: 0, height: 0 };
   const byNum = new Map(matches.map(m => [m.num, m]));
   const refd = new Set(matches.flatMap(m => m.src.filter(s => s.ref != null).map(s => s.ref)));
   const root = matches.find(m => !refd.has(m.num));
-  const leafText = s => sideText(s, team) || '';
+  // opt.pos：隊名前加籤號（團體決賽）
+  const leafText = s => { const t = sideText(s, team) || ''; return opt.pos && s.name && s.pos != null ? `${s.pos}　${t}` : t; };
   const maxLen = Math.max(4, ...matches.flatMap(m => [m.A, m.B].filter((_, i) => m.src[i].pos != null).map(s => leafText(s).length)));
   const NAME = Math.min(300, maxLen * 14 + 16);
   const X = m => NAME + (m.roundIdx + 1) * COL;

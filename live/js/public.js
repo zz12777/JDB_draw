@@ -49,7 +49,7 @@ function viewSched() {
       ${g.teams.map((t, i) => `<tr><td class="nm">${i + 1}　${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => `<td>${i === j ? '' : res(t, u)}</td>`).join('')}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
   }).join('') : '';
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
-  const t = bracketSvg(ko, e.team);
+  const t = bracketSvg(ko, e.team, { pos: e.team });
   const tree = t.svg ? `<div class="panel"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>
       <button class="btn ghost sm" data-zoom="-1">縮小</button><button class="btn ghost sm" data-zoom="1">放大</button></div>
     <div class="treebox" style="margin-top:10px">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * zoom)}" height="${Math.round(t.height * zoom)}"`)}</div></div>` : '';
