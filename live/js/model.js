@@ -110,6 +110,7 @@ export function derive(state) {
     const out = { name: e.name, team, kind: e.kind, rounds: [], matches: [] };
     const add = (m) => {
       m.ev = e.name; m.team = team;
+      m.no = m.stage === 'F' ? m.label : `(${m.label})`; // 顯示用場次：(一)、決(一)
       m.rec = state.m[m.id] || {};
       out.matches.push(m); byId.set(m.id, m);
     };
@@ -148,7 +149,7 @@ export function derive(state) {
           const pos = fp[g.letter + k]; const t = g.rank[k === '冠' ? 'c' : 'r'];
           if (pos) teamAt.set(Number(pos), { name: t || '', seed: g.letter + k });
         }));
-        const fm = koMatches(ko).sort((x, y) => x.num - y.num).map(m => ({ ...m, id: `${e.name}|F|${m.num}`, stage: 'F', label: `決${toCn(m.num)}`, src: [m.a, m.b] }));
+        const fm = koMatches(ko).sort((x, y) => x.num - y.num).map(m => ({ ...m, id: `${e.name}|F|${m.num}`, stage: 'F', label: `決(${toCn(m.num)})`, src: [m.a, m.b] }));
         const before = out.matches.length;
         fm.forEach(add);
         const finals = out.matches.slice(before);

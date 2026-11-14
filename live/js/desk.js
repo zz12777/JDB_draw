@@ -1,7 +1,7 @@
 // 大會台
 import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState } from './store.js';
-import { esc, $, $$, icon, toast, chip, tableMap, header, names, shortEv, lineName, mins } from './ui.js';
+import { esc, $, $$, icon, toast, chip, board, header, names, shortEv, lineName, mins } from './ui.js';
 import { demoState } from './demo.js';
 import { readWorkbookValues } from '../../js/reader.js';
 import { parseFinalBracket } from '../../js/finalparse.js';
@@ -12,7 +12,7 @@ let curEv = null;
 let modal = null; // { kind: 'score' | 'lineup', mid }
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
 let refTab = 'avail';
 let rosterMiss = [];
 
@@ -23,7 +23,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : viewSetup(s);
+  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : viewSetup(s);
 }
 
 // ---------------- 賽程控制 ----------------
@@ -40,6 +40,7 @@ function viewCtrl(s) {
       <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}${readyN(x) ? `<span class="n">${readyN(x)}</span>` : ''}</button>`).join('')}</div></div>
       <div class="legend">
         <span><span class="dot on"></span>前一輪已完賽</span>
+        <span><span class="chip ready" style="padding:0 6px">3</span>項目旁的數字為可開賽場數</span>
         ${e.team ? `<span><input type="checkbox" checked disabled>已發點單</span><span>${icon('list')}已收點單</span>` : ''}
         
       </div>
@@ -51,14 +52,16 @@ function viewCtrl(s) {
         const who = m.rec.absent.a && m.rec.absent.b ? 'both' : m.rec.absent.a ? 'a' : 'b';
         return `<div class="alertbox"><div class="small">第 ${m.tables.join('、')} 桌　${fmtTime(m.rec.absent.ts)}　裁判 ${esc(m.rec.absent.by || '')}</div>
           <div>${esc(recallText(m, who))}</div>
-          <div class="row" style="margin-top:4px"><button class="btn ghost sm" data-copy="${esc(recallText(m, who))}">${icon('copy')}複製</button><button class="btn ghost sm" data-clear-absent="${esc(m.id)}">${icon('check')}已到場</button></div></div>`;
+          <div class="row" style="margin-top:4px"><button class="btn ghost sm" data-clear-absent="${esc(m.id)}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
-      <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}
-        ${i ? '' : `<div><button class="btn ghost sm" data-copy="${esc(c.text)}">${icon('copy')}複製</button></div>`}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
-      <div class="panel"><h2>球桌</h2>${tableMap(s, D, { tag: 'button', refs: true, alerts: new Set(absent.map(m => m.id)) })}</div>
+      <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
       <div class="panel"><h2>待確認成績（${reported.length}）</h2>${reported.length ? reported.map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}　${m.score[0]}:${m.score[1]}</span><span class="spacer"></span><button class="btn sm" data-score="${esc(m.id)}">核對</button></div>`).join('') : '<p class="small muted">目前沒有待確認的成績。</p>'}</div>
       <div class="panel"><h2>可開賽（${ready.length}）</h2>${ready.length ? ready.slice(0, 12).map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}</span></div>`).join('') + (ready.length > 12 ? `<p class="small muted">另有 ${ready.length - 12} 場</p>` : '') : '<p class="small muted">目前沒有可開賽的場次。</p>'}</div>
     </div></div>`;
+}
+function viewTables(s) {
+  const absent = [...D.byId.values()].filter(m => m.rec.absent && (m.rec.absent.a || m.rec.absent.b) && m.status === 'playing');
+  return `<div class="panel">${board(s, D, { tag: 'button', desk: true, alerts: new Set(absent.map(m => m.id)) })}</div>`;
 }
 const stageOrder = m => (m.stage === 'F' ? 1 : 0) * 100 + m.roundIdx;
 
@@ -75,7 +78,7 @@ function card(m) {
   };
   const locked = m.status === 'done';
   return `<div class="mc ${m.status}" data-mid="${esc(m.id)}">
-    <div class="hd"><span class="no">${esc(m.stage === 'F' ? m.label : `(${m.label})`)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
+    <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
       ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽${m.status === 'playing' ? `，${mins(m.rec.start)} 分` : ''}</span>` : ''}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
@@ -121,7 +124,7 @@ function lineupModal(m) {
       <div class="row"><button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
-  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.stage === 'F' ? m.label : `(${m.label})`)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
+  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
     <div class="row" style="align-items:flex-start;gap:24px">${col('a', m.A)}${col('b', m.B)}</div></div>`;
 }
 function readLineup(k) {
@@ -144,25 +147,26 @@ function scoreModal(m) {
   const dis = locked ? 'disabled' : '';
   const lu = m.rec.lineup || {};
   const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}>`;
-  const row = (pi, games, label, an, bn, extra) => `<tr data-row="${pi}"><td class="nowrap">${label}</td><td class="nm">${esc(an)}</td>
-    ${[0, 1, 2, 3, 4].map(gi => `<td>${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</td>`).join('')}
-    <td class="res" data-res="${pi}"></td><td class="nm">${esc(bn)}</td>${extra}</tr>`;
+  const block = (pi, games, title, an, bn, meta, solo) => `<div class="pt ${solo ? 'solo' : ''}"><h4>${title}</h4>
+    <div class="pn"><span>${esc(an)}</span><span>${esc(bn)}</span></div>
+    ${[0, 1, 2, 3, 4].map(gi => `<div class="gr">${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</div>`).join('')}
+    <div class="res" data-res="${pi}"></div><div class="meta">${meta}</div></div>`;
   let body;
   if (m.team) {
     const pts = m.rec.pts || [];
     body = POINTS.map((p, i) => {
       const x = pts[i] || {};
-      const tsel = `<td><select data-ptable="${i}" ${dis}><option value=""></option>${m.tables.map(t => `<option ${Number(x.table) === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td><td class="small">${esc(x.ref || '')}</td>`;
-      return row(i, x.g || [], `第${'一二三四五'[i]}點`, lineName(lu.a, i), lineName(lu.b, i), tsel);
+      const meta = `桌次 <select data-ptable="${i}" ${dis}><option value=""></option>${m.tables.map(t => `<option ${Number(x.table) === t ? 'selected' : ''}>${t}</option>`).join('')}</select>${x.ref ? `<span>裁判 ${esc(x.ref)}</span>` : ''}`;
+      return block(i, x.g || [], `第${'一二三四五'[i]}點 ${p.dbl ? '雙打' : '單打'}`, lineName(lu.a, i), lineName(lu.b, i), meta);
     }).join('');
   } else {
-    body = row('x', m.rec.g || [], '比分', sideText(m.A), sideText(m.B), `<td class="small">${esc(m.rec.ref || '')}</td>`);
+    body = block('x', m.rec.g || [], '各局比分', sideText(m.A), sideText(m.B), m.rec.ref ? `裁判 ${esc(m.rec.ref)}` : '', true);
   }
-  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.stage === 'F' ? m.label : `(${m.label})`)}　成績</h2>${chip(m)}<span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
+  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}<span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
     <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="total" id="sc-total"></div><div class="n">${esc(sideText(m.B, m.team))}</div></div>
-    <table class="sc"><thead><tr><th></th><th>${esc(sideText(m.A, m.team))}</th><th>第一局</th><th>第二局</th><th>第三局</th><th>第四局</th><th>第五局</th><th>局數</th><th>${esc(sideText(m.B, m.team))}</th>${m.team ? '<th>桌次</th>' : ''}<th>裁判</th></tr></thead><tbody>${body}</tbody></table>
-    <p class="small muted" id="sc-note"></p>
-    <div class="row" style="margin-top:10px">
+    <div class="pts">${body}</div>
+    <p class="small" id="sc-note" style="color:var(--red);min-height:18px"></p>
+    <div class="row">
       <span class="small muted">棄權：</span>
       <button class="btn ghost sm" data-wo="b" ${dis}>${esc(sideText(m.A, m.team))} 棄權</button>
       <button class="btn ghost sm" data-wo="a" ${dis}>${esc(sideText(m.B, m.team))} 棄權</button>
@@ -184,7 +188,7 @@ function refreshScore() {
     inp.classList.toggle('bad', gameInvalid(games[gi]));
   });
   const note = $('#sc-note');
-  if (note) note.textContent = m.rec.wo ? '已登記棄權。' : m.result.needFirst3 ? '預賽須打完前三點，目前前三點尚未全部完成。' : m.winner ? '' : '每局 11 分、領先 2 分；先取得三局者獲勝' + (m.team ? '，先取得三點的隊伍獲勝。' : '。');
+  if (note) note.textContent = m.rec.wo ? '已登記棄權。' : m.result.needFirst3 ? '預賽須打完前三點，目前前三點尚未全部完成。' : '';
   const btn = $('#sc-confirm');
   if (btn) btn.disabled = !m.winner;
 }
@@ -403,7 +407,6 @@ document.addEventListener('click', async ev => {
   else if (d.score) openModal('score', d.score);
   else if (d.mid && d.table) openModal('score', d.mid);
   else if ('close' in d) { modal = null; drawModal(); }
-  else if (d.copy) { try { await navigator.clipboard.writeText(d.copy); toast('已複製廣播稿'); } catch (e) { toast('無法複製，請手動選取'); } }
   else if (d.clearAbsent) updateMatch(d.clearAbsent, r => { delete r.absent; });
   else if (d.luSave) {
     const l = readLineup(d.luSave);

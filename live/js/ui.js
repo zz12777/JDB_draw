@@ -32,7 +32,7 @@ export const STATUS_TEXT = { wait: '等待中', ready: '可開賽', playing: '�
 export const chip = m => `<span class="chip ${m.status}">${STATUS_TEXT[m.status]}</span>`;
 export const mins = ts => (ts ? Math.max(0, Math.round((Date.now() - ts) / 60000)) : 0);
 export const names = m => `${esc(sideText(m.A, m.team))} <span class="vs">對</span> ${esc(sideText(m.B, m.team))}`;
-export const shortEv = m => `${m.ev} ${m.label}`;
+export const shortEv = m => `${m.ev}${m.no}`;
 
 /** 進行中那一點（或個人賽）的目前局數與比分文字 */
 export function liveLine(m, pointIdx) {
@@ -76,6 +76,37 @@ export function tableMap(state, d, opt = {}) {
   };
   const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
   return `<div class="map ${opt.refs ? 'tall' : ''}">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
+}
+
+/**
+ * 大張的球桌看板：位置同球桌地圖，每桌顯示項目場次、對戰雙方與比分、目前進行的點或各局比分。
+ * opt.tag: 'button' 可點；opt.desk: 顯示裁判與已進行時間；opt.alerts: Set(場次 id) 標紅
+ */
+export function board(state, d, opt = {}) {
+  const n = state.tables || 24, half = Math.ceil(n / 2);
+  const tag = opt.tag || 'div';
+  const cell = t => {
+    const x = d.tables.get(t);
+    if (!x) return `<${tag} class="bcell" data-table="${t}"><div class="bt"><span class="bn">${t}</span></div><div class="bempty">空桌</div></${tag}>`;
+    const m = x.m;
+    let line = '';
+    if (m.team) {
+      if (x.point != null) {
+        const r = m.result.pts[x.point], lu = m.rec.lineup || {};
+        line = `第${'一二三四五'[x.point]}點　${esc(lineName(lu.a, x.point))} ${r.a}:${r.b} ${esc(lineName(lu.b, x.point))}`;
+      }
+    } else {
+      line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${g[0]}:${g[1]}`).join('　');
+    }
+    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '待確認' : `${mins(m.rec.start)} 分`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
+    return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
+      <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
+      <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>
+      <div class="bs"><span class="nm">${esc(sideText(m.B, m.team))}</span><b>${m.score[1]}</b></div>
+      <div class="bp">${line}</div></${tag}>`;
+  };
+  const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
+  return `<div class="board">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
 }
 
 /** 某場在某桌的裁判姓名 */
