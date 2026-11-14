@@ -1,5 +1,5 @@
 // 三個頁面共用的畫面元件
-import { sideText, EVENT_FULL } from './model.js';
+import { sideText, EVENT_FULL, fmtTime } from './model.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (sel, el = document) => el.querySelector(sel);
@@ -72,7 +72,7 @@ export function tableMap(state, d, opt = {}) {
     return `<${tag} class="tcell busy ${al ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <span class="t">${t}</span>
       <span class="who"><span class="ev">${esc(shortEv(m))}</span>${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}<br>${names(m)}${opt.refs ? `<br><span class="muted">裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : ''}</span>
-      <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><br>${m.status === 'reported' ? '待確認' : `${mins(m.rec.start)} 分`}</span></${tag}>`;
+      <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><br>${m.status === 'reported' ? '待確認' : fmtTime(m.rec.start)}</span></${tag}>`;
   };
   const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
   return `<div class="map ${opt.refs ? 'tall' : ''}">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
@@ -98,7 +98,7 @@ export function board(state, d, opt = {}) {
     } else {
       line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${g[0]}:${g[1]}`).join('　');
     }
-    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '待確認' : `${mins(m.rec.start)} 分`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
+    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '待確認' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
     return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
       <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>

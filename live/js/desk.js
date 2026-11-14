@@ -79,7 +79,7 @@ function card(m) {
   const locked = m.status === 'done';
   return `<div class="mc ${m.status}" data-mid="${esc(m.id)}">
     <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
-      ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽${m.status === 'playing' ? `，${mins(m.rec.start)} 分` : ''}</span>` : ''}</div>
+      ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : ''}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>

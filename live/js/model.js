@@ -235,11 +235,11 @@ export function matchTitle(m) {
 }
 /** 廣播稿 */
 export function callText(m, tables = m.tables) {
-  return `${EVENT_FULL[m.ev]} ${matchTitle(m)}，${sideText(m.A, m.team)}、${sideText(m.B, m.team)}，請到第 ${tables.join('、')} 球桌出場比賽`;
+  return `${m.ev}${m.no}，${sideText(m.A, m.team)}、${sideText(m.B, m.team)}，第 ${tables.join('、')} 桌`;
 }
 export function recallText(m, who) {
   const names = who === 'both' ? `${sideText(m.A, m.team)}、${sideText(m.B, m.team)}` : sideText(who === 'a' ? m.A : m.B, m.team);
-  return `${EVENT_FULL[m.ev]} ${matchTitle(m)}，${names}，請儘速到第 ${m.tables.join('、')} 球桌出場比賽`;
+  return `${m.ev}${m.no}，${names}，請儘速到第 ${m.tables.join('、')} 桌`;
 }
 export const fmtTime = ts => { if (!ts) return ''; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 export const parseTables = text => [...new Set(String(text || '').split(/[^0-9]+/).filter(Boolean).map(Number))];

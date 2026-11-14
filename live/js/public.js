@@ -4,14 +4,14 @@ import { getState, subscribe } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
 import { bracketSvg } from './tree.js';
 
-let tab = 'live', curEv = null, q = '', zoom = 1, detail = null, composing = false;
+let tab = 'sched', curEv = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['live', '即時桌況'], ['sched', '賽程與成績']];
+const TABS = [['sched', '賽程與成績'], ['live', '即時桌況']];
 
 function render() {
   const s = getState();
   D = derive(s);
-  $('#top').innerHTML = header(s, '即時賽況', []);
+  $('#top').innerHTML = header(s, '即時賽程', []);
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
