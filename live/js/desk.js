@@ -3,9 +3,9 @@ import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sid
 import { getState, subscribe, update, updateMatch, replaceState } from './store.js';
 import { esc, $, $$, icon, toast, chip, tableMap, header, names, shortEv, lineName, mins } from './ui.js';
 import { demoState } from './demo.js';
-import { readWorkbookValues, readFormFile } from '../../js/reader.js';
+import { readWorkbookValues } from '../../js/reader.js';
 import { parseFinalBracket } from '../../js/finalparse.js';
-import { parseResponses, buildEntries, splitNames } from '../../js/parse.js';
+import { readRosterDocx } from './roster.js';
 
 let tab = 'ctrl';
 let curEv = null;
@@ -14,6 +14,7 @@ let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
 let refTab = 'avail';
+let rosterMiss = [];
 
 function render() {
   const s = getState();
@@ -314,8 +315,9 @@ function viewSetup(s) {
         <td><label class="btn ghost sm">${icon('upload')}選擇檔案<input type="file" accept=".xlsx" hidden data-imp="${ev}"></label></td></tr>`; }).join('')}</tbody></table></div>
     <div class="panel"><h2>匯入參賽名單</h2>
       <p class="small muted">供排點選單使用。</p>
-      <div class="row"><label class="btn ghost sm">${icon('upload')}選擇檔案（可多選）<input type="file" accept=".xlsx,.csv" multiple hidden data-roster></label>
-      <span class="small muted">${D.events.filter(e => e.team).map(e => { const se = s.events.find(x => x.name === e.name); const n = Object.keys(se.rosters || {}).length; const total = e.groups.reduce((a, g) => a + g.teams.length, 0); return `${e.name} ${n}/${total} 隊`; }).join('　')}</span></div></div>
+      <div class="row"><label class="btn ghost sm">${icon('upload')}選擇參賽名單 Word 檔<input type="file" accept=".docx" hidden data-roster></label>
+      <span class="small muted">${D.events.filter(e => e.team).map(e => { const se = s.events.find(x => x.name === e.name); const n = Object.keys(se.rosters || {}).length; const total = e.groups.reduce((a, g) => a + g.teams.length, 0); return `${e.name} ${n}/${total} 隊`; }).join('　')}</span></div>
+      ${rosterMiss.length ? `<p class="small" style="color:var(--red)">以下隊名與名單不一致，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
@@ -371,25 +373,22 @@ async function importAll(files) {
   }
   toast(`${ok.length ? `已匯入：${ok.join('、')}` : ''}${ok.length && fail.length ? '；' : ''}${fail.length ? `未匯入：${fail.join('、')}` : ''}`);
 }
-async function importRosters(files) {
-  const found = {};
-  for (const f of files) {
-    try {
-      const rows = await readFormFile(f);
-      const { kind, responses } = parseResponses(rows.rows || rows);
-      const { events } = buildEntries(kind, responses);
-      Object.entries(events).forEach(([ev, list]) => { if (isTeam(ev)) list.forEach(x => { (found[ev] = found[ev] || {})[x.name] = splitNames(x.members || ''); }); });
-    } catch (err) { toast(`${f.name} 讀取失敗：${err.message}`); return; }
-  }
+async function importRoster(file) {
+  let found;
+  try { found = await readRosterDocx(file); } catch (err) { toast(`讀取失敗：${err.message}`); return; }
   const key = t => String(t).replace(/\s+/g, '');
   let hit = 0, total = 0;
+  const miss = [];
   update(s => s.events.forEach(e => {
-    if (e.kind !== 'rr' || !found[e.name]) return;
-    const src = new Map(Object.entries(found[e.name]).map(([t, v]) => [key(t), v]));
+    if (e.kind !== 'rr') return;
+    const src = new Map(Object.entries(found[e.name] || {}).map(([t, v]) => [key(t), v]));
     e.rosters = e.rosters || {};
-    e.groups.forEach(g => g.teams.forEach(t => { total++; if (src.has(key(t))) { e.rosters[t] = src.get(key(t)); hit++; } }));
+    e.groups.forEach(g => g.teams.forEach(t => { total++; if (src.has(key(t))) { e.rosters[t] = src.get(key(t)); hit++; } else miss.push(t); }));
   }));
-  toast(`名單已匯入：${hit}/${total} 隊對應成功${hit < total ? '，其餘隊名與籤表不一致，排點時可直接輸入姓名' : ''}`);
+  rosterMiss = miss;
+  const n = Object.values(found).reduce((a, x) => a + Object.keys(x).length, 0);
+  toast(n ? `名單已匯入：檔案內 ${n} 隊，籤表 ${total} 隊中 ${hit} 隊對應成功` : '檔案內找不到團體賽名單');
+  render();
 }
 
 // ---------------- 事件 ----------------
@@ -441,7 +440,7 @@ document.addEventListener('change', async ev => {
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
   else if ('staff' in d) update(s => { s.staff = [...new Set(t.value.split(/[\n,，、\s]+/).map(x => x.trim()).filter(Boolean))]; });
-  else if ('roster' in d) { if (t.files.length) await importRosters([...t.files]); }
+  else if ('roster' in d) { if (t.files[0]) await importRoster(t.files[0]); }
   else if ('restore' in d) {
     try { const s = JSON.parse(await t.files[0].text()); if (s.v !== 1) throw new Error('格式不符'); replaceState(s); toast('已還原備份'); } catch (e) { toast(`還原失敗：${e.message}`); }
   }
