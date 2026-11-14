@@ -1,0 +1,244 @@
+// 比賽當日系統：資料結構與規則（不碰畫面，可單獨測試）
+import { buildKO, buildRR, championSlots } from '../../js/bracket.js';
+import { toCn } from '../../js/util.js';
+
+export const EVENT_ORDER = ['男團', '女團', '社團', '男單', '女單', '男雙', '女雙'];
+export const EVENT_FULL = {
+  男團: '男子團體組', 女團: '女子團體組', 社團: '社會團體組',
+  男單: '男子單打', 女單: '女子單打', 男雙: '男子雙打', 女雙: '女子雙打',
+};
+export const isTeam = ev => /團$/.test(ev);
+/** 團體賽五點：單、單、雙、單、單 */
+export const POINTS = [{ dbl: false }, { dbl: false }, { dbl: true }, { dbl: false }, { dbl: false }];
+
+export function emptyState() {
+  return { v: 1, title: '交大盃', edition: '第十三屆', tables: 24, events: [], m: {}, notice: '' };
+}
+
+// ---------------- 數字讀法 ----------------
+const D = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+/** 廣播用的讀法：26 讀「二十六」，101 讀「一百零一」（籤表上的場次編號另有寫法，見 toCn） */
+export function cnSpoken(n) {
+  n = Math.trunc(n);
+  if (n < 10) return D[n];
+  if (n < 20) return '十' + (n % 10 ? D[n % 10] : '');
+  if (n < 100) return D[Math.floor(n / 10)] + '十' + (n % 10 ? D[n % 10] : '');
+  const h = Math.floor(n / 100), r = n % 100;
+  if (!r) return D[h] + '百';
+  if (r < 10) return D[h] + '百零' + D[r];
+  return D[h] + '百' + D[Math.floor(r / 10)] + '十' + (r % 10 ? D[r % 10] : '');
+}
+
+// ---------------- 比分規則 ----------------
+/** 一局是否成立：11 分制，領先 2 分；回傳 'a' | 'b' | null（未完成或不合規則） */
+export function gameWinner(g) {
+  if (!g || g[0] === '' || g[1] === '' || g[0] == null || g[1] == null) return null;
+  const a = Number(g[0]), b = Number(g[1]);
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return null;
+  const hi = Math.max(a, b), lo = Math.min(a, b);
+  if (hi < 11 || hi - lo < 2) return null;
+  if (hi > 11 && hi - lo !== 2) return null;
+  return a > b ? 'a' : 'b';
+}
+/** 一局比分填了但不合規則 */
+export function gameInvalid(g) {
+  if (!g) return false;
+  const filled = g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null;
+  return filled && !gameWinner(g);
+}
+/** 五戰三勝：回傳 { a, b, winner } */
+export function gamesResult(games, wo) {
+  if (wo) return { a: wo === 'a' ? 3 : 0, b: wo === 'b' ? 3 : 0, winner: wo, wo: true };
+  let a = 0, b = 0;
+  (games || []).forEach(g => { const w = gameWinner(g); if (w === 'a') a++; else if (w === 'b') b++; });
+  return { a, b, winner: a >= 3 ? 'a' : b >= 3 ? 'b' : null };
+}
+/**
+ * 團體賽：先取得三點者獲勝。
+ * 預賽若拆桌先打了後面的點，前三點仍須全部打完才算完賽；決賽取得三點即完賽。
+ */
+export function teamResult(rec, stage) {
+  if (rec && rec.wo) return { a: rec.wo === 'a' ? 3 : 0, b: rec.wo === 'b' ? 3 : 0, winner: rec.wo, done: true, wo: true, pts: [] };
+  const pts = POINTS.map((_, i) => gamesResult(rec && rec.pts && rec.pts[i] ? rec.pts[i].g : [], rec && rec.pts && rec.pts[i] ? rec.pts[i].wo : null));
+  let a = 0, b = 0;
+  pts.forEach(p => { if (p.winner === 'a') a++; else if (p.winner === 'b') b++; });
+  const winner = a >= 3 ? 'a' : b >= 3 ? 'b' : null;
+  const first3 = pts.slice(0, 3).every(p => p.winner);
+  const done = !!winner && (stage !== 'P' || first3);
+  return { a, b, winner, done, pts, needFirst3: !!winner && !done };
+}
+
+// ---------------- 結構 ----------------
+const structCache = new Map();
+function structOf(e) {
+  const key = JSON.stringify([e.kind, e.kind === 'ko' ? e.sizes : e.groups.map(g => g.teams.length)]);
+  if (!structCache.has(key)) {
+    if (e.kind === 'ko') structCache.set(key, { st: buildKO(e.sizes) });
+    else {
+      const st = buildRR(e.groups.map(g => g.teams.length));
+      const n = st.groups.length * 2;
+      const ko = n >= 2 && n <= 64 ? buildKO([n]) : null;
+      structCache.set(key, { st, ko, mark: ko ? championSlots(ko) : new Map() });
+    }
+  }
+  return structCache.get(key);
+}
+
+function koMatches(ko, custom) {
+  const roundOf = num => ko.rounds.find(r => num >= r.from && num <= r.to) || ko.rounds[0];
+  const src = custom
+    ? custom.map(m => ({ num: m.num, a: m.a, b: m.b }))
+    : ko.matches.map(m => ({ num: m.num, a: side(m.children[0]), b: side(m.children[1]) }));
+  function side(c) { return c.kind === 'leaf' ? { pos: c.pos } : { ref: c.num }; }
+  return src.map(m => {
+    const r = roundOf(m.num);
+    const fix = s => (s.ref != null && typeof s.ref !== 'number' ? { ref: custom.find(x => x.label === s.ref).num } : s);
+    return { num: m.num, a: fix(m.a), b: fix(m.b), round: r.label, roundIdx: ko.rounds.indexOf(r) };
+  });
+}
+
+/**
+ * 由狀態算出所有場次目前的樣子。
+ * 回傳 { events: [{ name, type, rounds: [{ key, label, matches }], groups?, final? }], byId, tables }
+ */
+export function derive(state) {
+  const byId = new Map();
+  const events = [];
+  for (const e of state.events) {
+    const { st, ko, mark } = structOf(e);
+    const team = isTeam(e.name);
+    const out = { name: e.name, team, kind: e.kind, rounds: [], matches: [] };
+    const add = (m) => {
+      m.ev = e.name; m.team = team;
+      m.rec = state.m[m.id] || {};
+      out.matches.push(m); byId.set(m.id, m);
+    };
+    if (e.kind === 'ko') {
+      const res = new Map();
+      const ms = koMatches(st, e.custom).sort((x, y) => x.num - y.num);
+      const name = p => { const x = e.byPos[p]; return x ? { name: x.name, school: x.school, pos: p } : { name: '', school: '', pos: p }; };
+      ms.forEach(m => add({ ...m, id: `${e.name}|K|${m.num}`, stage: 'K', label: toCn(m.num), src: [m.a, m.b] }));
+      resolveKO(out.matches, name, res);
+      st.rounds.forEach((r, i) => out.rounds.push({ key: 'K' + i, label: r.label, matches: out.matches.filter(m => m.roundIdx === i) }));
+    } else {
+      // 預賽
+      out.groups = st.groups.map((g, gi) => ({ letter: g.letter, teams: e.groups[gi].teams.slice(), matches: [] }));
+      st.groups.forEach((g, gi) => g.matches.forEach(x => {
+        const teams = e.groups[gi].teams;
+        const m = { id: `${e.name}|P|${x.num}`, stage: 'P', num: x.num, label: toCn(x.num), round: `預賽第${x.round}輪`, roundIdx: x.round - 1,
+          group: g.letter, gi, ia: x.a - 1, ib: x.b - 1,
+          A: { name: teams[x.a - 1] }, B: { name: teams[x.b - 1] } };
+        add(m); out.groups[gi].matches.push(m);
+      }));
+      out.matches.sort((x, y) => x.num - y.num);
+      out.matches.forEach(finish);
+      // 前一輪是否打完
+      out.matches.forEach(m => {
+        const prev = t => out.groups[m.gi].matches.filter(x => x.roundIdx < m.roundIdx && (x.A.name === t || x.B.name === t)).every(x => x.confirmed);
+        m.prevDone = { a: prev(m.A.name), b: prev(m.B.name) };
+      });
+      st.rounds.forEach((r, i) => out.rounds.push({ key: 'P' + i, label: `預賽第${i + 1}輪`, matches: out.matches.filter(m => m.stage === 'P' && m.roundIdx === i) }));
+      // 各組名次
+      out.groups.forEach(g => { g.table = standings(g); g.rank = (e.rank && e.rank[g.letter]) || {}; });
+      // 決賽
+      if (ko) {
+        const fp = e.finalPos || {};
+        const teamAt = new Map();
+        out.groups.forEach(g => ['冠', '亞'].forEach(k => {
+          const pos = fp[g.letter + k]; const t = g.rank[k === '冠' ? 'c' : 'r'];
+          if (pos) teamAt.set(Number(pos), { name: t || '', seed: g.letter + k });
+        }));
+        const fm = koMatches(ko).sort((x, y) => x.num - y.num).map(m => ({ ...m, id: `${e.name}|F|${m.num}`, stage: 'F', label: `決${toCn(m.num)}`, src: [m.a, m.b] }));
+        const before = out.matches.length;
+        fm.forEach(add);
+        const finals = out.matches.slice(before);
+        resolveKO(finals, p => { const x = teamAt.get(p); return { name: x ? x.name : '', pos: p, hint: `${mark.get(p) || ''} ${p}`, seed: x ? x.seed : '' }; }, new Map());
+        ko.rounds.forEach((r, i) => out.rounds.push({ key: 'F' + i, label: `決賽 ${r.label}`, matches: finals.filter(m => m.roundIdx === i) }));
+        out.final = { size: ko.positions, mark, teamAt, fp };
+      }
+    }
+    events.push(out);
+  }
+
+  function resolveKO(list, nameOf, res) {
+    const byNum = new Map(list.map(m => [m.num, m]));
+    list.forEach(m => {
+      const get = s => {
+        if (s.pos != null) return { ...nameOf(s.pos), known: true };
+        const p = byNum.get(s.ref);
+        const w = p && p.confirmed && p.winner ? (p.winner === 'a' ? p.A : p.B) : null;
+        return w ? { ...w, from: s.ref } : { name: '', pending: `${p ? p.label : ''}勝`, from: s.ref };
+      };
+      m.A = get(m.src[0]); m.B = get(m.src[1]);
+      m.prevDone = { a: !!m.A.name, b: !!m.B.name };
+      finish(m);
+      res.set(m.num, m);
+    });
+  }
+
+  function finish(m) {
+    const rec = m.rec;
+    const r = m.team ? teamResult(rec, m.stage) : gamesResult(rec.g, rec.wo);
+    m.score = [r.a, r.b];
+    m.result = r;
+    const complete = m.team ? r.done : !!r.winner;
+    m.winner = complete ? r.winner : null;
+    m.confirmed = !!rec.confirmed && complete;
+    m.known = !!(m.A && m.A.name) && !!(m.B && m.B.name);
+    m.tables = rec.tables || [];
+    m.lineupOk = { a: !!(rec.lineup && rec.lineup.a), b: !!(rec.lineup && rec.lineup.b) };
+    const lineReady = !m.team || (m.lineupOk.a && m.lineupOk.b);
+    m.status = m.confirmed ? 'done' : complete ? 'reported' : m.tables.length ? 'playing' : (m.known && lineReady) ? 'ready' : 'wait';
+  }
+
+  // 球桌使用情形
+  const tables = new Map();
+  // 已打完但大會尚未確認的場次仍留在桌上（裁判可修正），新派的場次會蓋過去
+  [...byId.values()].filter(m => m.status === 'playing' || m.status === 'reported').sort((x, y) => (x.status === 'playing') - (y.status === 'playing')).forEach(m => {
+    m.tables.forEach(t => {
+      let point = null;
+      if (m.team && m.rec.pts) m.rec.pts.forEach((p, i) => { if (p && Number(p.table) === Number(t) && !m.result.pts[i].winner) point = i; });
+      tables.set(Number(t), { m, point });
+    });
+  });
+  return { events: events.sort((x, y) => EVENT_ORDER.indexOf(x.name) - EVENT_ORDER.indexOf(y.name)), byId, tables };
+}
+
+/** 分組循環名次：先比勝場；同勝場時列出點數、局數供大會判斷 */
+export function standings(g) {
+  const rows = g.teams.map(t => ({ team: t, w: 0, l: 0, pf: 0, pa: 0, played: 0 }));
+  const of = t => rows.find(r => r.team === t);
+  g.matches.forEach(m => {
+    if (!m.confirmed) return;
+    const a = of(m.A.name), b = of(m.B.name);
+    a.played++; b.played++;
+    a.pf += m.score[0]; a.pa += m.score[1]; b.pf += m.score[1]; b.pa += m.score[0];
+    if (m.winner === 'a') { a.w++; b.l++; } else { b.w++; a.l++; }
+  });
+  const sorted = rows.slice().sort((x, y) => (y.w - x.w) || ((y.pf - y.pa) - (x.pf - x.pa)));
+  sorted.forEach((r, i) => { r.tie = sorted.some((o, j) => j !== i && o.w === r.w); });
+  const all = g.matches.every(m => m.confirmed);
+  return { rows: sorted, all };
+}
+
+// ---------------- 文字 ----------------
+export function sideText(s, team) {
+  if (!s) return '';
+  if (s.name) return team || !s.school ? s.name : `${s.school} ${s.name}`;
+  if (s.pending) return s.pending;
+  if (s.hint) return s.hint.trim();
+  return '';
+}
+export function matchTitle(m) {
+  return m.stage === 'F' ? `決賽第${cnSpoken(m.num)}場次` : `第${cnSpoken(m.num)}場次`;
+}
+/** 廣播稿 */
+export function callText(m, tables = m.tables) {
+  return `${EVENT_FULL[m.ev]} ${matchTitle(m)}，${sideText(m.A, m.team)}、${sideText(m.B, m.team)}，請到第 ${tables.join('、')} 球桌出場比賽`;
+}
+export function recallText(m, who) {
+  const names = who === 'both' ? `${sideText(m.A, m.team)}、${sideText(m.B, m.team)}` : sideText(who === 'a' ? m.A : m.B, m.team);
+  return `${EVENT_FULL[m.ev]} ${matchTitle(m)}，${names}，請儘速到第 ${m.tables.join('、')} 球桌出場比賽`;
+}
+export const fmtTime = ts => { if (!ts) return ''; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+export const parseTables = text => [...new Set(String(text || '').split(/[^0-9]+/).filter(Boolean).map(Number))];
