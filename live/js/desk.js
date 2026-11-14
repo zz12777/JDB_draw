@@ -1,7 +1,8 @@
 // 大會台
 import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL } from './store.js';
-import { esc, $, $$, icon, toast, chip, board, header, names, shortEv, lineName, mins } from './ui.js';
+import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
+import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
 import { readWorkbookValues } from '../../js/reader.js';
 import { parseFinalBracket } from '../../js/finalparse.js';
@@ -53,7 +54,7 @@ function viewCtrl(s) {
         ${e.team ? `<span><input type="checkbox" checked disabled>已發點單</span><span>${icon('list')}已收點單</span>` : ''}
         
       </div>
-      <div class="rounds">${e.rounds.map(r => `<div class="round"><h3><span>${esc(r.label)}</span><span class="muted small">${r.matches.filter(m => m.status === 'done').length}/${r.matches.length}</span></h3>
+      <div class="rounds">${e.rounds.map(r => `<div class="round"><h3><span>${esc(r.label)}${roundTime(s, r)}</span><span class="muted small">${r.matches.filter(m => m.status === 'done').length}/${r.matches.length}</span></h3>
         ${r.matches.map(card).join('')}</div>`).join('')}</div>
     </div></div>
     <div class="side">
@@ -69,7 +70,14 @@ function viewCtrl(s) {
 }
 function viewTables(s) {
   const absent = [...D.byId.values()].filter(m => m.rec.absent && (m.rec.absent.a || m.rec.absent.b) && m.status === 'playing');
-  return `<div class="panel">${board(s, D, { tag: 'button', desk: true, alerts: new Set(absent.map(m => m.id)) })}</div>`;
+  return `<div class="panel">${deskBoard(s, D, { alerts: new Set(absent.map(m => m.id)) })}</div>`;
+}
+/** 這一輪在時間表上的時段 */
+function roundTime(s, r) {
+  const sl = r.matches.map(m => slotOf(s.sched, m)).filter(Boolean);
+  if (!sl.length) return '';
+  const a = sl.reduce((x, y) => (`${y.d}${y.s}` < `${x.d}${x.s}` ? y : x)), b = sl.reduce((x, y) => (`${y.d}${y.e}` > `${x.d}${x.e}` ? y : x));
+  return ` <span class="rt">${esc(a.day)} ${a.s}-${b.e}</span>`;
 }
 const stageOrder = m => (m.stage === 'F' ? 1 : 0) * 100 + m.roundIdx;
 
@@ -87,13 +95,18 @@ function card(m) {
   const locked = m.status === 'done';
   return `<div class="mc ${m.status}" data-mid="${esc(m.id)}">
     <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
-      ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : ''}</div>
+      ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : planned(m)}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>
       ${m.team ? `<button class="btn ghost sm" data-lineup="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('list')}排點</button>` : ''}
       <button class="btn ghost sm" data-score="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon(locked ? 'lock' : 'score')}成績</button></div>
   </div>`;
+}
+
+function planned(m) {
+  const x = slotOf(getState().sched, m);
+  return x ? `<span class="muted">表定 ${x.s}</span>` : '';
 }
 
 function setTables(mid, text) {
@@ -251,7 +264,7 @@ function viewDraw(s) {
     const cur = g.rank[rk] || '';
     const err = check(g, k);
     const roll = (se.roll || {})[g.letter + k] || '';
-    return `<td><select data-rank="${g.letter}|${rk}"><option value=""></option>${g.teams.map(t => `<option ${cur === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+    return `<td class="${k === '亞' ? 'sep' : ''}"><select data-rank="${g.letter}|${rk}"><option value=""></option>${g.teams.map(t => `<option ${cur === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
         ${!cur && sug ? `<div class="small muted">名次試算：${esc(sug.team)}${sug.tie ? '（同勝場，請確認）' : ''}</div>` : ''}</td>
       <td><select data-roll="${g.letter + k}"><option value=""></option>${['到', '代抽', '未到'].map(x => `<option ${roll === x ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
       <td><input type="text" inputmode="numeric" style="width:56px" data-fpos="${g.letter + k}" value="${(se.finalPos || {})[g.letter + k] || ''}">
@@ -263,7 +276,7 @@ function viewDraw(s) {
       <span class="spacer"></span><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
     <p class="small muted">名次試算僅比勝場，同勝場請以選單指定。</p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
-    <div style="overflow-x:auto"><table class="list"><thead><tr><th>組別</th><th>預賽戰績</th><th>冠軍</th><th>點名</th><th>籤號</th><th>亞軍</th><th>點名</th><th>籤號</th></tr></thead><tbody>
+    <div style="overflow-x:auto"><table class="list"><thead><tr><th>組別</th><th>預賽戰績</th><th>冠軍</th><th>點名</th><th>籤號</th><th class="sep">亞軍</th><th>點名</th><th>籤號</th></tr></thead><tbody>
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
@@ -340,6 +353,10 @@ function viewSetup(s) {
       <span class="small muted">${esc(s.rosterFile || '')}</span></div>
       ${rosterGuess.length ? `<p class="small">籤表隊名與名單寫法不同，已依校名對應，請確認：${esc(rosterGuess.join('、'))}</p>` : ''}
       ${rosterMiss.length ? `<p class="small" style="color:var(--red)">名單中找不到以下隊伍，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
+    <div class="panel"><h2>匯入賽程時間表（Excel 檔）</h2>
+      <div class="row"><label class="btn ghost sm">${icon('upload')}選擇賽程時間表<input type="file" accept=".xlsx" hidden data-sched></label>
+      <span class="small muted">${s.sched ? `${esc(s.sched.file || '')}，${s.sched.slots.length} 個時段` : ''}</span>
+      ${s.sched ? '<button class="btn ghost sm danger" data-sched-clear>移除</button>' : ''}</div></div>
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
@@ -443,6 +460,10 @@ document.addEventListener('click', async ev => {
   else if (d.mid && d.table) openModal('score', d.mid);
   else if ('close' in d) { modal = null; drawModal(); }
   else if (d.clearAbsent) updateMatch(d.clearAbsent, r => { delete r.absent; });
+  else if ('luBack' in d) {
+    const w = t.closest('.lu-free'), sel = w.previousElementSibling, k = sel.dataset.luOff[0];
+    sel.dataset.lu = sel.dataset.luOff; delete sel.dataset.luOff; sel.hidden = false; w.remove(); markLineup(k);
+  }
   else if (d.luSave) {
     const l = readLineup(d.luSave);
     const w = lineupWarn(l);
@@ -459,7 +480,8 @@ document.addEventListener('click', async ev => {
     update(s => { const se = s.events.find(x => x.name === curEv); const e = D.events.find(x => x.name === curEv); se.rank = se.rank || {};
       e.groups.forEach(g => { if (g.table.all && !g.table.rows[0].tie && !g.table.rows[1].tie) se.rank[g.letter] = { c: g.table.rows[0].team, r: g.table.rows[1].team }; }); });
     toast('已帶入無同勝場爭議的組別，其餘請以選單指定');
-  } else if ('backup' in d) {
+  } else if ('schedClear' in d) update(s => { delete s.sched; });
+  else if ('backup' in d) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(getState())], { type: 'application/json' }));
     a.download = `交大盃當日備份_${fmtTime(Date.now()).replace(':', '')}.json`; a.click();
@@ -470,8 +492,14 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', async ev => {
   const t = ev.target, d = t.dataset;
   if (d.lu) {
-    if (t.value === '__other') { const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.lu = d.lu; inp.style.width = t.style.width; t.replaceWith(inp); inp.focus(); }
-    markLineup(d.lu[0]);
+    const side = d.lu[0];
+    if (t.value === '__other') {
+      const key = d.lu, w = document.createElement('span');
+      w.className = 'lu-free'; w.style.width = t.style.width;
+      w.innerHTML = `<input type="text" data-lu="${key}"><button class="btn ghost sm" data-lu-back title="返回選單">選單</button>`;
+      delete t.dataset.lu; t.dataset.luOff = key; t.value = ''; t.hidden = true; t.after(w); w.firstChild.focus();
+    }
+    markLineup(side);
   }
   else if (d.tb) setTables(d.tb, t.value);
   else if (d.slip) { const [mid, k] = [d.slip.slice(0, d.slip.lastIndexOf('|')), d.slip.slice(-1)]; updateMatch(mid, r => { r.slip = r.slip || {}; r.slip[k] = t.checked; }); }
@@ -483,6 +511,9 @@ document.addEventListener('change', async ev => {
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
   else if ('staff' in d) update(s => { s.staff = [...new Set(t.value.split(/[\n,，、\s]+/).map(x => x.trim()).filter(Boolean))]; });
+  else if ('sched' in d) {
+    if (t.files[0]) try { const slots = parseTimetable(await readWorkbookValues(await t.files[0].arrayBuffer())); const file = t.files[0].name; update(s => { s.sched = { file, slots }; }); toast(`賽程時間表已匯入：${slots.length} 個時段`); } catch (err) { toast(`匯入失敗：${err.message}`); }
+  }
   else if ('roster' in d) { if (t.files[0]) await importRoster(t.files[0]); }
   else if ('restore' in d) {
     try { const s = JSON.parse(await t.files[0].text()); if (s.v !== 1) throw new Error('格式不符'); replaceState(s); toast('已還原備份'); } catch (e) { toast(`還原失敗：${e.message}`); }

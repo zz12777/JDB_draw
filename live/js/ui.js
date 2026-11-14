@@ -109,6 +109,27 @@ export function board(state, d, opt = {}) {
   return `<div class="board">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
 }
 
+/**
+ * 大會台用的球桌看板。寬螢幕：大會台在左，上排為前半桌號、下排為後半桌號；
+ * 窄螢幕：同球桌地圖（大會台在下、左右兩排）。細節點桌子看。
+ */
+export function deskBoard(state, d, opt = {}) {
+  const n = state.tables || 24, half = Math.ceil(n / 2);
+  const cell = t => {
+    const r = t <= half ? 1 : 2, c = t <= half ? t : t - half;
+    const pos = `style="--r:${r};--c:${c}"`;
+    const x = d.tables.get(t);
+    if (!x) return `<button class="wcell" ${pos} data-table="${t}"><span class="bn">${t}</span><span class="bempty">空桌</span></button>`;
+    const m = x.m;
+    return `<button class="wcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${m.status === 'reported' ? 'rep' : ''}" ${pos} data-table="${t}" data-mid="${esc(m.id)}">
+      <span class="bn">${t}</span><span class="be">${esc(shortEv(m))}${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}</span>
+      <span class="ws"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></span>
+      <span class="ws"><span class="nm">${esc(sideText(m.B, m.team))}</span><b>${m.score[1]}</b></span>
+      <span class="wx">${m.status === 'reported' ? '待確認' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
+  };
+  return `<div class="wboard" style="--half:${half}"><div class="wdesk">大會台</div>${Array.from({ length: n }, (_, i) => cell(i + 1)).join('')}</div>`;
+}
+
 /** 某場在某桌的裁判姓名 */
 export function refOf(m, t) {
   const r = m.rec;

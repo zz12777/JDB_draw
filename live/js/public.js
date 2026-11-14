@@ -33,18 +33,21 @@ function viewSched() {
   if (e.team) {
     const N = Math.max(...e.groups.map(g => g.teams.length));
     groups = e.groups.map(g => {
-      const cell = (a, b) => {
-        const m = g.matches.find(x => (x.A.name === a && x.B.name === b) || (x.A.name === b && x.B.name === a));
+// 比照完成籤表：左下半寫場次，對角一條斜線，右上半寫比數（列的隊伍在前）
+      const find = (a, b) => g.matches.find(x => (x.A.name === a && x.B.name === b) || (x.A.name === b && x.B.name === a));
+      const cell = (a, b, i, j) => {
+        const m = find(a, b);
         if (!m) return '<td></td>';
-        if (!shown(m)) return `<td class="muted">${esc(m.no)}</td>`;
+        if (i > j) return `<td class="lk no" data-mid="${esc(m.id)}">${esc(m.no)}</td>`;
+        if (!shown(m)) return '<td></td>';
         const mine = m.A.name === a;
-        return `<td class="lk" data-mid="${esc(m.id)}">${m.score[mine ? 0 : 1]}:${m.score[mine ? 1 : 0]}</td>`;
+        return `<td class="lk sc" data-mid="${esc(m.id)}">${m.score[mine ? 0 : 1]}:${m.score[mine ? 1 : 0]}</td>`;
       };
       const st = t => g.table.rows.find(r => r.team === t);
       const tag = t => (g.rank.c === t ? ' <span class="chip ready">冠</span>' : g.rank.r === t ? ' <span class="chip reported">亞</span>' : '');
       const pad = n => '<td></td>'.repeat(n);
       return `<table class="grp"><thead><tr><th class="hd">${g.letter} 組</th>${Array.from({ length: N }, (_, i) => `<th>${g.teams[i] ? `${i + 1} ${esc(g.teams[i])}` : ''}</th>`).join('')}<th class="wl">勝</th><th class="wl">敗</th></tr></thead><tbody>
-        ${g.teams.map((t, i) => `<tr><td class="nm">${i + 1}　${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td></td>' : cell(t, u))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
+        ${g.teams.map((t, i) => `<tr><td class="nm">${i + 1}　${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
     }).join('');
   }
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;

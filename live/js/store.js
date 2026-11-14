@@ -19,7 +19,7 @@ export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, e
 // ---------------- 狀態 <-> 資料庫格式 ----------------
 const parse = (s, d) => { if (s == null) return d; try { const v = JSON.parse(s); return v == null ? d : v; } catch (e) { return d; } };
 const clone = x => JSON.parse(JSON.stringify(x));
-const META_KEYS = ['title', 'edition', 'tables', 'notice', 'rosterFile', 'rev'];
+const META_KEYS = ['title', 'edition', 'tables', 'notice', 'rosterFile', 'rev', 'sched'];
 const games = g => (Array.isArray(g) ? g.slice(0, 5).map(x => (Array.isArray(x) ? [x[0] ?? '', x[1] ?? ''] : ['', ''])) : undefined);
 
 function nodeToRec(node) {
