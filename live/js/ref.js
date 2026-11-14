@@ -72,7 +72,7 @@ function refresh() {
   });
   const r = m.team ? m.result.pts[point] : m.result;
   const msg = $('#msg');
-  if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc((m.team && lineName((m.rec.lineup || {})[r.winner], point)) || sideText(r.winner === 'a' ? m.A : m.B, m.team))} 獲勝。</b>`
+  if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc([sideText(r.winner === 'a' ? m.A : m.B, m.team), m.team ? lineName((m.rec.lineup || {})[r.winner], point) : ''].filter(Boolean).join(' '))} 獲勝。</b>`
     : '';
 }
 
