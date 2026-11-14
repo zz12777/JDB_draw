@@ -17,17 +17,17 @@ function render() {
 }
 
 function viewName() {
-  return `<div class="panel"><h2>裁判姓名</h2><p class="small muted">姓名會隨成績一併記錄，供大會核對。</p>
+  return `<div class="panel"><h2>裁判姓名</h2>
     <div class="row"><input id="rn" type="text" placeholder="請輸入姓名" style="flex:1;font-size:18px;padding:8px"><button class="btn" data-setname>開始</button></div></div>`;
 }
 function viewTables(s) {
   return `<div class="panel"><div class="row"><h2 style="margin:0">請選擇球桌</h2><span class="spacer"></span><span class="small muted">裁判：${esc(name)}</span><button class="btn ghost sm" data-rename>更改</button></div>
-    <p class="small muted">僅能記錄大會已排定桌次、正在進行的場次。</p>${tableMap(s, D, { tag: 'button' })}</div>`;
+    ${tableMap(s, D, { tag: 'button' })}</div>`;
 }
 function viewMatch() {
   const x = D.tables.get(table);
   const back = `<button class="btn ghost sm" data-back>返回球桌列表</button>`;
-  if (!x) return `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div><p class="muted">此桌目前沒有進行中的場次。若剛完成比賽，成績已送交大會確認。</p></div>`;
+  if (!x) return `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div><p class="muted">此桌目前沒有進行中的場次。</p></div>`;
   const m = x.m;
   const lu = m.rec.lineup || {};
   const an = sideText(m.A, m.team), bn = sideText(m.B, m.team);
@@ -72,8 +72,8 @@ function refresh() {
   });
   const r = m.team ? m.result.pts[point] : m.result;
   const msg = $('#msg');
-  if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc(m.team ? lineName((m.rec.lineup || {})[r.winner], point) : sideText(r.winner === 'a' ? m.A : m.B))} 獲勝。</b>成績已送出，由大會確認。`
-    : '每局 11 分、領先 2 分；先取得三局者獲勝。比分輸入後即時送出。';
+  if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc(m.team ? lineName((m.rec.lineup || {})[r.winner], point) : sideText(r.winner === 'a' ? m.A : m.B))} 獲勝。</b>`
+    : '';
 }
 
 document.addEventListener('click', ev => {
@@ -81,7 +81,8 @@ document.addEventListener('click', ev => {
   const d = t.dataset;
   if ('setname' in d) { const v = $('#rn').value.trim(); if (!v) { toast('請輸入姓名'); return; } name = v; localStorage.setItem(NAME_KEY, name); render(); }
   else if ('rename' in d) { name = ''; render(); }
-  else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point; render(); }
+  else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
+    if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => { r.refs = r.refs || {}; r.refs[table] = name; }); else render(); }
   else if ('back' in d) { table = null; point = null; render(); }
   else if ('points' in d) { point = null; render(); }
   else if (d.point) { point = Number(d.point); render(); }

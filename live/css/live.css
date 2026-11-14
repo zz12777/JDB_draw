@@ -23,7 +23,7 @@ a { color: var(--blue-2); }
 .icon { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
 
 .top { background: var(--blue); color: #fff; display: flex; align-items: center; gap: 14px; padding: 10px 20px; flex-wrap: wrap; border-bottom: 3px solid var(--yellow); }
-.top img { width: 38px; height: 38px; background: #fff; border-radius: 50%; padding: 2px; }
+.top img { width: 44px; height: 44px; border-radius: 50%; }
 .top h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 1px; }
 .top .sub { font-size: 13px; opacity: .85; }
 .top .spacer { flex: 1; }
@@ -158,3 +158,5 @@ table.grp { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
 table.grp th, table.grp td { border: 1px solid var(--line); padding: 4px 6px; font-size: 13px; text-align: center; }
 table.grp th { background: var(--blue-soft); font-weight: 500; }
 table.grp td.nm { text-align: left; font-weight: 500; }
+
+.map.tall .tcell { height: 58px; }

@@ -39,7 +39,7 @@ function viewLive(s) {
   const ready = all.filter(m => m.status === 'ready');
   return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}
     <div class="panel"><h2>進行中（${playing.length}）</h2>${playing.map(bigCard).join('') || '<p class="muted small">目前沒有進行中的比賽。</p>'}</div>
-    <div class="panel"><h2>準備區</h2><p class="small muted">以下場次已可開賽，請留意大會廣播。</p>
+    <div class="panel"><h2>準備區</h2>
       ${ready.length ? `<table class="list"><tbody>${ready.slice(0, 15).map(m => `<tr><td class="nowrap"><b>${m.ev}</b> ${esc(m.stage === 'F' ? m.label : `(${m.label})`)}</td><td>${names(m)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">目前沒有等待開賽的場次。</p>'}</div>
     <div class="panel"><h2>球桌位置</h2>${tableMap(s, D)}</div>`;
 }
@@ -61,7 +61,7 @@ function viewSched() {
 function viewSearch() {
   const key = q.trim();
   const hit = m => [m.A, m.B].some(x => x && ((x.name || '').includes(key) || (x.school || '').includes(key))) ||
-    (m.team && m.rec.lineup && m.status !== 'wait' && m.lineupOk.a && m.lineupOk.b && JSON.stringify(m.rec.lineup).includes(key));
+    (m.team && m.rec.lineup && m.rec.start && m.lineupOk.a && m.lineupOk.b && JSON.stringify(m.rec.lineup).includes(key));
   const list = [...D.byId.values()].filter(hit);
   const live = list.filter(m => m.status === 'playing');
   const rest = list.filter(m => m.status !== 'playing');

@@ -71,15 +71,23 @@ export function tableMap(state, d, opt = {}) {
     const al = opt.alerts && opt.alerts.has(m.id);
     return `<${tag} class="tcell busy ${al ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <span class="t">${t}</span>
-      <span class="who"><span class="ev">${esc(shortEv(m))}</span>${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}<br>${names(m)}</span>
+      <span class="who"><span class="ev">${esc(shortEv(m))}</span>${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}<br>${names(m)}${opt.refs ? `<br><span class="muted">裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : ''}</span>
       <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><br>${m.status === 'reported' ? '待確認' : `${mins(m.rec.start)} 分`}</span></${tag}>`;
   };
   const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
-  return `<div class="map">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
+  return `<div class="map ${opt.refs ? 'tall' : ''}">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
+}
+
+/** 某場在某桌的裁判姓名 */
+export function refOf(m, t) {
+  const r = m.rec;
+  if (r.refs && r.refs[t]) return r.refs[t];
+  const p = (r.pts || []).find(x => x && Number(x.table) === Number(t) && x.ref);
+  return p ? p.ref : (r.ref || '');
 }
 
 export function header(state, role, links) {
-  return `<img src="../img/logo.png" alt=""><div><h1>${esc(state.title || '交大盃')}</h1><div class="sub">${esc(state.edition || '')}${role ? `　${role}` : ''}</div></div>
+  return `<img src="img/logo.png" alt=""><div><h1>${esc(state.title || '交大盃')}</h1><div class="sub">${esc(state.edition || '')}${role ? `　${role}` : ''}</div></div>
     <span class="spacer"></span>${links.map(l => `<a href="${l[1]}">${l[0]}</a>`).join('')}`;
 }
 export { EVENT_FULL };

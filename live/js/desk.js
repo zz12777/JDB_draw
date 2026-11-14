@@ -12,7 +12,8 @@ let curEv = null;
 let modal = null; // { kind: 'score' | 'lineup', mid }
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['draw', '決賽抽籤'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
+let refTab = 'avail';
 
 function render() {
   const s = getState();
@@ -21,7 +22,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'draw' ? viewDraw(s) : viewSetup(s);
+  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : viewSetup(s);
 }
 
 // ---------------- 賽程控制 ----------------
@@ -38,8 +39,8 @@ function viewCtrl(s) {
       <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}${readyN(x) ? `<span class="n">${readyN(x)}</span>` : ''}</button>`).join('')}</div></div>
       <div class="legend">
         <span><span class="dot on"></span>前一輪已完賽</span>
-        ${e.team ? `<span><input type="checkbox" checked disabled>已發點單</span><span>${icon('list')}已收點單（已輸入排點）</span>` : ''}
-        <span><span class="chip ready">可開賽</span>輸入桌次即開賽並記錄時間</span>
+        ${e.team ? `<span><input type="checkbox" checked disabled>已發點單</span><span>${icon('list')}已收點單</span>` : ''}
+        
       </div>
       <div class="rounds">${e.rounds.map(r => `<div class="round"><h3><span>${esc(r.label)}</span><span class="muted small">${r.matches.filter(m => m.status === 'done').length}/${r.matches.length}</span></h3>
         ${r.matches.map(card).join('')}</div>`).join('')}</div>
@@ -53,7 +54,7 @@ function viewCtrl(s) {
       }).join('')}</div>` : ''}
       <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}
         ${i ? '' : `<div><button class="btn ghost sm" data-copy="${esc(c.text)}">${icon('copy')}複製</button></div>`}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
-      <div class="panel"><h2>球桌</h2>${tableMap(s, D, { tag: 'button', alerts: new Set(absent.map(m => m.id)) })}</div>
+      <div class="panel"><h2>球桌</h2>${tableMap(s, D, { tag: 'button', refs: true, alerts: new Set(absent.map(m => m.id)) })}</div>
       <div class="panel"><h2>待確認成績（${reported.length}）</h2>${reported.length ? reported.map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}　${m.score[0]}:${m.score[1]}</span><span class="spacer"></span><button class="btn sm" data-score="${esc(m.id)}">核對</button></div>`).join('') : '<p class="small muted">目前沒有待確認的成績。</p>'}</div>
       <div class="panel"><h2>可開賽（${ready.length}）</h2>${ready.length ? ready.slice(0, 12).map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}</span></div>`).join('') + (ready.length > 12 ? `<p class="small muted">另有 ${ready.length - 12} 場</p>` : '') : '<p class="small muted">目前沒有可開賽的場次。</p>'}</div>
     </div></div>`;
@@ -120,7 +121,6 @@ function lineupModal(m) {
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.stage === 'F' ? m.label : `(${m.label})`)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
-    <p class="small muted">依各隊繳交的紙本點單輸入。兩隊都儲存後，此場次即列為可開賽。</p>
     <div class="row" style="align-items:flex-start;gap:24px">${col('a', m.A)}${col('b', m.B)}</div></div>`;
 }
 function readLineup(k) {
@@ -239,14 +239,66 @@ function viewDraw(s) {
   const finals = e.matches.filter(m => m.stage === 'F' && m.roundIdx === 0);
   return `<div class="panel"><div class="row"><div class="pills">${teams.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
       <span class="spacer"></span><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
-    <p class="small muted">預賽各組取前二名晉級。名次試算僅比勝場，同勝場時請依競賽規程判定後以選單指定。同組冠亞軍須分在上下半區。</p>
+    <p class="small muted">名次試算僅比勝場，同勝場請以選單指定。</p>
     <p class="small">冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}　亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}　上半區為 1 到 ${half} 號</p>
     <div style="overflow-x:auto"><table class="list"><thead><tr><th>組別</th><th>預賽戰績</th><th>冠軍</th><th>點名</th><th>籤號</th><th>亞軍</th><th>點名</th><th>籤號</th></tr></thead><tbody>
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><h2>決賽第一輪對戰</h2><table class="list"><thead><tr><th>場次</th><th>對戰</th></tr></thead><tbody>
       ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => `<tr><td>${esc(m.label)}</td><td>${names(m)}</td></tr>`).join('')}</tbody></table>
-      <p class="small muted">${finals.length ? '' : ''}籤號輸入後，決賽輪次會自動帶入隊名。</p></div>`;
+</div>`;
+}
+
+// ---------------- 裁判 ----------------
+/** 每位裁判擔任次數：個人賽一場算一次，團體賽一點算一次 */
+function refCounts() {
+  const cnt = new Map();
+  const add = (n, k) => { if (!n) return; if (!cnt.has(n)) cnt.set(n, new Set()); cnt.get(n).add(k); };
+  D.byId.forEach(m => {
+    const r = m.rec;
+    const per = new Map(); // 姓名 -> 這一場記了幾個單位
+    const bump = (n, k) => { if (!n) return; per.set(n, (per.get(n) || new Set()).add(k)); };
+    if (m.team) (r.pts || []).forEach((p, i) => { if (p && p.ref) bump(p.ref, 'p' + i); });
+    else if (r.ref) bump(r.ref, 'x');
+    Object.entries(r.refs || {}).forEach(([t, n]) => { if (!per.has(n)) bump(n, 't' + t); });
+    per.forEach((set, n) => set.forEach(k => add(n, m.id + k)));
+  });
+  return new Map([...cnt.entries()].map(([n, set]) => [n, set.size]));
+}
+/** 正在比賽與即將出賽的人 */
+function busyPeople(s) {
+  const now = new Set(), soon = new Set();
+  const people = m => {
+    if (!m.team) return [m.A, m.B].flatMap(x => String((x && x.name) || '').split(/[\/／]/)).map(x => x.trim()).filter(Boolean);
+    const e = s.events.find(x => x.name === m.ev);
+    return [m.A, m.B].flatMap(x => (e.rosters && e.rosters[x && x.name]) || []);
+  };
+  D.byId.forEach(m => {
+    if (m.status === 'playing') people(m).forEach(n => now.add(n));
+    else if (m.status === 'ready' || (m.status === 'wait' && m.known)) people(m).forEach(n => soon.add(n));
+  });
+  const onDuty = new Set();
+  D.tables.forEach((x, t) => { if (x.m.status === 'playing') { const n = (x.m.rec.refs || {})[t]; if (n) onDuty.add(n); } });
+  return { now, soon, onDuty };
+}
+function viewRefs(s) {
+  const cnt = refCounts();
+  const staff = s.staff || [];
+  const { now, soon, onDuty } = busyPeople(s);
+  const sub = `<div class="pills" style="margin-bottom:12px">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div>`;
+  if (refTab === 'count') {
+    const names = [...new Set([...staff, ...cnt.keys()])].sort((a, b) => (cnt.get(b) || 0) - (cnt.get(a) || 0) || a.localeCompare(b, 'zh-Hant'));
+    return `${sub}<div class="panel"><h2>擔任次數</h2><p class="small muted">個人賽一場計一次，團體賽一點計一次。</p>
+      ${names.length ? `<table class="list" style="max-width:420px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`;
+  }
+  const state = n => (onDuty.has(n) ? '執裁中' : now.has(n) ? '比賽中' : soon.has(n) ? '即將出賽' : '');
+  const free = staff.filter(n => !state(n)).sort((a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0));
+  const rest = staff.filter(n => state(n));
+  return `${sub}<div class="desk"><div class="panel"><h2>可擔任裁判（${free.length}）</h2>
+      ${staff.length ? `<table class="list"><thead><tr><th>姓名</th><th>已擔任次數</th></tr></thead><tbody>${free.map(n => `<tr><td>${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>
+        ${rest.length ? `<h3>暫不可擔任（${rest.length}）</h3><table class="list"><tbody>${rest.map(n => `<tr><td>${esc(n)}</td><td class="muted">${state(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted small">請先於右側輸入工作人員名單。</p>'}</div>
+    <div class="panel"><h2>工作人員名單</h2><p class="small muted">一行一位。</p>
+      <textarea data-staff rows="16" style="width:100%">${esc(staff.join('\n'))}</textarea></div></div>`;
 }
 
 // ---------------- 資料設定 ----------------
@@ -255,41 +307,69 @@ function viewSetup(s) {
       <label>名稱 <input type="text" data-set="title" value="${esc(s.title)}" style="width:120px"></label>
       <label>屆數 <input type="text" data-set="edition" value="${esc(s.edition)}" style="width:120px"></label>
       <label>球桌數 <input type="number" min="2" max="60" data-set="tables" value="${s.tables}" style="width:80px"></label></div></div>
-    <div class="panel"><h2>匯入最終籤表</h2>
-      <p class="small muted">上傳各項目的最終籤表 Excel（抽籤系統「下載完成籤表」的檔案，或人工調整後的版本）。重新匯入同一項目會保留已登記的成績與桌次，請確認籤表內容未變動。</p>
+    <div class="panel"><div class="row"><h2 style="margin:0">匯入最終籤表（Excel 檔）</h2><span class="spacer"></span><label class="btn sm">${icon('upload')}一次選擇多個檔案<input type="file" accept=".xlsx" multiple hidden data-impall></label></div>
+      <p class="small muted">依檔名或工作表名稱辨識項目。</p>
       <table class="list"><thead><tr><th>項目</th><th>目前資料</th><th></th></tr></thead><tbody>
       ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` : '<span class="muted">尚未匯入</span>'}</td>
         <td><label class="btn ghost sm">${icon('upload')}選擇檔案<input type="file" accept=".xlsx" hidden data-imp="${ev}"></label></td></tr>`; }).join('')}</tbody></table></div>
-    <div class="panel"><h2>匯入團體賽名單</h2>
-      <p class="small muted">上傳報名表單回應（男子組、女子組、社會組各一份），供排點選單使用。僅讀取隊名與隊員姓名，其他欄位不會儲存。</p>
+    <div class="panel"><h2>匯入參賽名單</h2>
+      <p class="small muted">供排點選單使用。</p>
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇檔案（可多選）<input type="file" accept=".xlsx,.csv" multiple hidden data-roster></label>
       <span class="small muted">${D.events.filter(e => e.team).map(e => { const se = s.events.find(x => x.name === e.name); const n = Object.keys(se.rosters || {}).length; const total = e.groups.reduce((a, g) => a + g.teams.length, 0); return `${e.name} ${n}/${total} 隊`; }).join('　')}</span></div></div>
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
       <button class="btn ghost" data-demo>載入示範資料</button>
-      <button class="btn ghost danger" data-wipe>清除全部資料</button></div>
-      <p class="small muted">目前資料儲存於此瀏覽器。建議比賽期間定時下載備份檔。</p></div>`;
+      <button class="btn ghost danger" data-wipe>清除全部資料</button></div></div>`;
 }
 
+/** 由檔名或工作表名稱判斷項目 */
+function detectEvent(text) {
+  const t = String(text).replace(/\s+/g, '');
+  const rules = [['男團', /男子?團|大專男團/], ['女團', /女子?團|大專女團/], ['社團', /社會?組?團|社會組/],
+    ['男單', /男子?單/], ['女單', /女子?單/], ['男雙', /男子?雙/], ['女雙', /女子?雙/]];
+  const hit = rules.filter(([, re]) => re.test(t)).map(x => x[0]);
+  return hit.length === 1 ? hit[0] : null;
+}
+function applyBracket(ev, sheets) {
+  const r = parseFinalBracket(sheets, ev);
+  update(s => {
+    const old = s.events.find(x => x.name === ev);
+    let e;
+    if (r.st.kind === 'ko') {
+      e = { name: ev, kind: 'ko', sizes: r.st.sections.map(x => x.size), byPos: Object.fromEntries(r.byPos) };
+      if (r.matches) e.custom = r.matches;
+    } else {
+      e = { name: ev, kind: 'rr', groups: r.st.groups.map(g => ({ letter: g.letter, teams: Array.from({ length: g.size }, (_, j) => r.byPos.get(g.startPos + j).name) })),
+        rosters: (old && old.rosters) || {}, rank: (old && old.rank) || {}, finalPos: (old && old.finalPos) || {}, roll: (old && old.roll) || {} };
+    }
+    s.events = s.events.filter(x => x.name !== ev).concat(e);
+  });
+  return r;
+}
 async function importBracket(ev, file) {
   try {
-    const sheets = await readWorkbookValues(await file.arrayBuffer());
-    const r = parseFinalBracket(sheets, ev);
-    update(s => {
-      const old = s.events.find(x => x.name === ev);
-      let e;
-      if (r.st.kind === 'ko') {
-        e = { name: ev, kind: 'ko', sizes: r.st.sections.map(x => x.size), byPos: Object.fromEntries(r.byPos) };
-        if (r.matches) e.custom = r.matches;
-      } else {
-        e = { name: ev, kind: 'rr', groups: r.st.groups.map(g => ({ letter: g.letter, teams: Array.from({ length: g.size }, (_, j) => r.byPos.get(g.startPos + j).name) })),
-          rosters: (old && old.rosters) || {}, rank: (old && old.rank) || {}, finalPos: (old && old.finalPos) || {}, roll: (old && old.roll) || {} };
-      }
-      s.events = s.events.filter(x => x.name !== ev).concat(e);
-    });
+    const r = applyBracket(ev, await readWorkbookValues(await file.arrayBuffer()));
     toast(`${ev} 已匯入：${r.info}${r.warnings.length ? `；${r.warnings.join('；')}` : ''}`);
   } catch (err) { toast(`${ev} 匯入失敗：${err.message}`); }
+}
+/** 一次匯入多個檔案：先看檔名，看不出來再依工作表名稱分項目 */
+async function importAll(files) {
+  const ok = [], fail = [];
+  for (const f of files) {
+    try {
+      const sheets = await readWorkbookValues(await f.arrayBuffer());
+      const byEv = new Map();
+      const whole = detectEvent(f.name);
+      if (whole) byEv.set(whole, sheets);
+      else sheets.forEach(sh => { const ev = detectEvent(sh.name); if (ev) byEv.set(ev, (byEv.get(ev) || []).concat(sh)); });
+      if (!byEv.size) { fail.push(`${f.name}（無法辨識項目）`); continue; }
+      for (const [ev, list] of byEv) {
+        try { applyBracket(ev, list); ok.push(ev); } catch (err) { fail.push(`${ev}（${err.message}）`); }
+      }
+    } catch (err) { fail.push(`${f.name}（${err.message}）`); }
+  }
+  toast(`${ok.length ? `已匯入：${ok.join('、')}` : ''}${ok.length && fail.length ? '；' : ''}${fail.length ? `未匯入：${fail.join('、')}` : ''}`);
 }
 async function importRosters(files) {
   const found = {};
@@ -318,6 +398,7 @@ document.addEventListener('click', async ev => {
   if (!t) { if (ev.target.classList.contains('modal-bg')) { modal = null; drawModal(); } return; }
   const d = t.dataset;
   if (d.tab) { tab = d.tab; render(); }
+  else if (d.reftab) { refTab = d.reftab; render(); }
   else if (d.ev) { curEv = d.ev; render(); }
   else if (d.lineup) openModal('lineup', d.lineup);
   else if (d.score) openModal('score', d.score);
@@ -358,6 +439,8 @@ document.addEventListener('change', async ev => {
   else if (d.fpos) update(s => { const se = s.events.find(x => x.name === curEv); se.finalPos = se.finalPos || {}; se.finalPos[d.fpos] = t.value ? Number(t.value) || '' : ''; });
   else if (d.set) update(s => { s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : t.value; });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
+  else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
+  else if ('staff' in d) update(s => { s.staff = [...new Set(t.value.split(/[\n,，、\s]+/).map(x => x.trim()).filter(Boolean))]; });
   else if ('roster' in d) { if (t.files.length) await importRosters([...t.files]); }
   else if ('restore' in d) {
     try { const s = JSON.parse(await t.files[0].text()); if (s.v !== 1) throw new Error('格式不符'); replaceState(s); toast('已還原備份'); } catch (e) { toast(`還原失敗：${e.message}`); }
