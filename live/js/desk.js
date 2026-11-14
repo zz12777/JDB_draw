@@ -115,9 +115,10 @@ function lineupModal(m) {
   const col = (k, S) => {
     const roster = (e.rosters && e.rosters[S.name]) || [];
     const l = (m.rec.lineup && m.rec.lineup[k]) || [];
-    const inp = (i, j, v) => `<input type="text" list="ros-${k}" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" style="width:${j == null ? 100 : 48}%">`;
+    const inp = (i, j, v) => (roster.length
+      ? `<select data-lu="${k}|${i}|${j}" style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
+      : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" style="width:${j == null ? 100 : 48}%">`);
     return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : '<span class="chip">尚未輸入</span>'}</h3>
-      <datalist id="ros-${k}">${roster.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       ${POINTS.map((p, i) => `<div class="row" style="margin-bottom:6px;flex-wrap:nowrap"><span class="nowrap small muted" style="width:76px">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</span>
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
@@ -127,17 +128,25 @@ function lineupModal(m) {
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
     <div class="row" style="align-items:flex-start;gap:24px">${col('a', m.A)}${col('b', m.B)}</div></div>`;
 }
+const val = el => (el.value === '__other' ? '' : el.value.trim());
 function readLineup(k) {
   return POINTS.map((p, i) => p.dbl
-    ? [0, 1].map(j => $(`[data-lu="${k}|${i}|${j}"]`).value.trim())
-    : $(`[data-lu="${k}|${i}|null"]`).value.trim());
+    ? [0, 1].map(j => val($(`[data-lu="${k}|${i}|${j}"]`)))
+    : val($(`[data-lu="${k}|${i}|null"]`)));
+}
+/** 標出重複的選手（紅底）並顯示提示 */
+function markLineup(k) {
+  const els = $$(`[data-lu^="${k}|"]`);
+  const vals = els.map(el => (el.value === '__other' ? '' : el.value.trim()));
+  els.forEach((el, i) => el.classList.toggle('bad', !!vals[i] && vals.filter(v => v === vals[i]).length > 1));
+  const warn = $(`[data-lu-warn="${k}"]`);
+  if (warn) warn.textContent = lineupWarn(readLineup(k));
 }
 function lineupWarn(l) {
   const flat = l.flat().filter(Boolean);
   const dup = flat.filter((n, i) => flat.indexOf(n) !== i);
   const out = [];
-  if (dup.length) out.push(`${[...new Set(dup)].join('、')} 重複排點，請確認是否符合規程`);
-  if (l[2][0] && l[2][0] === l[2][1]) out.push('雙打兩人不可為同一人');
+  if (dup.length) out.push(`${[...new Set(dup)].join('、')} 重複排點`);
   return out.join('；');
 }
 
@@ -309,20 +318,19 @@ function viewRefs(s) {
 
 // ---------------- 資料設定 ----------------
 function viewSetup(s) {
+  const fileOf = ev => (s.events.find(x => x.name === ev) || {}).file || '';
   return `<div class="panel"><h2>賽事</h2><div class="row">
       <label>名稱 <input type="text" data-set="title" value="${esc(s.title)}" style="width:120px"></label>
       <label>屆數 <input type="text" data-set="edition" value="${esc(s.edition)}" style="width:120px"></label>
       <label>球桌數 <input type="number" min="2" max="60" data-set="tables" value="${s.tables}" style="width:80px"></label></div></div>
     <div class="panel"><div class="row"><h2 style="margin:0">匯入最終籤表（Excel 檔）</h2><span class="spacer"></span><label class="btn sm">${icon('upload')}一次選擇多個檔案<input type="file" accept=".xlsx" multiple hidden data-impall></label></div>
-      <p class="small muted">依檔名或工作表名稱辨識項目。</p>
       <table class="list"><thead><tr><th>項目</th><th>目前資料</th><th></th></tr></thead><tbody>
-      ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` : '<span class="muted">尚未匯入</span>'}</td>
+      ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` + (fileOf(ev) ? `<div class="muted">${esc(fileOf(ev))}</div>` : '') : '<span class="muted">尚未匯入</span>'}</td>
         <td><label class="btn ghost sm">${icon('upload')}選擇檔案<input type="file" accept=".xlsx" hidden data-imp="${ev}"></label></td></tr>`; }).join('')}</tbody></table></div>
     <div class="panel"><h2>匯入參賽名單</h2>
-      <p class="small muted">供排點選單使用。</p>
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇參賽名單 Word 檔<input type="file" accept=".docx" hidden data-roster></label>
-      <span class="small muted">${D.events.filter(e => e.team).map(e => { const se = s.events.find(x => x.name === e.name); const n = Object.keys(se.rosters || {}).length; const total = e.groups.reduce((a, g) => a + g.teams.length, 0); return `${e.name} ${n}/${total} 隊`; }).join('　')}</span></div>
-      ${rosterGuess.length ? `<p class="small">隊名寫法不同，已依校名對應，請確認：${esc(rosterGuess.join('、'))}</p>` : ''}
+      <span class="small muted">${esc(s.rosterFile || '')}</span></div>
+      ${rosterGuess.length ? `<p class="small">籤表隊名與名單寫法不同，已依校名對應，請確認：${esc(rosterGuess.join('、'))}</p>` : ''}
       ${rosterMiss.length ? `<p class="small" style="color:var(--red)">名單中找不到以下隊伍，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
@@ -339,7 +347,7 @@ function detectEvent(text) {
   const hit = rules.filter(([, re]) => re.test(t)).map(x => x[0]);
   return hit.length === 1 ? hit[0] : null;
 }
-function applyBracket(ev, sheets) {
+function applyBracket(ev, sheets, fileName) {
   const r = parseFinalBracket(sheets, ev);
   update(s => {
     const old = s.events.find(x => x.name === ev);
@@ -351,13 +359,14 @@ function applyBracket(ev, sheets) {
       e = { name: ev, kind: 'rr', groups: r.st.groups.map(g => ({ letter: g.letter, teams: Array.from({ length: g.size }, (_, j) => r.byPos.get(g.startPos + j).name) })),
         rosters: (old && old.rosters) || {}, rank: (old && old.rank) || {}, finalPos: (old && old.finalPos) || {}, roll: (old && old.roll) || {} };
     }
+    e.file = fileName || '';
     s.events = s.events.filter(x => x.name !== ev).concat(e);
   });
   return r;
 }
 async function importBracket(ev, file) {
   try {
-    const r = applyBracket(ev, await readWorkbookValues(await file.arrayBuffer()));
+    const r = applyBracket(ev, await readWorkbookValues(await file.arrayBuffer()), file.name);
     toast(`${ev} 已匯入：${r.info}${r.warnings.length ? `；${r.warnings.join('；')}` : ''}`);
   } catch (err) { toast(`${ev} 匯入失敗：${err.message}`); }
 }
@@ -373,7 +382,7 @@ async function importAll(files) {
       else sheets.forEach(sh => { const ev = detectEvent(sh.name); if (ev) byEv.set(ev, (byEv.get(ev) || []).concat(sh)); });
       if (!byEv.size) { fail.push(`${f.name}（無法辨識項目）`); continue; }
       for (const [ev, list] of byEv) {
-        try { applyBracket(ev, list); ok.push(ev); } catch (err) { fail.push(`${ev}（${err.message}）`); }
+        try { applyBracket(ev, list, f.name); ok.push(ev); } catch (err) { fail.push(`${ev}（${err.message}）`); }
       }
     } catch (err) { fail.push(`${f.name}（${err.message}）`); }
   }
@@ -398,9 +407,11 @@ async function importRoster(file) {
     left.forEach(t => {
       const u = unitFromTeam(t);
       const same = rest.filter(x => unitFromTeam(x.t) === u), mine = left.filter(o => unitFromTeam(o) === u);
-      if (u && same.length === 1 && mine.length === 1) { e.rosters[t] = same[0].v; hit++; guess.push(`${t}（名單：${same[0].t}）`); } else miss.push(t);
+      const g = e.groups.find(x => x.teams.includes(t));
+      if (u && same.length === 1 && mine.length === 1) { e.rosters[t] = same[0].v; hit++; guess.push(`${e.name} ${g.letter} 組「${t}」對應名單「${same[0].t}」`); } else miss.push(`${e.name} ${g.letter} 組「${t}」`);
     });
   }));
+  update(s => { s.rosterFile = file.name; });
   rosterGuess = guess;
   rosterMiss = miss;
   const n = Object.values(found).reduce((a, x) => a + Object.keys(x).length, 0);
@@ -424,6 +435,7 @@ document.addEventListener('click', async ev => {
   else if (d.luSave) {
     const l = readLineup(d.luSave);
     const w = lineupWarn(l);
+    if (w) { markLineup(d.luSave); toast('有選手重複排點，無法儲存'); return; }
     updateMatch(modal.mid, r => { r.lineup = r.lineup || {}; r.lineup[d.luSave] = l; });
     drawModal();
     $(`[data-lu-warn="${d.luSave}"]`).textContent = w;
@@ -446,7 +458,11 @@ document.addEventListener('click', async ev => {
 
 document.addEventListener('change', async ev => {
   const t = ev.target, d = t.dataset;
-  if (d.tb) setTables(d.tb, t.value);
+  if (d.lu) {
+    if (t.value === '__other') { const inp = document.createElement('input'); inp.type = 'text'; inp.dataset.lu = d.lu; inp.style.width = t.style.width; t.replaceWith(inp); inp.focus(); }
+    markLineup(d.lu[0]);
+  }
+  else if (d.tb) setTables(d.tb, t.value);
   else if (d.slip) { const [mid, k] = [d.slip.slice(0, d.slip.lastIndexOf('|')), d.slip.slice(-1)]; updateMatch(mid, r => { r.slip = r.slip || {}; r.slip[k] = t.checked; }); }
   else if (d.ptable != null) updateMatch(modal.mid, r => { r.pts = r.pts || []; r.pts[d.ptable] = r.pts[d.ptable] || {}; r.pts[d.ptable].table = t.value ? Number(t.value) : null; });
   else if (d.rank) { const [g, k] = d.rank.split('|'); update(s => { const se = s.events.find(x => x.name === curEv); se.rank = se.rank || {}; se.rank[g] = se.rank[g] || {}; se.rank[g][k] = t.value; }); }

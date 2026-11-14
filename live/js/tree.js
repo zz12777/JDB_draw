@@ -34,7 +34,7 @@ export function bracketSvg(matches, team, opt = {}) {
       (win ? thick : out).push(`<path d="${d}" class="${win ? 'w' : 'l'}"/>`);
       if (show) out.push(`<text x="${x - 8}" y="${k.y - 5}" class="sc ${win ? 'b' : ''}" text-anchor="end">${m.score[i]}</text>`);
     });
-    out.push(`<text x="${x + 5}" y="${p.y - 5}" class="no ${m.status === 'playing' ? 'live' : ''}">${esc(m.no)}</text>`);
+    out.push(`<text x="${x + 5}" y="${p.y - 5}" class="no ${m.status === 'playing' ? 'live' : ''}" data-mid="${esc(m.id)}">${esc(m.no)}</text>`);
     if (m.status === 'playing' && m.tables.length) out.push(`<text x="${x + 5}" y="${p.y + 13}" class="tb">第 ${m.tables.join('、')} 桌</text>`);
   });
   const rp = pos.get(root.num), rx = X(root);

@@ -210,3 +210,20 @@ svg.tree .tb { font-size: 11px; fill: var(--yellow-ink); font-weight: 700; }
 .pt .res { font-weight: 700; font-size: 18px; color: var(--blue); min-height: 28px; }
 .pt .meta { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .pt.solo { flex: 0 0 280px; margin: 0 auto; }
+
+svg.tree .no { cursor: pointer; text-decoration: underline; }
+[data-mid].click { cursor: pointer; }
+select.bad, input.bad { border-color: var(--red) !important; background: var(--red-soft) !important; }
+.tchip { background: var(--blue); color: #fff; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+.tcell.ptsel { height: auto; min-height: 48px; font-size: 14px; }
+.tcell.ptsel.fin { background: var(--yellow-soft); border-color: var(--yellow); }
+table.grp { table-layout: fixed; }
+table.grp th.hd { width: 24%; }
+table.grp th.wl { width: 44px; }
+table.grp td.lk { cursor: pointer; color: var(--blue-2); }
+table.dt { border-collapse: collapse; width: 100%; margin-top: 10px; }
+table.dt th, table.dt td { border-bottom: 1px solid var(--line); padding: 6px; font-size: 14px; text-align: center; }
+table.dt th { color: var(--muted); font-weight: 500; font-size: 13px; }
+table.dt td.w { font-weight: 700; }
+@media (max-width: 640px) { table.grp th, table.grp td { font-size: 12px; padding: 3px 2px; } table.grp th.wl { width: 26px; } }
+.bcell[data-mid] { cursor: pointer; }

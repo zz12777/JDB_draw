@@ -42,14 +42,14 @@ function viewMatch() {
     const def = x.point;
     return `${head}<div class="panel"><h2>請選擇要記錄的點</h2>
       ${POINTS.map((p, i) => { const r = m.result.pts[i]; const pt = (m.rec.pts || [])[i] || {};
-        return `<button class="tcell ${def === i ? 'busy' : ''}" style="margin-bottom:6px" data-point="${i}"><span class="t">${i + 1}</span>
-          <span class="who">第${'一二三四五'[i]}點 ${p.dbl ? '雙打' : '單打'}${pt.table ? `　第 ${pt.table} 桌` : ''}<br>${esc(lineName(lu.a, i))} 對 ${esc(lineName(lu.b, i))}</span>
-          <span class="mins"><span class="big">${r.a}:${r.b}</span><br>${r.winner ? '已完成' : ''}</span></button>`; }).join('')}</div>${absent}`;
+        return `<button class="tcell ptsel ${r.winner ? 'fin' : def === i ? 'busy' : ''}" style="margin-bottom:6px" data-point="${i}"><span class="t">${i + 1}</span>
+          <span class="who">第${'一二三四五'[i]}點${pt.table ? ` <span class="tchip">第 ${pt.table} 桌</span>` : ''}<br>${esc(lineName(lu.a, i))} vs ${esc(lineName(lu.b, i))}</span>
+          <span class="mins"><span class="big">${r.a}:${r.b}</span></span></button>`; }).join('')}</div>${absent}`;
   }
   const games = m.team ? (((m.rec.pts || [])[point] || {}).g || []) : (m.rec.g || []);
   const pa = m.team ? lineName(lu.a, point) : an, pb = m.team ? lineName(lu.b, point) : bn;
   return `${head}<div class="panel">
-    <div class="row"><h2 style="margin:0">${m.team ? `第${'一二三四五'[point]}點 ${POINTS[point].dbl ? '雙打' : '單打'}` : '各局比分'}</h2><span class="spacer"></span>${m.team ? '<button class="btn ghost sm" data-points>選擇其他點</button>' : ''}</div>
+    <div class="row"><h2 style="margin:0">${m.team ? `第${'一二三四五'[point]}點` : '各局比分'}</h2><span class="spacer"></span>${m.team ? '<button class="btn ghost sm" data-points>選擇其他點</button>' : ''}</div>
     <div class="gamerow small muted" style="margin-top:8px"><span></span><span style="text-align:center">${esc(pa)}</span><span style="text-align:center">${esc(pb)}</span><span></span></div>
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gamerow"><span class="small">第${'一二三四五'[gi]}局</span>
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${(games[gi] || [])[0] ?? ''}">
