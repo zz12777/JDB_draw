@@ -13,6 +13,7 @@ import { normalizeTeamName, unitFromTeam } from '../../js/schools.js';
 let tab = 'ctrl';
 let curEv = null;
 let modal = null; // { kind: 'score' | 'lineup', mid }
+let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
@@ -135,7 +136,7 @@ function lineupModal(m) {
   const e = getState().events.find(x => x.name === m.ev);
   const col = (k, S) => {
     const roster = (e.rosters && e.rosters[S.name]) || [];
-    const l = (m.rec.lineup && m.rec.lineup[k]) || [];
+    const l = draft[k] || (m.rec.lineup && m.rec.lineup[k]) || [];
     const inp = (i, j, v) => (roster.length
       ? `<select data-lu="${k}|${i}|${j}" style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
       : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" style="width:${j == null ? 100 : 48}%">`);
@@ -223,7 +224,7 @@ function refreshScore() {
   if (btn) btn.disabled = !m.winner;
 }
 
-function openModal(kind, mid) { modal = { kind, mid }; drawModal(); }
+function openModal(kind, mid) { modal = { kind, mid }; draft = {}; drawModal(); }
 function drawModal() {
   const host = $('#modal');
   if (!modal) { host.innerHTML = ''; host.hidden = true; return; }
@@ -264,10 +265,11 @@ function viewDraw(s) {
     const cur = g.rank[rk] || '';
     const err = check(g, k);
     const roll = (se.roll || {})[g.letter + k] || '';
-    return `<td class="${k === '亞' ? 'sep' : ''}"><select data-rank="${g.letter}|${rk}"><option value=""></option>${g.teams.map(t => `<option ${cur === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+    const cls = k === '冠' ? 'gc' : 'gr';
+    return `<td class="${cls} first"><select data-rank="${g.letter}|${rk}"><option value=""></option>${g.teams.map(t => `<option ${cur === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
         ${!cur && sug ? `<div class="small muted">名次試算：${esc(sug.team)}${sug.tie ? '（同勝場，請確認）' : ''}</div>` : ''}</td>
-      <td><select data-roll="${g.letter + k}"><option value=""></option>${['到', '代抽', '未到'].map(x => `<option ${roll === x ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
-      <td><input type="text" inputmode="numeric" style="width:56px" data-fpos="${g.letter + k}" value="${(se.finalPos || {})[g.letter + k] || ''}">
+      <td class="${cls}"><select data-roll="${g.letter + k}"><option value=""></option>${['到', '代抽', '未到'].map(x => `<option ${roll === x ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+      <td class="${cls}"><input type="text" inputmode="numeric" style="width:56px" data-fpos="${g.letter + k}" value="${(se.finalPos || {})[g.letter + k] || ''}">
         ${err ? `<div class="small" style="color:var(--red)">${err}</div>` : k === '亞' && hint(g) && !(se.finalPos || {})[g.letter + k] ? `<div class="small muted">應抽${hint(g)}</div>` : ''}</td>`;
   };
   const allDone = e.groups.every(g => g.table.all);
@@ -276,7 +278,8 @@ function viewDraw(s) {
       <span class="spacer"></span><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
     <p class="small muted">名次試算僅比勝場，同勝場請以選單指定。</p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
-    <div style="overflow-x:auto"><table class="list"><thead><tr><th>組別</th><th>預賽戰績</th><th>冠軍</th><th>點名</th><th>籤號</th><th class="sep">亞軍</th><th>點名</th><th>籤號</th></tr></thead><tbody>
+    <div style="overflow-x:auto"><table class="list drawt"><thead><tr><th rowspan="2">組別</th><th rowspan="2">預賽戰績</th><th colspan="3" class="gc first gtop">冠軍</th><th colspan="3" class="gr first gtop">亞軍</th></tr>
+      <tr><th class="gc first">隊伍</th><th class="gc">點名</th><th class="gc">籤號</th><th class="gr first">隊伍</th><th class="gr">點名</th><th class="gr">籤號</th></tr></thead><tbody>
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
@@ -332,8 +335,8 @@ function viewRefs(s) {
   const rest = staff.filter(n => state(n));
   return `${sub}<div class="desk"><div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? `<table class="list"><thead><tr><th>姓名</th><th>已擔任次數</th></tr></thead><tbody>${free.map(n => `<tr><td>${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>
-        ${rest.length ? `<h3>暫不可擔任（${rest.length}）</h3><table class="list"><tbody>${rest.map(n => `<tr><td>${esc(n)}</td><td class="muted">${state(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted small">請先於右側輸入工作人員名單。</p>'}</div>
-    <div class="panel"><h2>工作人員名單</h2><p class="small muted">一行一位。</p>
+        ${rest.length ? `<h3>暫不可擔任（${rest.length}）</h3><table class="list"><tbody>${rest.map(n => `<tr><td>${esc(n)}</td><td class="muted">${state(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted small">請先於右側輸入自己人裁判名單。</p>'}</div>
+    <div class="panel"><h2>自己人裁判名單</h2><p class="small muted">一行一位。</p>
       <textarea data-staff rows="16" style="width:100%">${esc(staff.join('\n'))}</textarea></div></div>`;
 }
 
@@ -348,8 +351,8 @@ function viewSetup(s) {
       <table class="list"><thead><tr><th>項目</th><th>目前資料</th><th></th></tr></thead><tbody>
       ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` + (fileOf(ev) ? `<div class="muted">${esc(fileOf(ev))}</div>` : '') : '<span class="muted">尚未匯入</span>'}</td>
         <td><label class="btn ghost sm">${icon('upload')}選擇檔案<input type="file" accept=".xlsx" hidden data-imp="${ev}"></label></td></tr>`; }).join('')}</tbody></table></div>
-    <div class="panel"><h2>匯入參賽名單</h2>
-      <div class="row"><label class="btn ghost sm">${icon('upload')}選擇參賽名單 Word 檔<input type="file" accept=".docx" hidden data-roster></label>
+    <div class="panel"><h2>匯入參賽名單（Word 檔）</h2>
+      <div class="row"><label class="btn ghost sm">${icon('upload')}選擇參賽名單<input type="file" accept=".docx" hidden data-roster></label>
       <span class="small muted">${esc(s.rosterFile || '')}</span></div>
       ${rosterGuess.length ? `<p class="small">籤表隊名與名單寫法不同，已依校名對應，請確認：${esc(rosterGuess.join('、'))}</p>` : ''}
       ${rosterMiss.length ? `<p class="small" style="color:var(--red)">名單中找不到以下隊伍，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
@@ -448,7 +451,7 @@ async function importRoster(file) {
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('button, [data-table], [data-signout]');
   if (t && 'signout' in t.dataset) ev.preventDefault();
-  if (!t) { if (ev.target.classList.contains('modal-bg')) { modal = null; drawModal(); } return; }
+  if (!t) { if (ev.target.classList.contains('modal-bg')) { modal = null; draft = {}; drawModal(); } return; }
   const d = t.dataset;
   if ('signin' in d) { auth.signIn(); return; }
   if ('signout' in d) { auth.signOut(); return; }
@@ -458,7 +461,7 @@ document.addEventListener('click', async ev => {
   else if (d.lineup) openModal('lineup', d.lineup);
   else if (d.score) openModal('score', d.score);
   else if (d.mid && d.table) openModal('score', d.mid);
-  else if ('close' in d) { modal = null; drawModal(); }
+  else if ('close' in d) { modal = null; draft = {}; drawModal(); }
   else if (d.clearAbsent) updateMatch(d.clearAbsent, r => { delete r.absent; });
   else if ('luBack' in d) {
     const w = t.closest('.lu-free'), sel = w.previousElementSibling, k = sel.dataset.luOff[0];
@@ -472,7 +475,7 @@ document.addEventListener('click', async ev => {
     drawModal();
     $(`[data-lu-warn="${d.luSave}"]`).textContent = w;
     toast('排點已儲存');
-  } else if (d.luClear) { updateMatch(modal.mid, r => { if (r.lineup) delete r.lineup[d.luClear]; }); drawModal(); }
+  } else if (d.luClear) { delete draft[d.luClear]; updateMatch(modal.mid, r => { if (r.lineup) delete r.lineup[d.luClear]; }); drawModal(); }
   else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) r.wo = d.wo; else delete r.wo; }); drawModal(); }
   else if ('confirm' in d) { updateMatch(modal.mid, r => { r.confirmed = true; r.end = Date.now(); r.tables = []; delete r.absent; }); modal = null; drawModal(); toast('成績已確認並鎖定'); }
   else if ('unconfirm' in d) { updateMatch(modal.mid, r => { r.confirmed = false; }); drawModal(); }
@@ -499,6 +502,7 @@ document.addEventListener('change', async ev => {
       w.innerHTML = `<input type="text" data-lu="${key}"><button class="btn ghost sm" data-lu-back title="返回選單">選單</button>`;
       delete t.dataset.lu; t.dataset.luOff = key; t.value = ''; t.hidden = true; t.after(w); w.firstChild.focus();
     }
+    draft[side] = readLineup(side);
     markLineup(side);
   }
   else if (d.tb) setTables(d.tb, t.value);
@@ -523,6 +527,7 @@ document.addEventListener('change', async ev => {
 // 比分：邊輸入邊存，不重畫輸入框
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (t.dataset.lu && t.tagName === 'INPUT') { draft[t.dataset.lu[0]] = readLineup(t.dataset.lu[0]); return; }
   if (!t.dataset.g || !modal) return;
   const [pi, gi, side] = t.dataset.g.split('|');
   const v = t.value.replace(/\D/g, '');
@@ -538,7 +543,7 @@ document.addEventListener('input', ev => {
   });
 });
 document.addEventListener('keydown', ev => {
-  if (ev.key === 'Escape' && modal) { modal = null; drawModal(); }
+  if (ev.key === 'Escape' && modal) { modal = null; draft = {}; drawModal(); }
   if (ev.key === 'Enter' && ev.target.dataset && ev.target.dataset.tb) ev.target.blur();
 });
 

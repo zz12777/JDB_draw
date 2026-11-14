@@ -15,6 +15,9 @@ export function bracketSvg(matches, team, opt = {}) {
   const maxLen = Math.max(4, ...matches.flatMap(m => [m.A, m.B].filter((_, i) => m.src[i].pos != null).map(s => leafText(s).length)));
   const NAME = Math.min(300, maxLen * 14 + 16);
   const X = m => NAME + (m.roundIdx + 1) * COL;
+  // 已落敗的籤位（名字變灰）
+  const out = new Set();
+  matches.forEach(m => { if (m.winner) { const l = m.winner === 'a' ? m.B : m.A; if (l && l.pos != null) out.add(l.pos); } });
   let row = 0;
   const leaves = [], pos = new Map();
   (function lay(m) {
@@ -24,24 +27,24 @@ export function bracketSvg(matches, team, opt = {}) {
     });
     pos.set(m.num, { y: (kids[0].y + kids[1].y) / 2, kids });
   })(root);
-  const out = [], thick = [];
+  const svg = [], thick = [];
   matches.forEach(m => {
     const p = pos.get(m.num), x = X(m);
     const show = m.status !== 'wait' && m.status !== 'ready';
     p.kids.forEach((k, i) => {
       const d = `M${k.x} ${k.y}H${x}V${p.y}`;
       const win = m.winner === (i ? 'b' : 'a');
-      (win ? thick : out).push(`<path d="${d}" class="${win ? 'w' : 'l'}"/>`);
-      if (show) out.push(`<text x="${x - 8}" y="${k.y - 5}" class="sc ${win ? 'b' : ''}" text-anchor="end">${m.score[i]}</text>`);
+      (win ? thick : svg).push(`<path d="${d}" class="${win ? 'w' : 'l'}"/>`);
+      if (show) svg.push(`<text x="${x - 8}" y="${k.y - 5}" class="sc ${win ? 'b' : ''}" text-anchor="end">${m.score[i]}</text>`);
     });
-    out.push(`<text x="${x + 5}" y="${p.y - 5}" class="no ${m.status === 'playing' ? 'live' : ''}" data-mid="${esc(m.id)}">${esc(m.no)}</text>`);
-    if (m.status === 'playing' && m.tables.length) out.push(`<text x="${x + 5}" y="${p.y + 13}" class="tb">第 ${m.tables.join('、')} 桌</text>`);
+    svg.push(`<text x="${x + 5}" y="${p.y - 5}" class="no ${m.status === 'playing' ? 'live' : ''}" data-mid="${esc(m.id)}">${esc(m.no)}</text>`);
+    if (m.status === 'playing' && m.tables.length) svg.push(`<text x="${x + 5}" y="${p.y + 13}" class="tb">第 ${m.tables.join('、')} 桌</text>`);
   });
   const rp = pos.get(root.num), rx = X(root);
   const champ = root.winner ? sideText(root.winner === 'a' ? root.A : root.B, team) : '';
-  (root.winner ? thick : out).push(`<path d="M${rx} ${rp.y}H${rx + COL}" class="${root.winner ? 'w' : 'l'}"/>`);
-  if (champ) out.push(`<text x="${rx + COL + 8}" y="${rp.y + 5}" class="nm b">${esc(champ)}</text>`);
-  leaves.forEach(l => out.push(`<text x="${NAME - 8}" y="${l.y + 5}" class="nm ${l.side.name ? '' : 'mu'}" text-anchor="end">${esc(leafText(l.side))}</text>`));
+  (root.winner ? thick : svg).push(`<path d="M${rx} ${rp.y}H${rx + COL}" class="${root.winner ? 'w' : 'l'}"/>`);
+  if (champ) svg.push(`<text x="${rx + COL + 8}" y="${rp.y + 5}" class="nm b">${esc(champ)}</text>`);
+  leaves.forEach(l => svg.push(`<text x="${NAME - 8}" y="${l.y + 5}" class="nm ${l.side.name && !out.has(l.side.pos) ? '' : 'mu'}" text-anchor="end">${esc(leafText(l.side))}</text>`));
   const width = rx + COL + (champ ? champ.length * 15 + 20 : 20), height = row * RH + 12;
-  return { width, height, svg: `<svg class="tree" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${out.join('')}${thick.join('')}</svg>` };
+  return { width, height, svg: `<svg class="tree" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${svg.join('')}${thick.join('')}</svg>` };
 }

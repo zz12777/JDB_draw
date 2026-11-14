@@ -243,7 +243,6 @@ table.dt td.w { font-weight: 700; }
 table.grp td.diag { background: linear-gradient(to top right, transparent calc(50% - 0.7px), #9aa7bd calc(50% - 0.7px), #9aa7bd calc(50% + 0.7px), transparent calc(50% + 0.7px)); }
 table.grp td.no { color: var(--blue-2); }
 table.grp td.sc { font-weight: 700; color: var(--ink); }
-table.list td.sep, table.list th.sep { border-left: 3px solid var(--blue); padding-left: 14px; }
 .round h3 .rt { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 4px; }
 .lu-free { display: inline-flex; gap: 4px; }
 .lu-free input { flex: 1; min-width: 0; }
@@ -269,3 +268,28 @@ table.list td.sep, table.list th.sep { border-left: 3px solid var(--blue); paddi
   .wboard .wcell { grid-column: calc(var(--c) + 1); grid-row: var(--r); min-height: 200px; }
   .wboard .wdesk { grid-column: 1; grid-row: 1 / 3; writing-mode: vertical-rl; display: grid; place-items: center; padding: 0; }
 }
+
+/* 大會台球桌卡片：校名、姓名、比數各一行 */
+.wcell .wn { display: block; margin-top: 3px; }
+.wcell .wn .sch { display: block; color: var(--muted); font-size: 12px; }
+.wcell .wn .nm { display: block; font-weight: 700; font-size: 14px; word-break: break-all; }
+.wcell .wsc { display: block; text-align: center; font-size: 20px; font-weight: 700; color: var(--blue); margin-top: 4px; letter-spacing: 1px; }
+
+/* 決賽抽籤表格：冠軍、亞軍各一塊底色 */
+table.drawt { border-collapse: separate; border-spacing: 0; }
+table.drawt th.gtop { text-align: center; font-weight: 700; color: var(--ink); font-size: 14px; }
+table.drawt .gc { background: #f1f6fd; }
+table.drawt .gr { background: #fff9e6; }
+table.drawt th.gc { background: #e3edfa; }
+table.drawt th.gr { background: #fdf0c4; }
+table.drawt .first { border-left: 12px solid #fff; }
+table.drawt th.gtop.gc { border-radius: 8px 8px 0 0; }
+table.drawt th.gtop.gr { border-radius: 8px 8px 0 0; }
+
+/* 賽程時間表 */
+table.tt { border-collapse: collapse; width: 100%; }
+table.tt th, table.tt td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; font-size: 14px; }
+table.tt th { background: var(--blue-soft); font-weight: 700; }
+table.tt td.tm { color: var(--muted); font-variant-numeric: tabular-nums; }
+table.tt td.dr { background: var(--yellow-soft); }
+svg.tree .nm.mu { fill: #9aa3b2; }

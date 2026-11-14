@@ -1,29 +1,52 @@
 // 公開頁：即時桌況、賽程與成績
-import { derive, sideText, EVENT_FULL, fmtTime, POINTS, gameWinner } from './model.js';
+import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner } from './model.js';
+import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
 import { bracketSvg } from './tree.js';
 
 let tab = 'sched', curEv = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['sched', '賽程與成績'], ['live', '即時桌況']];
+const TABS = [['sched', '賽程與成績'], ['time', '賽程時間表'], ['live', '即時桌況']];
 
 function render() {
   const s = getState();
   D = derive(s);
   $('#top').innerHTML = header(s, '即時賽程', []);
-  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
+  if (tab === 'time' && !s.sched) tab = 'sched';
+  $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = '<input id="q" class="search" type="text" placeholder="輸入學校、隊名或姓名，查詢相關場次"><div style="height:12px"></div><div id="content"></div>';
   if ($('#q').value !== q && !composing) $('#q').value = q;
   $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
-    : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : viewSched();
+    : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : tab === 'time' ? viewTime(s) : viewSched();
   drawDetail();
 }
 
 function viewLive(s) {
   return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${board(s, D)}`;
+}
+
+/** 賽程時間表：每天一張表，列是時段、欄是項目 */
+function viewTime(s) {
+  const slots = s.sched.slots;
+  const text = x => (x.draw ? '決賽抽籤' : `${x.f ? '決' : ''}(${toCn(x.from)})${x.to !== x.from ? `~(${toCn(x.to)})` : ''}`);
+  return [...new Set(slots.map(x => x.d))].sort().map(d => {
+    const list = slots.filter(x => x.d === d);
+    const evs = EVENT_ORDER.filter(ev => list.some(x => x.ev === ev)).sort((a, b) => /團/.test(a) - /團/.test(b));
+    // 以所有出現過的時間點切成列；跨多列的時段合併成一格
+    const cuts = [...new Set(list.flatMap(x => [x.s, x.e]))].sort();
+    const rows = cuts.slice(0, -1).map((t, i) => [t, cuts[i + 1]]).filter(([a, b]) => list.some(x => x.s < b && x.e > a));
+    const body = rows.map(([a, b], ri) => `<tr><td class="nowrap tm">${a}-${b}</td>${evs.map(ev => {
+      const x = list.find(y => y.ev === ev && y.s <= a && y.e > a);
+      if (!x) return '<td></td>';
+      if (x.s !== a) return '';
+      const span = rows.filter(([p, q]) => p >= x.s && q <= x.e).length;
+      return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''}">${text(x)}</td>`;
+    }).join('')}</tr>`).join('');
+    return `<div class="panel"><h2>${esc(list[0].day)}</h2><div style="overflow-x:auto"><table class="tt"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+  }).join('');
 }
 
 const shown = m => m.status !== 'wait' && m.status !== 'ready';
