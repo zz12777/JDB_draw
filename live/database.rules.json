@@ -1,19 +1,27 @@
 {
   "rules": {
+    "admins": {
+      ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')",
+      ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')",
+      "$key": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') == $key",
+        ".validate": "newData.hasChildren(['email', 'until']) && newData.child('until').isNumber() && newData.child('email').isString() && newData.child('email').val().length < 120"
+      }
+    },
     "t13": {
       "pub": {
         ".read": true,
         "meta": {
-          ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')"
+          ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)"
         },
         "events": {
-          ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')"
+          ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)"
         },
         "m": {
           ".indexOn": [
             "u"
           ],
-          ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')",
+          ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
           "$mid": {
             "u": {
               ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
@@ -59,8 +67,8 @@
         }
       },
       "desk": {
-        ".read": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')",
-        ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')"
+        ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)"
       }
     }
   }

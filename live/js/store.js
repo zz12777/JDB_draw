@@ -136,6 +136,9 @@ function localRemote() {
   };
 }
 
+/** 管理員名單的索引：信箱的點換成逗號（資料庫的索引不能有點） */
+export const adminKey = email => String(email || '').toLowerCase().replace(/\./g, ',');
+
 // ---------------- 雲端：即時連線（大會台、裁判頁） ----------------
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 async function sdkRemote() {
@@ -150,8 +153,13 @@ async function sdkRemote() {
   if (au) {
     const a = au.getAuth(app);
     let offs = [];
-    au.onAuthStateChanged(a, user => {
-      auth.ready = true; auth.user = user ? user.email : null; auth.isAdmin = !!user && ADMINS.includes(user.email); auth.error = '';
+    au.onAuthStateChanged(a, async user => {
+      auth.ready = true; auth.user = user ? user.email : null; auth.error = '';
+      // 管理員：兩個交大盃信箱，或由它們加入且尚未到期的帳號
+      auth.isAdmin = !!user && ADMINS.includes(user.email);
+      if (user && !auth.isAdmin) {
+        try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); } catch (e) { auth.isAdmin = false; }
+      }
       offs.forEach(f => f()); offs = [];
       if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail)];
       emitAuth();
