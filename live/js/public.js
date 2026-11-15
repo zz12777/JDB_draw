@@ -8,13 +8,14 @@ import { bracketSvg } from './tree.js';
 let tab = 'sched', curEv = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
 const TABS = [['sched', '賽程'], ['time', '時間表'], ['ann', '成績公告'], ['live', '即時桌況']];
+const TAB_ICON = { sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables' };
 
 function render() {
   const s = getState();
   D = derive(s);
   $('#top').innerHTML = header(s, '即時賽程', []);
   if (tab === 'time' && !s.sched) tab = 'sched';
-  $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
+  $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}<span>${t}</span></button>`).join('');
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = `<label class="sbox">${icon('search')}<input id="q" class="search" type="search" placeholder="學校、隊名或姓名"></label><div style="height:12px"></div><div id="content"></div>`;
@@ -34,7 +35,7 @@ function viewTime(s) {
   // 場次只在「～」後面換行，數字本身不拆開
   const nums = x => (x.draw ? '<span class="nw">決賽抽籤</span>'
     : `<span class="nw">${x.f ? '決' : ''}(${toCn(x.from)})${x.to !== x.from ? '～' : ''}</span>${x.to !== x.from ? `<wbr><span class="nw">(${toCn(x.to)})</span>` : ''}`);
-  const time = (a, b) => `<span class="t1">${a}</span><span class="t2">${b}</span>`;
+  const time = (a, b) => `<span class="tt3"><span>${a}</span><span class="bar"></span><span>${b}</span></span>`;
   return [...new Set(slots.map(x => x.d))].sort().map(d => {
     const list = slots.filter(x => x.d === d);
     const evs = EVENT_ORDER.filter(ev => list.some(x => x.ev === ev)).sort((a, b) => /團/.test(a) - /團/.test(b));
@@ -49,14 +50,7 @@ function viewTime(s) {
       return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''}">${nums(x)}</td>`;
     }).join('')}</tr>`).join('');
     const table = `<div class="ttw"><table class="tt"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
-    // 手機：每個開始時間一列，右側列出這個時間開始的項目與場次
-    const starts = [...new Set(list.map(x => x.s))].sort();
-    const cards = starts.map(t => {
-      const items = list.filter(x => x.s === t).sort((p, q) => evs.indexOf(p.ev) - evs.indexOf(q.ev));
-      const end = cuts.find(c => c > t);
-      return `<div class="tl"><div class="tm">${time(t, end)}</div><div class="ti">${items.map(x => `<div class="tr ${x.draw ? 'dr' : ''}"><span class="te">${x.ev}</span><span class="tn">${nums(x)}</span>${x.e !== end ? `<span class="tx">至 ${x.e}</span>` : ''}</div>`).join('')}</div></div>`;
-    }).join('');
-    return `<div class="panel"><h2>${esc(dayLabel(s, d, list[0].day))}</h2>${table}<div class="tls">${cards}</div></div>`;
+    return `<div class="panel"><h2>${esc(dayLabel(s, d, list[0].day))}</h2>${table}</div>`;
   }).join('');
 }
 
