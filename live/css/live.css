@@ -353,3 +353,19 @@ table.tt th:first-child { background: var(--blue-soft); }
 .fside { display: inline-flex; align-items: center; margin: 0 6px; }
 .fside:first-child { margin-left: 0; }
 .dwo { text-align: center; font-size: 17px; font-weight: 700; color: var(--red); padding: 14px 0 6px; }
+
+table.frt { width: auto; }
+table.frt td.fs { white-space: nowrap; padding-right: 24px; }
+table.frt td.fvs { color: var(--muted); font-size: 12px; text-align: center; padding: 0 10px; }
+.ftag { min-width: 26px; }
+.ftag.soft { min-width: 34px; }
+table.dgv { margin: 12px auto 0; border-collapse: collapse; }
+table.dgv td { padding: 6px 14px; text-align: center; font-size: 18px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+table.dgv tr:last-child td { border-bottom: 0; }
+table.dgv td.gl { font-size: 12px; color: var(--muted); }
+table.dgv td.w { font-weight: 700; color: var(--blue); }
+.duel .lost { color: #9aa3b2; }
+.wo-tag { color: var(--red); font-size: 12px; font-weight: 700; margin-left: 6px; border: 1px solid var(--red); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+
+.btn.danger-solid { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.danger-solid:hover { background: #8f1d17; }

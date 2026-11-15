@@ -228,8 +228,14 @@ function openModal(kind, mid) { modal = { kind, mid }; draft = {}; drawModal(); 
 function drawModal() {
   const host = $('#modal');
   if (!modal) { host.innerHTML = ''; host.hidden = true; return; }
-  const m = D.byId.get(modal.mid);
   host.hidden = false;
+  if (modal.kind === 'wipe') {
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>清除全部資料</h2>
+      <p>籤表、名單、排點、成績與裁判紀錄都會刪除，且無法復原。建議先下載備份檔。</p>
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
+    return;
+  }
+  const m = D.byId.get(modal.mid);
   host.innerHTML = `<div class="modal-bg">${modal.kind === 'score' ? scoreModal(m) : lineupModal(m)}</div>`;
   refreshScore();
 }
@@ -283,14 +289,14 @@ function viewDraw(s) {
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
-    <div class="panel"><h2>決賽第一輪賽程</h2><table class="list"><thead><tr><th>場次</th><th>賽程</th></tr></thead><tbody>
+    <div class="panel"><h2>決賽第一輪賽程</h2><table class="list frt"><thead><tr><th>場次</th><th colspan="3">賽程</th></tr></thead><tbody>
       ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => {
         const side = x => {
           if (!x || x.pos == null) return `<span class="muted">${esc(x && x.pending ? x.pending : '')}</span>`;
           const seed = x.seed || e.final.mark.get(x.pos) || '';
           return `<span class="ftag">${x.pos}</span><span class="ftag soft">${esc(seed)}</span>${x.name ? `<b>${esc(x.name)}</b>` : '<span class="muted">待抽籤</span>'}`;
         };
-        return `<tr><td class="nowrap">${esc(m.no)}</td><td><span class="fside">${side(m.A)}</span><span class="vs">對</span><span class="fside">${side(m.B)}</span></td></tr>`;
+        return `<tr><td class="nowrap">${esc(m.no)}</td><td class="fs">${side(m.A)}</td><td class="fvs">vs</td><td class="fs">${side(m.B)}</td></tr>`;
       }).join('')}</tbody></table>
 </div>`;
 }
@@ -527,7 +533,8 @@ document.addEventListener('click', async ev => {
     a.href = URL.createObjectURL(new Blob([JSON.stringify(getState())], { type: 'application/json' }));
     a.download = `交大盃當日備份_${fmtTime(Date.now()).replace(':', '')}.json`; a.click();
   } else if ('demo' in d) { if (!getState().events.length || t.dataset.sure) { replaceState(demoState()); tab = 'ctrl'; render(); toast('已載入示範資料'); } else { t.dataset.sure = 1; t.textContent = '再按一次以覆蓋現有資料'; } }
-  else if ('wipe' in d) { if (t.dataset.sure) { replaceState(emptyState()); render(); } else { t.dataset.sure = 1; t.textContent = '再按一次確定清除'; } }
+  else if ('wipe' in d) { modal = { kind: 'wipe' }; drawModal(); }
+  else if ('wipeOk' in d) { modal = null; drawModal(); replaceState(emptyState()); render(); toast('已清除全部資料'); }
 });
 
 document.addEventListener('change', async ev => {
