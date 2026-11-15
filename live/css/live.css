@@ -371,3 +371,7 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .btn.danger-solid:hover { background: #8f1d17; }
 
 .wcell .bpt { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+.lg { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); background: #fff; }
+.lg.busy { background: var(--blue-soft); border-color: var(--blue-2); }
+.lg.rep { background: var(--yellow-soft); border-color: var(--yellow); }
+.lg.alert { background: var(--red-soft); border-color: var(--red); }

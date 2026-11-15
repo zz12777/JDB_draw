@@ -74,7 +74,7 @@ function viewCtrl(s) {
 function viewTables(s) {
   const alerts = new Set();
   D.byId.forEach(m => { if (m.status === 'playing') absences(m).forEach(ab => String(ab.table || m.tables.join(',')).split(/[^0-9]+/).filter(Boolean).forEach(t => alerts.add(Number(t)))); });
-  return `<div class="panel">${deskBoard(s, D, { alerts })}</div>`;
+  return `<div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg busy"></span>進行中</span><span><span class="lg rep"></span>已打完，待大會確認</span><span><span class="lg alert"></span>有未到回報</span><span><span class="lg"></span>空桌</span></div>${deskBoard(s, D, { alerts })}</div>`;
 }
 /** 這一輪在時間表上的時段 */
 function roundTime(s, r) {
@@ -368,7 +368,6 @@ function viewAnn(s) {
   const pub = s.podium || {};
   return `<div class="panel"><div class="row"><h2 style="margin:0">成績公告</h2><span class="spacer"></span>
       <label class="small">標題 <input type="text" data-ann-title value="${esc(s.annTitle || '')}" style="width:300px"></label></div>
-    <p class="small muted">名次依已確認的決賽成績產生，按「公布」後才會出現在公開頁。公布後仍可修改文字。</p>
     <table class="list"><thead><tr><th>項目</th>${ANN_KEYS.map(k => `<th>${k[1]}</th>`).join('')}<th></th></tr></thead><tbody>
     ${ANN_ORDER.map(ev => {
       const e = D.events.find(x => x.name === ev);
@@ -403,8 +402,7 @@ function viewSetup(s) {
       ${rosterMiss.length ? `<p class="small" style="color:var(--red)">名單中找不到以下隊伍，排點時請直接輸入姓名：${esc(rosterMiss.join('、'))}</p>` : ''}</div>
     <div class="panel"><h2>匯入賽程時間表（Excel 檔）</h2>
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇賽程時間表<input type="file" accept=".xlsx" hidden data-sched></label>
-      <span class="small muted">${s.sched ? `${esc(s.sched.file || '')}，${s.sched.slots.length} 個時段` : ''}</span>
-      ${s.sched ? '<button class="btn ghost sm danger" data-sched-clear>移除</button>' : ''}</div></div>
+      <span class="small muted">${s.sched ? esc(s.sched.file || '') : ''}</span></div></div>
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
