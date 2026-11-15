@@ -94,7 +94,7 @@ export function board(state, d, opt = {}) {
   const tag = opt.tag || 'div';
   const cell = t => {
     const x = d.tables.get(t);
-    if (!x) return `<${tag} class="bcell" data-table="${t}"><div class="bt"><span class="bn">${t}</span></div><div class="bempty">空桌</div></${tag}>`;
+    if (!x) return `<${tag} class="bcell ${opt.match ? 'dim' : ''}" data-table="${t}"><div class="bt"><span class="bn">${t}</span></div><div class="bempty">空桌</div></${tag}>`;
     const m = x.m;
     let line = '';
     if (m.team) {
@@ -106,7 +106,7 @@ export function board(state, d, opt = {}) {
       line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${g[0]}:${g[1]}`).join('　');
     }
     const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '待確認' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
-    return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
+    return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${opt.match && !opt.match(m, x.point) ? 'dim' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
       <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>
       <div class="bs"><span class="nm">${esc(sideText(m.B, m.team))}</span><b>${m.score[1]}</b></div>

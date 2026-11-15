@@ -50,7 +50,9 @@ function render() {
   $('#main').innerHTML = `
     <section class="hero"><img src="../live/img/logo.png" alt="" data-brand>
       <div><h2>交大盃籌辦資源</h2>
-        ${st.until ? `<p>你的管理員權限到 ${fmtDate(st.until)} 為止。</p>` : ''}</div></section>
+        ${st.until ? `<p>你的管理員權限到 ${fmtDate(st.until)} 為止。</p>` : ''}
+        <div class="row" style="margin-top:12px"><label class="btn ghost">${icon('upload')}選擇圖片<input type="file" accept="image/*" hidden id="vf"></label>
+          ${cr.saved ? '<button class="btn ghost sm" data-vreset>恢復原本的圖</button>' : ''}</div></div></section>
 
     <div class="sys">
       <div class="panel"><span class="when">報名截止後到賽前</span><h2>${icon('bracket')}抽籤系統</h2>
@@ -99,9 +101,7 @@ function render() {
       <a href="https://github.com/zz12777/JDB_draw" target="_blank" rel="noopener"><b>程式碼</b><span>GitHub 上的抽籤系統與當日系統</span></a>
     </div></div>
 
-    <div class="panel" id="brand"></div>
     ${st.base ? adminPanel() : ''}`;
-  drawBrand();
 }
 
 function adminPanel() {
@@ -124,28 +124,25 @@ function adminPanel() {
 // 上傳圖片後，在圓形範圍內拖曳移動、調整大小，存成各頁的標誌與分頁圖示
 const D = 300; // 編輯畫布大小
 const cr = { img: null, zoom: 1, x: 0, y: 0, bg: '#ffffff', saved: null };
-db.onValue(db.ref(database, 'branding'), s => { cr.saved = s.val(); if (!cr.img) drawBrand(); }, () => {});
+db.onValue(db.ref(database, 'branding'), s => { cr.saved = s.val(); if (!cr.img) render(); }, () => {});
 
+/** 調整視覺的彈出視窗 */
 function drawBrand() {
-  const host = document.getElementById('brand');
-  if (!host) return;
-  const saved = cr.saved;
-  host.innerHTML = `<h2>視覺</h2>
-    <div class="vis">
-      <div class="vis-edit">
-        <canvas id="cv" width="${D * 2}" height="${D * 2}" style="width:${D}px;height:${D}px" class="${cr.img ? 'on' : ''}"></canvas>
-        ${cr.img ? '' : '<div class="vis-empty">選擇圖片後在這裡調整</div>'}
-      </div>
+  let host = document.getElementById('vmodal');
+  if (!host) { host = document.createElement('div'); host.id = 'vmodal'; document.body.appendChild(host); }
+  if (!cr.img) { host.innerHTML = ''; return; }
+  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(720px,100%)">
+    <div class="row"><h2>調整視覺</h2><span class="spacer"></span><button class="btn ghost sm" data-vcancel aria-label="關閉" title="關閉">${icon('close')}</button></div>
+    <div class="vis" style="margin-top:10px">
+      <div class="vis-edit"><canvas id="cv" width="${D * 2}" height="${D * 2}" style="width:${D}px;height:${D}px" class="on"></canvas></div>
       <div class="vis-side">
-        <label class="btn ghost">${icon('upload')}選擇圖片<input type="file" accept="image/*" hidden id="vf"></label>
-        ${cr.img ? `<label class="small">大小 <input type="range" id="vz" min="1" max="4" step="0.01" value="${cr.zoom}"></label>
-          <label class="small">背景 <input type="color" id="vb" value="${cr.bg}"></label>
-          <p class="small muted">在圓圈上拖曳可移動圖片。</p>
-          <div class="vis-prev"><span>預覽</span><canvas id="p1" width="120" height="120"></canvas><span class="onblue"><canvas id="p2" width="88" height="88"></canvas></span><canvas id="p3" width="32" height="32"></canvas></div>
-          <div class="row"><button class="btn" data-vsave>儲存並套用</button><button class="btn ghost" data-vcancel>取消</button></div>`
-          : (saved ? `<p class="small muted">${esc(saved.by || '')} 於 ${fmtDate(saved.at || Date.now())} 更新</p><button class="btn ghost sm" data-vreset>恢復原本的圖</button>` : '')}
-      </div></div>`;
-  if (cr.img) paint();
+        <label class="small">大小 <input type="range" id="vz" min="1" max="4" step="0.01" value="${cr.zoom}"></label>
+        <label class="small">背景 <input type="color" id="vb" value="${cr.bg}"></label>
+        <p class="small muted">在圓圈上拖曳可移動圖片。</p>
+        <div class="vis-prev"><canvas id="p1" width="120" height="120"></canvas><span class="onblue"><canvas id="p2" width="88" height="88"></canvas></span><canvas id="p3" width="32" height="32"></canvas></div>
+        <div class="row"><button class="btn" data-vsave>儲存並套用</button><button class="btn ghost" data-vcancel>取消</button></div>
+      </div></div></div></div>`;
+  paint();
 }
 function cover() { return D / Math.min(cr.img.width, cr.img.height); }
 function clamp() {
@@ -190,9 +187,11 @@ document.addEventListener('input', ev => {
 document.addEventListener('change', ev => {
   if (ev.target.id !== 'vf' || !ev.target.files[0]) return;
   const img = new Image();
+  const file = ev.target.files[0];
+  ev.target.value = ''; // 同一個檔案可以再選一次
   img.onload = () => { cr.img = img; cr.zoom = 1; cr.x = 0; cr.y = 0; drawBrand(); };
   img.onerror = () => toast('無法讀取這張圖片');
-  img.src = URL.createObjectURL(ev.target.files[0]);
+  img.src = URL.createObjectURL(file);
 });
 
 document.addEventListener('click', async ev => {
@@ -201,8 +200,8 @@ document.addEventListener('click', async ev => {
   const d = t.dataset;
   if ('vcancel' in d) { cr.img = null; drawBrand(); return; }
   if ('vsave' in d) {
-    const b = { logo: exportImg(360, 'image/webp'), icon: exportImg(64, 'image/png'), by: st.user, at: Date.now() };
-    try { await db.set(db.ref(database, 'branding'), b); cr.img = null; refreshBrand(b); drawBrand(); toast('新版視覺已套用'); }
+    const b = { logo: exportImg(360, 'image/webp'), icon: exportImg(64, 'image/png') };
+    try { await db.set(db.ref(database, 'branding'), b); cr.img = null; refreshBrand(b); drawBrand(); render(); toast('新版視覺已套用'); }
     catch (err) { toast(/permission/i.test(err.message) ? '儲存失敗：資料庫規則尚未更新' : `儲存失敗：${err.message}`); }
     return;
   }

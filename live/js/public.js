@@ -1,5 +1,6 @@
 // 公開頁：即時桌況、賽程與成績
 import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
+import { slotOf } from './timetable.js';
 import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
@@ -20,13 +21,17 @@ function render() {
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = `<label class="sbox">${icon('search')}<input id="q" class="search" type="search" placeholder="學校、隊名或姓名"></label><div style="height:12px"></div><div id="content"></div>`;
   if ($('#q').value !== q && !composing) $('#q').value = q;
+  // 搜尋只在賽程、成績公告、即時桌況出現，各自只找當頁的內容
+  $('.sbox').style.display = tab === 'time' ? 'none' : '';
+  $('#q').placeholder = tab === 'ann' ? '搜尋成績公告' : tab === 'live' ? '搜尋目前球桌' : '學校、隊名或姓名';
+  const key = tab === 'time' ? '' : q.trim();
   $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
-    : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s) : viewSched();
+    : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s, key) : key ? viewSearch(s, key) : viewSched();
   drawDetail();
 }
 
-function viewLive(s) {
-  return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${board(s, D)}`;
+function viewLive(s, key) {
+  return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${board(s, D, key ? { match: m => hit(m, key) } : {})}`;
 }
 
 /** 賽程時間表：每天一張表，列是時段、欄是項目 */
@@ -55,12 +60,14 @@ function viewTime(s) {
 }
 
 /** 成績公告：大會公布前只列出空格 */
-function viewAnn(s) {
+function viewAnn(s, key) {
   const pub = s.podium || {};
-  const line = (label, v) => `<div class="al"><span class="ak">${label}：</span><span>${esc(v || '')}</span></div>`;
+  const mark = v => (key && v && v.includes(key) ? esc(v).split(esc(key)).join(`<mark>${esc(key)}</mark>`) : esc(v || ''));
+  const line = (label, v) => `<div class="al"><span class="ak">${label}：</span><span>${mark(v)}</span></div>`;
+  const rows = ev => { const p = pub[ev] || {}; return [['冠軍', p.c], ['亞軍', p.r], ['季軍', p.s1], ['季軍', p.s2]]; };
+  const list = ANN_ORDER.map(ev => [ev, key ? rows(ev).filter(([, v]) => v && v.includes(key)) : rows(ev)]).filter(([, r]) => r.length);
   return `<div class="panel ann"><h2>${esc(s.annTitle || '成績公告')}</h2>
-    ${ANN_ORDER.map(ev => { const p = pub[ev] || {};
-      return `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${line('冠軍', p.c)}${line('亞軍', p.r)}${line('季軍', p.s1)}${line('季軍', p.s2)}</div>`; }).join('')}</div>`;
+    ${list.length ? `<div class="agrid">${list.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(([l, v]) => line(l, v)).join('')}</div>`).join('')}</div>` : '<p class="muted small" style="text-align:center">查無相關成績。</p>'}</div>`;
 }
 
 const shown = m => m.status !== 'wait' && m.status !== 'ready';
@@ -96,15 +103,18 @@ function viewSched() {
     ${groups ? `<div class="panel"><h2>預賽</h2>${groups}</div>` : ''}${tree}`;
 }
 
-function viewSearch() {
-  const key = q.trim();
-  const hit = m => [m.A, m.B].some(x => x && ((x.name || '').includes(key) || (x.school || '').includes(key))) ||
-    (m.team && m.rec.lineup && m.rec.start && m.lineupOk.a && m.lineupOk.b && JSON.stringify(m.rec.lineup).includes(key));
-  const list = [...D.byId.values()].filter(hit);
+/** 這一場是否和關鍵字有關：學校、隊名、姓名，團體賽開賽後也找排點 */
+function hit(m, key) {
+  return [m.A, m.B].some(x => x && ((x.name || '').includes(key) || (x.school || '').includes(key))) ||
+    (m.team && m.rec.lineup && (m.rec.start || shown(m)) && JSON.stringify(m.rec.lineup).includes(key));
+}
+function viewSearch(s, key) {
+  const list = [...D.byId.values()].filter(m => hit(m, key));
+  const when = m => { const x = slotOf(s.sched, m); return x ? `${esc(dayLabel(s, x.d, x.day))} ${x.s}-${x.e}` : ''; };
   return `<div class="panel"><h2>「${esc(key)}」的場次（${list.length}）</h2>
     ${list.length ? `<table class="list"><tbody>${list.map(m => `<tr class="click" data-mid="${esc(m.id)}"><td class="nowrap"><b>${m.ev}</b>${esc(m.no)}</td><td>${names(m)}</td>
       <td class="nowrap"><b>${shown(m) ? `${m.score[0]}:${m.score[1]}` : ''}</b></td>
-      <td class="small nowrap">${m.status === 'playing' ? `第 ${m.tables.join('、')} 桌` : m.status === 'done' ? '' : STATUS_TEXT[m.status]}${m.rec.start ? `<br>${fmtTime(m.rec.start)}` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">查無相關場次。</p>'}</div>`;
+      <td class="small nowrap" style="text-align:right">${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : when(m)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">查無相關場次。</p>'}</div>`;
 }
 
 /** 單場明細：個人賽各局比分；團體賽各點選手與比分（開賽後才顯示排點） */

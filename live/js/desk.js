@@ -61,7 +61,7 @@ function viewCtrl(s) {
     <div class="side">
       ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(({ m, ab }) => {
         const tb = ab.table || m.tables.join('、');
-        return `<div class="alertbox"><div class="small">第 ${tb} 桌　${fmtTime(ab.ts)} 回報　裁判 ${esc(ab.by || '')}</div>
+        return `<div class="alertbox"><div class="small ameta">第 ${tb} 桌　${fmtTime(ab.ts)} 回報　裁判 ${esc(ab.by || '')}</div>
           <div>${esc(recallText(m, ab))}</div>
           <div class="row" style="margin-top:4px">${ab.called ? `<span class="small" style="color:var(--green)">${fmtTime(ab.called)} 已廣播</span>` : ''}<span class="spacer"></span>
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
@@ -364,10 +364,32 @@ function podiumText(e) {
   const t = x => (x && x.name ? sideText(x, e.team) : '');
   return { c: t(p.c), r: t(p.r), s1: t(p.s[0]), s2: t(p.s[1]) };
 }
+/**
+ * 已公布項目轉成猛將資料庫試算表的列（Tab 分隔，可直接貼上）。
+ * 欄位：賽事、年份、組別、項目、名次、學校、隊名、姓名
+ */
+function strongRows(s) {
+  const year = (() => { const d = new Date(`${(s.dates || [])[0] || ''}T00:00:00`); return Number.isNaN(d.getTime()) ? new Date().getFullYear() - 1911 : d.getFullYear() - 1911 - (d.getMonth() < 6 ? 1 : 0); })();
+  const name = `交大盃${s.edition || ''}`;
+  const rows = [];
+  ANN_ORDER.forEach(ev => {
+    if (!(s.podium || {})[ev]) return;
+    const e = D.events.find(x => x.name === ev), p = e && podium(e);
+    if (!p) return;
+    const se = s.events.find(x => x.name === ev) || {};
+    [[1, p.c], [2, p.r], [3, p.s[0]], [3, p.s[1]]].forEach(([r, x]) => {
+      if (!x || !x.name) return;
+      if (e.team) rows.push([name, year, ev === '社團' ? '社會' : '大專', ev, r, ev === '社團' ? '' : unitFromTeam(x.name), x.name, ((se.rosters || {})[x.name] || []).join('、')]);
+      else rows.push([name, year, '大專', ev, r, x.school || '', '', String(x.name).split(/[\/／]/).join('、')]);
+    });
+  });
+  return rows;
+}
 function viewAnn(s) {
   const pub = s.podium || {};
   return `<div class="panel"><div class="row"><h2 style="margin:0">成績公告</h2><span class="spacer"></span>
-      <label class="small">標題 <input type="text" data-ann-title value="${esc(s.annTitle || '')}" style="width:300px"></label></div>
+      <label class="small">標題 <input type="text" data-ann-title value="${esc(s.annTitle || '')}" style="width:300px"></label>
+      <button class="btn ghost sm" data-strong ${Object.keys(pub).length ? '' : 'disabled'}>${icon('copy')}複製猛將資料庫格式</button></div>
     <table class="list"><thead><tr><th>項目</th>${ANN_KEYS.map(k => `<th>${k[1]}</th>`).join('')}<th></th></tr></thead><tbody>
     ${ANN_ORDER.map(ev => {
       const e = D.events.find(x => x.name === ev);
@@ -498,6 +520,11 @@ document.addEventListener('click', async ev => {
   const d = t.dataset;
   if ('signin' in d) { auth.signIn(); return; }
   if ('signout' in d) { auth.signOut(); return; }
+  if ('strong' in d) {
+    const rows = strongRows(getState());
+    try { await navigator.clipboard.writeText(rows.map(r => r.join('\t')).join('\n')); toast(`已複製 ${rows.length} 列，請貼到猛將資料庫試算表最下方`); } catch (e) { toast('無法複製'); }
+    return;
+  }
   if (d.pub) { const e = D.events.find(x => x.name === d.pub); const v = podiumText(e); update(s => { s.podium = { ...(s.podium || {}), [d.pub]: v }; }); toast(`${ANN_NAME[d.pub]} 已公布`); return; }
   if (d.unpub) { update(s => { const p = { ...(s.podium || {}) }; delete p[d.unpub]; s.podium = p; }); return; }
   if (d.tab) { tab = d.tab; render(); }

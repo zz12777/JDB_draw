@@ -375,3 +375,9 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .lg.busy { background: var(--blue-soft); border-color: var(--blue-2); }
 .lg.rep { background: var(--yellow-soft); border-color: var(--yellow); }
 .lg.alert { background: var(--red-soft); border-color: var(--red); }
+
+.bcell.dim { opacity: .28; }
+.ann mark { background: var(--yellow-soft); color: inherit; padding: 0 2px; border-radius: 3px; }
+.ann .agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 28px; }
+.ann .agrid .ab { max-width: none; margin: 0 0 14px; }
+.alertbox .ameta { color: #8a6a66; }
