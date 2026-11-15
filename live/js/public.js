@@ -78,6 +78,7 @@ function viewSched() {
         if (i > j) return `<td class="lk no" data-mid="${esc(m.id)}">${esc(m.no)}</td>`;
         if (!shown(m)) return '<td></td>';
         const mine = m.A.name === a;
+        if (m.rec.wo) return `<td class="lk sc" data-mid="${esc(m.id)}">${(m.rec.wo === 'a') === mine ? '勝' : '棄權'}</td>`;
         return `<td class="lk sc" data-mid="${esc(m.id)}">${m.score[mine ? 0 : 1]}:${m.score[mine ? 1 : 0]}</td>`;
       };
       const st = t => g.table.rows.find(r => r.team === t);
@@ -118,16 +119,18 @@ function drawDetail() {
     <div class="dn ${r.winner === 'b' ? 'w' : ''}">${bn}</div><div class="dg">${gs}</div></div>`;
   const stack = v => (Array.isArray(v) ? v.filter(Boolean).map(esc).join('<br>') : esc(v || ''));
   let body;
-  if (m.team) {
-    const lu = m.rec.start ? (m.rec.lineup || {}) : {};
+  if (m.rec.wo) {
+    body = `<div class="dwo">${esc(sideText(m.rec.wo === 'a' ? m.B : m.A, m.team))} 棄權</div>`;
+  } else if (m.team) {
+    // 排點在開賽後（已派桌或已有比分）才公開
+    const lu = m.rec.start || shown(m) ? (m.rec.lineup || {}) : {};
     body = `<div class="dlist">${POINTS.map((p, i) => block(`第${'一二三四五'[i]}點`, stack((lu.a || [])[i]), stack((lu.b || [])[i]), m.result.pts[i], games(((m.rec.pts || [])[i] || {}).g))).join('')}</div>`;
   } else {
     body = games(m.rec.g) ? `<div class="dg" style="margin-top:10px;font-size:15px">${games(m.rec.g)}</div>` : '';
   }
-  if (m.rec.wo) body = `<p class="small muted">${esc(sideText(m.rec.wo === 'a' ? m.B : m.A, m.team))} 棄權</p>`;
   host.hidden = false;
   host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(640px,100%)"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}</h2>${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
-    <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="s">${shown(m) ? `${m.score[0]} : ${m.score[1]}` : 'vs'}</div><div class="n">${esc(sideText(m.B, m.team))}</div></div>${shown(m) ? body : ''}</div></div>`;
+    <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="s">${m.rec.wo ? 'vs' : shown(m) ? `${m.score[0]} : ${m.score[1]}` : 'vs'}</div><div class="n">${esc(sideText(m.B, m.team))}</div></div>${shown(m) ? body : ''}</div></div>`;
 }
 
 document.addEventListener('click', ev => {

@@ -73,7 +73,7 @@ export function gamesResult(games, wo) {
  * 預賽若拆桌先打了後面的點，前三點仍須全部打完才算完賽；決賽取得三點即完賽。
  */
 export function teamResult(rec, stage) {
-  if (rec && rec.wo) return { a: rec.wo === 'a' ? 3 : 0, b: rec.wo === 'b' ? 3 : 0, winner: rec.wo, done: true, wo: true, pts: [] };
+  if (rec && rec.wo) return { a: rec.wo === 'a' ? 3 : 0, b: rec.wo === 'b' ? 3 : 0, winner: rec.wo, done: true, wo: true, pts: POINTS.map(() => ({ a: 0, b: 0, winner: null })) };
   const pts = POINTS.map((_, i) => gamesResult(rec && rec.pts && rec.pts[i] ? rec.pts[i].g : [], rec && rec.pts && rec.pts[i] ? rec.pts[i].wo : null));
   let a = 0, b = 0;
   pts.forEach(p => { if (p.winner === 'a') a++; else if (p.winner === 'b') b++; });

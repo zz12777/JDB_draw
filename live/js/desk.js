@@ -284,7 +284,14 @@ function viewDraw(s) {
     </tbody></table></div></div>
     <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
     <div class="panel"><h2>決賽第一輪賽程</h2><table class="list"><thead><tr><th>場次</th><th>賽程</th></tr></thead><tbody>
-      ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => `<tr><td>${esc(m.label)}</td><td>${names(m)}</td></tr>`).join('')}</tbody></table>
+      ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => {
+        const side = x => {
+          if (!x || x.pos == null) return `<span class="muted">${esc(x && x.pending ? x.pending : '')}</span>`;
+          const seed = x.seed || e.final.mark.get(x.pos) || '';
+          return `<span class="ftag">${x.pos}</span><span class="ftag soft">${esc(seed)}</span>${x.name ? `<b>${esc(x.name)}</b>` : '<span class="muted">待抽籤</span>'}`;
+        };
+        return `<tr><td class="nowrap">${esc(m.no)}</td><td><span class="fside">${side(m.A)}</span><span class="vs">對</span><span class="fside">${side(m.B)}</span></td></tr>`;
+      }).join('')}</tbody></table>
 </div>`;
 }
 
