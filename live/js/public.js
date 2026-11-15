@@ -1,5 +1,5 @@
 // 公開頁：即時桌況、賽程與成績
-import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner } from './model.js';
+import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
@@ -7,7 +7,7 @@ import { bracketSvg } from './tree.js';
 
 let tab = 'sched', curEv = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['sched', '賽程與成績'], ['time', '賽程時間表'], ['live', '即時桌況']];
+const TABS = [['sched', '賽程'], ['time', '時間表'], ['ann', '成績公告'], ['live', '即時桌況']];
 
 function render() {
   const s = getState();
@@ -20,7 +20,7 @@ function render() {
   if (!$('#q')) $('#main').innerHTML = '<input id="q" class="search" type="text" placeholder="輸入學校、隊名或姓名，查詢相關場次"><div style="height:12px"></div><div id="content"></div>';
   if ($('#q').value !== q && !composing) $('#q').value = q;
   $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
-    : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : tab === 'time' ? viewTime(s) : viewSched();
+    : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s) : viewSched();
   drawDetail();
 }
 
@@ -45,8 +45,17 @@ function viewTime(s) {
       const span = rows.filter(([p, q]) => p >= x.s && q <= x.e).length;
       return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''}">${text(x)}</td>`;
     }).join('')}</tr>`).join('');
-    return `<div class="panel"><h2>${esc(list[0].day)}</h2><div style="overflow-x:auto"><table class="tt"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+    return `<div class="panel"><h2>${esc(dayLabel(s, d, list[0].day))}</h2><div style="overflow-x:auto"><table class="tt"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
   }).join('');
+}
+
+/** 成績公告：大會公布前只列出空格 */
+function viewAnn(s) {
+  const pub = s.podium || {};
+  const line = (label, v) => `<div class="al"><span class="ak">${label}：</span><span>${esc(v || '')}</span></div>`;
+  return `<div class="panel ann"><h2>${esc(s.annTitle || '成績公告')}</h2>
+    ${ANN_ORDER.map(ev => { const p = pub[ev] || {};
+      return `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${line('冠軍', p.c)}${line('亞軍', p.r)}${line('季軍', p.s1)}${line('季軍', p.s2)}</div>`; }).join('')}</div>`;
 }
 
 const shown = m => m.status !== 'wait' && m.status !== 'ready';
@@ -69,8 +78,8 @@ function viewSched() {
       const st = t => g.table.rows.find(r => r.team === t);
       const tag = t => (g.rank.c === t ? ' <span class="chip ready">冠</span>' : g.rank.r === t ? ' <span class="chip reported">亞</span>' : '');
       const pad = n => '<td></td>'.repeat(n);
-      return `<table class="grp"><thead><tr><th class="hd">${g.letter} 組</th>${Array.from({ length: N }, (_, i) => `<th>${g.teams[i] ? `${i + 1} ${esc(g.teams[i])}` : ''}</th>`).join('')}<th class="wl">勝</th><th class="wl">敗</th></tr></thead><tbody>
-        ${g.teams.map((t, i) => `<tr><td class="nm">${i + 1}　${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
+      return `<table class="grp"><thead><tr><th class="hd">${g.letter} 組</th>${Array.from({ length: N }, (_, i) => `<th>${g.teams[i] ? `${i + 1}<span class="tn"> ${esc(g.teams[i])}</span>` : ''}</th>`).join('')}<th class="wl">勝</th><th class="wl">敗</th></tr></thead><tbody>
+        ${g.teams.map((t, i) => `<tr><td class="nm"><span class="ix">${i + 1}</span>${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
     }).join('');
   }
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
@@ -112,7 +121,7 @@ function drawDetail() {
   }
   if (m.rec.wo) body = `<p class="small muted">${esc(sideText(m.rec.wo === 'a' ? m.B : m.A, m.team))} 棄權</p>`;
   host.hidden = false;
-  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(640px,100%)"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}</h2>${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
+  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(640px,100%)"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}</h2>${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="s">${shown(m) ? `${m.score[0]} : ${m.score[1]}` : 'vs'}</div><div class="n">${esc(sideText(m.B, m.team))}</div></div>${shown(m) ? body : ''}</div></div>`;
 }
 

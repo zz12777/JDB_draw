@@ -1,5 +1,5 @@
 // 大會台
-import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState } from './model.js';
+import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL } from './store.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
@@ -16,7 +16,7 @@ let modal = null; // { kind: 'score' | 'lineup', mid }
 let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
 let refTab = 'avail';
 let rosterMiss = [], rosterGuess = [];
 
@@ -28,7 +28,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : viewSetup(s);
+  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s);
 }
 
 function viewLogin() {
@@ -78,7 +78,7 @@ function roundTime(s, r) {
   const sl = r.matches.map(m => slotOf(s.sched, m)).filter(Boolean);
   if (!sl.length) return '';
   const a = sl.reduce((x, y) => (`${y.d}${y.s}` < `${x.d}${x.s}` ? y : x)), b = sl.reduce((x, y) => (`${y.d}${y.e}` > `${x.d}${x.e}` ? y : x));
-  return ` <span class="rt">${esc(a.day)} ${a.s}-${b.e}</span>`;
+  return ` <span class="rt">${esc(dayLabel(getState(), a.d, a.day))} ${a.s}-${b.e}</span>`;
 }
 const stageOrder = m => (m.stage === 'F' ? 1 : 0) * 100 + m.roundIdx;
 
@@ -147,7 +147,7 @@ function lineupModal(m) {
       <div class="row"><button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
-  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
+  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="row" style="align-items:flex-start;gap:24px">${col('a', m.A)}${col('b', m.B)}</div></div>`;
 }
 const val = el => (el.value === '__other' ? '' : el.value.trim());
@@ -193,7 +193,7 @@ function scoreModal(m) {
   } else {
     body = block('x', m.rec.g || [], '各局比分', sideText(m.A), sideText(m.B), m.rec.ref ? `裁判 ${esc(m.rec.ref)}` : '', true);
   }
-  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}<span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}關閉</button></div>
+  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="total" id="sc-total"></div><div class="n">${esc(sideText(m.B, m.team))}</div></div>
     <div class="pts">${body}</div>
     <p class="small" id="sc-note" style="color:var(--red);min-height:18px"></p>
@@ -283,7 +283,7 @@ function viewDraw(s) {
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
-    <div class="panel"><h2>決賽第一輪對戰</h2><table class="list"><thead><tr><th>場次</th><th>對戰</th></tr></thead><tbody>
+    <div class="panel"><h2>決賽第一輪賽程</h2><table class="list"><thead><tr><th>場次</th><th>賽程</th></tr></thead><tbody>
       ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => `<tr><td>${esc(m.label)}</td><td>${names(m)}</td></tr>`).join('')}</tbody></table>
 </div>`;
 }
@@ -340,13 +340,42 @@ function viewRefs(s) {
       <textarea data-staff rows="16" style="width:100%">${esc(staff.join('\n'))}</textarea></div></div>`;
 }
 
+// ---------------- 成績公告 ----------------
+const ANN_KEYS = [['c', '冠軍'], ['r', '亞軍'], ['s1', '季軍'], ['s2', '季軍']];
+function podiumText(e) {
+  const p = e && podium(e);
+  if (!p) return null;
+  const t = x => (x && x.name ? sideText(x, e.team) : '');
+  return { c: t(p.c), r: t(p.r), s1: t(p.s[0]), s2: t(p.s[1]) };
+}
+function viewAnn(s) {
+  const pub = s.podium || {};
+  return `<div class="panel"><div class="row"><h2 style="margin:0">成績公告</h2><span class="spacer"></span>
+      <label class="small">標題 <input type="text" data-ann-title value="${esc(s.annTitle || '')}" style="width:300px"></label></div>
+    <p class="small muted">名次依已確認的決賽成績產生，按「公布」後才會出現在公開頁。公布後仍可修改文字。</p>
+    <table class="list"><thead><tr><th>項目</th>${ANN_KEYS.map(k => `<th>${k[1]}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${ANN_ORDER.map(ev => {
+      const e = D.events.find(x => x.name === ev);
+      const auto = podiumText(e);
+      const p = pub[ev];
+      const ready = auto && auto.c && auto.r;
+      return `<tr><td class="nowrap"><b>${ANN_NAME[ev]}</b></td>${ANN_KEYS.map(([k]) => `<td>${p
+        ? `<input type="text" data-ann="${ev}|${k}" value="${esc(p[k] || '')}" style="width:100%;min-width:120px">`
+        : `<span class="${auto && auto[k] ? '' : 'muted'}">${esc((auto && auto[k]) || '未產生')}</span>`}</td>`).join('')}
+        <td class="nowrap">${p ? `<span class="chip playing">已公布</span> <button class="btn ghost sm" data-unpub="${ev}">取消公布</button>`
+          : `<button class="btn sm" data-pub="${ev}" ${ready ? '' : 'disabled'}>公布</button>`}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
 // ---------------- 資料設定 ----------------
 function viewSetup(s) {
   const fileOf = ev => (s.events.find(x => x.name === ev) || {}).file || '';
   return `<div class="panel"><h2>賽事</h2><div class="row">
       <label>名稱 <input type="text" data-set="title" value="${esc(s.title)}" style="width:120px"></label>
       <label>屆數 <input type="text" data-set="edition" value="${esc(s.edition)}" style="width:120px"></label>
-      <label>球桌數 <input type="number" min="2" max="60" data-set="tables" value="${s.tables}" style="width:80px"></label></div></div>
+      <label>球桌數 <input type="number" min="2" max="60" data-set="tables" value="${s.tables}" style="width:80px"></label>
+      <label>第一天 <input type="date" data-date="0" value="${esc((s.dates || [])[0] || '')}"></label>
+      <label>第二天 <input type="date" data-date="1" value="${esc((s.dates || [])[1] || '')}"></label></div></div>
     <div class="panel"><div class="row"><h2 style="margin:0">匯入最終籤表（Excel 檔）</h2><span class="spacer"></span><label class="btn sm">${icon('upload')}一次選擇多個檔案<input type="file" accept=".xlsx" multiple hidden data-impall></label></div>
       <table class="list"><thead><tr><th>項目</th><th>目前資料</th><th></th></tr></thead><tbody>
       ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` + (fileOf(ev) ? `<div class="muted">${esc(fileOf(ev))}</div>` : '') : '<span class="muted">尚未匯入</span>'}</td>
@@ -455,6 +484,8 @@ document.addEventListener('click', async ev => {
   const d = t.dataset;
   if ('signin' in d) { auth.signIn(); return; }
   if ('signout' in d) { auth.signOut(); return; }
+  if (d.pub) { const e = D.events.find(x => x.name === d.pub); const v = podiumText(e); update(s => { s.podium = { ...(s.podium || {}), [d.pub]: v }; }); toast(`${ANN_NAME[d.pub]} 已公布`); return; }
+  if (d.unpub) { update(s => { const p = { ...(s.podium || {}) }; delete p[d.unpub]; s.podium = p; }); return; }
   if (d.tab) { tab = d.tab; render(); }
   else if (d.reftab) { refTab = d.reftab; render(); }
   else if (d.ev) { curEv = d.ev; render(); }
@@ -511,6 +542,9 @@ document.addEventListener('change', async ev => {
   else if (d.rank) { const [g, k] = d.rank.split('|'); update(s => { const se = s.events.find(x => x.name === curEv); se.rank = se.rank || {}; se.rank[g] = se.rank[g] || {}; se.rank[g][k] = t.value; }); }
   else if (d.roll) update(s => { const se = s.events.find(x => x.name === curEv); se.roll = se.roll || {}; se.roll[d.roll] = t.value; });
   else if (d.fpos) update(s => { const se = s.events.find(x => x.name === curEv); se.finalPos = se.finalPos || {}; se.finalPos[d.fpos] = t.value ? Number(t.value) || '' : ''; });
+  else if (d.date) update(s => { s.dates = (s.dates || ['', '']).slice(); s.dates[Number(d.date)] = t.value; });
+  else if (d.ann) { const [ev, k] = d.ann.split('|'); update(s => { s.podium = { ...(s.podium || {}) }; s.podium[ev] = { ...s.podium[ev], [k]: t.value.trim() }; }); }
+  else if (d.annTitle != null) update(s => { s.annTitle = t.value.trim(); });
   else if (d.set) update(s => { s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : t.value; });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }

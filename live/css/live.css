@@ -293,3 +293,24 @@ table.tt th { background: var(--blue-soft); font-weight: 700; }
 table.tt td.tm { color: var(--muted); font-variant-numeric: tabular-nums; }
 table.tt td.dr { background: var(--yellow-soft); }
 svg.tree .nm.mu { fill: #9aa3b2; }
+
+/* 預賽表格：每列同高，斜線角度一致；手機上欄位只寫編號、隊名不換行 */
+table.grp td { height: 34px; }
+table.grp td.nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.grp td.nm .ix { display: inline-block; width: 1.6em; color: var(--muted); }
+@media (max-width: 640px) {
+  table.grp .tn { display: none; }
+  table.grp th.hd { width: 30%; }
+  table.grp td { height: 32px; white-space: nowrap; }
+  table.grp td.no, table.grp td.sc { font-size: 11px; padding: 0; letter-spacing: -0.5px; }
+  table.grp td.nm .chip { display: none; }
+}
+.btn[data-close] { padding: 5px 7px; }
+.btn[data-close] .icon { width: 18px; height: 18px; }
+
+/* 成績公告 */
+.ann h2 { text-align: center; font-size: 19px; margin-bottom: 14px; }
+.ann .ab { margin: 0 auto 16px; max-width: 420px; }
+.ann .ab h3 { font-size: 15px; color: var(--blue); border-bottom: 2px solid var(--yellow); padding-bottom: 3px; margin: 0 0 6px; }
+.ann .al { display: flex; font-size: 15px; line-height: 1.9; border-bottom: 1px dashed var(--line); }
+.ann .ak { color: var(--muted); width: 4em; flex: none; }

@@ -12,7 +12,22 @@ export const isTeam = ev => /團$/.test(ev);
 export const POINTS = [{ dbl: false }, { dbl: false }, { dbl: true }, { dbl: false }, { dbl: false }];
 
 export function emptyState() {
-  return { v: 1, title: '交大盃', edition: '第十三屆', tables: 24, events: [], m: {}, notice: '' };
+  return { v: 1, title: '交大盃', edition: '第十三屆', tables: 24, events: [], m: {}, notice: '',
+    annTitle: '第十三屆TIBHAR交大盃成績公告', dates: ['2026-12-05', '2026-12-06'], podium: {} };
+}
+
+/** 成績公告的項目順序與名稱 */
+export const ANN_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
+export const ANN_NAME = {
+  男單: '大專男子組個人單打', 女單: '大專女子組個人單打', 男雙: '大專男子組個人雙打', 女雙: '大專女子組個人雙打',
+  男團: '大專男子團體組', 女團: '大專女子團體組', 社團: '社會團體組',
+};
+/** 第幾天的日期：12/5（六）；沒有設定就用時間表上的寫法 */
+export function dayLabel(state, d, fallback = '') {
+  const v = (state.dates || [])[d - 1];
+  const t = v ? new Date(`${v}T00:00:00`) : null;
+  if (!t || Number.isNaN(t.getTime())) return fallback;
+  return `${t.getMonth() + 1}/${t.getDate()}（${'日一二三四五六'[t.getDay()]}）`;
 }
 
 // ---------------- 數字讀法 ----------------
@@ -203,6 +218,21 @@ export function derive(state) {
     });
   });
   return { events: events.sort((x, y) => EVENT_ORDER.indexOf(x.name) - EVENT_ORDER.indexOf(y.name)), byId, tables };
+}
+
+/**
+ * 某項目的冠亞季季（依大會確認過的決賽結果）。尚未產生的名次為 null。
+ * e：derive 算出的項目
+ */
+export function podium(e) {
+  const list = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
+  if (!list.length) return null;
+  const refd = new Set(list.flatMap(m => m.src.filter(s => s.ref != null).map(s => s.ref)));
+  const root = list.find(m => !refd.has(m.num));
+  if (!root) return null;
+  const pick = (m, win) => (m && m.confirmed && m.winner ? ((m.winner === 'a') === win ? m.A : m.B) : null);
+  const semis = root.src.filter(s => s.ref != null).map(s => list.find(m => m.num === s.ref));
+  return { c: pick(root, true), r: pick(root, false), s: [pick(semis[0], false), pick(semis[1], false)] };
 }
 
 /** 分組循環名次：先比勝場；同勝場時列出點數、局數供大會判斷 */
