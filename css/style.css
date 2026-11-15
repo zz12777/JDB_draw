@@ -180,3 +180,12 @@ table.mini th, table.mini td { border: 1px solid var(--line); padding: 3px 8px; 
 .pill { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel); }
 .pill button { border: 0; background: none; padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--muted); }
 .pill button.on { background: var(--accent); color: #fff; }
+
+/* 標題列：與當日系統、籌辦首頁一致（藍底、黃線） */
+.top { background: #14407f; color: #fff; border-bottom: 3px solid #f2b90c; }
+.top .brand-logo { width: 44px; height: 44px; }
+.top .brand .sub { color: rgba(255, 255, 255, .8); }
+.top .btn.ghost { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .45); }
+.top .btn.ghost:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .7); }
+.top .btn.ghost.danger { color: #ffd2cf; }
+.top .btn .icon, .top .btn svg { color: inherit; }

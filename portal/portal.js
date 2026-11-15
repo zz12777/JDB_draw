@@ -34,12 +34,12 @@ au.onAuthStateChanged(auth, async user => {
 });
 
 const fmtDate = ts => { const d = new Date(ts); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
-const link = (title, url) => `<div class="lnk"><div><b>${title}</b><code>${esc(url)}</code></div>
-  <div class="row" style="gap:6px"><button class="btn ghost sm" data-copy="${esc(url)}" title="複製網址" aria-label="複製網址">${icon('copy')}</button><a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a></div></div>`;
+const link = (title, url, qr) => `<div class="lnk"><div><b>${title}</b><code>${esc(url)}</code></div>
+  <div class="row" style="gap:6px">${qr ? `<button class="btn ghost sm" data-qr="${esc(url)}">QR code</button>` : ''}<button class="btn ghost sm" data-copy="${esc(url)}" title="複製網址" aria-label="複製網址">${icon('copy')}</button><a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a></div></div>`;
 
 function render() {
   $('#top').innerHTML = `<img src="../live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
-    ${st.user ? `<a href="#" data-signout>登出 ${esc(st.user)}</a>` : ''}`;
+    ${st.admin ? `<a href="${URLS.draw}">抽籤系統</a><a href="${URLS.desk}">大會台</a>` : ''}${st.user ? `<a href="#" data-signout>登出 ${esc(st.user)}</a>` : ''}`;
   if (!st.ready) return;
   if (!st.admin) {
     $('#main').innerHTML = `<div class="login"><img src="../live/img/logo.png" alt="" data-brand><h2>交大盃籌辦首頁</h2>
@@ -82,7 +82,7 @@ function render() {
           <li>公開頁：賽程、時間表、成績公告、即時桌況</li>
         </ul>
         <p class="small muted">資料存在雲端資料庫，多台電腦與手機即時同步。大會台需以管理員帳號登入。</p>
-        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('公開頁（給參賽者）', URLS.pub)}</div></div>
+        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('公開頁（給參賽者）', URLS.pub, true)}</div></div>
     </div>
 
     <div class="panel"><h2>流程</h2><div class="flow">
@@ -193,10 +193,33 @@ document.addEventListener('change', ev => {
   img.src = URL.createObjectURL(file);
 });
 
+// ---------------- 公開頁 QR code ----------------
+function qrCanvas(url, size) {
+  const qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
+  const n = qr.getModuleCount(), quiet = 4, cell = Math.floor(size / (n + quiet * 2));
+  const c = document.createElement('canvas'); c.width = c.height = cell * (n + quiet * 2);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#14233b';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect((k + quiet) * cell, (r + quiet) * cell, cell, cell);
+  return c;
+}
+function showQr(url) {
+  let host = document.getElementById('vmodal');
+  if (!host) { host = document.createElement('div'); host.id = 'vmodal'; document.body.appendChild(host); }
+  if (!window.qrcode) { toast('QR code 元件載入失敗，請重新整理'); return; }
+  const png = qrCanvas(url, 1024).toDataURL('image/png');
+  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%);text-align:center">
+    <div class="row"><h2>公開頁 QR code</h2><span class="spacer"></span><button class="btn ghost sm" data-qrclose aria-label="關閉" title="關閉">${icon('close')}</button></div>
+    <img src="${png}" alt="" style="width:260px;height:260px;margin:12px auto 6px;display:block">
+    <p class="small muted" style="word-break:break-all">${esc(url)}</p>
+    <a class="btn" href="${png}" download="交大盃即時賽程QRcode.png">${icon('download')}下載圖片</a></div></div>`;
+}
+
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('button, a[data-signout]');
   if (!t) return;
   const d = t.dataset;
+  if (d.qr) { showQr(d.qr); return; }
+  if ('qrclose' in d) { document.getElementById('vmodal').innerHTML = ''; return; }
   if ('vcancel' in d) { cr.img = null; drawBrand(); return; }
   if ('vsave' in d) {
     const b = { logo: exportImg(360, 'image/webp'), icon: exportImg(64, 'image/png') };
