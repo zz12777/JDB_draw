@@ -81,7 +81,7 @@ function render() {
           <li>公開頁：賽程、時間表、成績公告、即時桌況</li>
         </ul>
         <p class="small muted">資料存在雲端資料庫，多台電腦與手機即時同步。大會台需以管理員帳號登入。</p>
-        <div class="links">${link('大會台', URLS.desk)}${link('裁判記分', URLS.ref)}${link('公開頁（給參賽者）', URLS.pub)}</div></div>
+        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('公開頁（給參賽者）', URLS.pub)}</div></div>
     </div>
 
     <div class="panel"><h2>流程</h2><div class="flow">
@@ -131,7 +131,6 @@ function drawBrand() {
   if (!host) return;
   const saved = cr.saved;
   host.innerHTML = `<h2>視覺</h2>
-    <p class="small muted">上傳新版圖片，調整圓圈內要呈現的範圍，儲存後抽籤系統、當日系統與本頁的標誌和分頁圖示都會更換。</p>
     <div class="vis">
       <div class="vis-edit">
         <canvas id="cv" width="${D * 2}" height="${D * 2}" style="width:${D}px;height:${D}px" class="${cr.img ? 'on' : ''}"></canvas>
@@ -144,8 +143,7 @@ function drawBrand() {
           <p class="small muted">在圓圈上拖曳可移動圖片。</p>
           <div class="vis-prev"><span>預覽</span><canvas id="p1" width="120" height="120"></canvas><span class="onblue"><canvas id="p2" width="88" height="88"></canvas></span><canvas id="p3" width="32" height="32"></canvas></div>
           <div class="row"><button class="btn" data-vsave>儲存並套用</button><button class="btn ghost" data-vcancel>取消</button></div>`
-          : `<div class="vis-prev"><span>目前</span><img src="${esc((saved && saved.logo) || '../live/img/logo.png')}" alt=""></div>
-          ${saved ? `<p class="small muted">${esc(saved.by || '')} 於 ${fmtDate(saved.at || Date.now())} 更新</p><button class="btn ghost sm" data-vreset>恢復原本的圖</button>` : '<p class="small muted">目前使用原本的圖。</p>'}`}
+          : (saved ? `<p class="small muted">${esc(saved.by || '')} 於 ${fmtDate(saved.at || Date.now())} 更新</p><button class="btn ghost sm" data-vreset>恢復原本的圖</button>` : '')}
       </div></div>`;
   if (cr.img) paint();
 }

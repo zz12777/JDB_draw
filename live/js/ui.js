@@ -38,7 +38,7 @@ export function toast(msg) {
 export const STATUS_TEXT = { wait: '等待中', ready: '可開賽', playing: '進行中', reported: '待確認', done: '已確認' };
 export const chip = m => `<span class="chip ${m.status}">${STATUS_TEXT[m.status]}</span>`;
 export const mins = ts => (ts ? Math.max(0, Math.round((Date.now() - ts) / 60000)) : 0);
-export const names = m => `${esc(sideText(m.A, m.team))} <span class="vs">對</span> ${esc(sideText(m.B, m.team))}`;
+export const names = m => `${esc(sideText(m.A, m.team))} <span class="vs">vs</span> ${esc(sideText(m.B, m.team))}`;
 export const shortEv = m => `${m.ev}${m.no}`;
 
 /** 進行中那一點（或個人賽）的目前局數與比分文字 */

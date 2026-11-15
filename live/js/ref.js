@@ -11,7 +11,7 @@ let D = null;
 function render() {
   const s = getState();
   D = derive(s);
-  $('#top').innerHTML = header(s, '裁判記分', []);
+  $('#top').innerHTML = header(s, '裁判紀錄區', []);
   $('#main').innerHTML = !name ? viewName() : table == null ? viewTables(s) : viewMatch();
   if (name && table != null) refresh();
 }
