@@ -1,0 +1,67 @@
+{
+  "rules": {
+    "t13": {
+      "pub": {
+        ".read": true,
+        "meta": {
+          ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')"
+        },
+        "events": {
+          ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')"
+        },
+        "m": {
+          ".indexOn": [
+            "u"
+          ],
+          ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')",
+          "$mid": {
+            "u": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isNumber()"
+            },
+            "g": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 400"
+            },
+            "ref": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 60"
+            },
+            "refs": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 400"
+            },
+            "absent": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 200"
+            },
+            "pts": {
+              "$i": {
+                "g": {
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".validate": "newData.isString() && newData.val().length < 400"
+                },
+                "ref": {
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".validate": "newData.isString() && newData.val().length < 60"
+                },
+                "table": {
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".validate": "newData.isString() && newData.val().length < 10"
+                },
+                "absent": {
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".validate": "newData.isString() && newData.val().length < 200"
+                }
+              }
+            }
+          }
+        }
+      },
+      "desk": {
+        ".read": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')",
+        ".write": "auth != null && (auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com')"
+      }
+    }
+  }
+}
