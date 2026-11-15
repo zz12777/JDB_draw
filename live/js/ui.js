@@ -6,6 +6,9 @@ export const $ = (sel, el = document) => el.querySelector(sel);
 export const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
 const ICONS = {
+  search: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14" fill="none"/>',
+  zoomIn: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14M5 7h4M7 5v4" fill="none"/>',
+  zoomOut: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14M5 7h4" fill="none"/>',
   speaker: '<path d="M3 6.5v3h2.5L9 12.5v-9L5.5 6.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9" fill="none"/>',
   check: '<path d="M3 8.5l3.2 3.2L13 4.8" fill="none"/>',
   lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none"/>',

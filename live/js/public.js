@@ -17,7 +17,7 @@ function render() {
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
-  if (!$('#q')) $('#main').innerHTML = '<input id="q" class="search" type="text" placeholder="輸入學校、隊名或姓名，查詢相關場次"><div style="height:12px"></div><div id="content"></div>';
+  if (!$('#q')) $('#main').innerHTML = `<label class="sbox">${icon('search')}<input id="q" class="search" type="search" placeholder="學校、隊名或姓名"></label><div style="height:12px"></div><div id="content"></div>`;
   if ($('#q').value !== q && !composing) $('#q').value = q;
   $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
     : q.trim() ? viewSearch() : tab === 'live' ? viewLive(s) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s) : viewSched();
@@ -31,21 +31,32 @@ function viewLive(s) {
 /** 賽程時間表：每天一張表，列是時段、欄是項目 */
 function viewTime(s) {
   const slots = s.sched.slots;
-  const text = x => (x.draw ? '決賽抽籤' : `${x.f ? '決' : ''}(${toCn(x.from)})${x.to !== x.from ? `~(${toCn(x.to)})` : ''}`);
+  // 場次只在「～」後面換行，數字本身不拆開
+  const nums = x => (x.draw ? '<span class="nw">決賽抽籤</span>'
+    : `<span class="nw">${x.f ? '決' : ''}(${toCn(x.from)})${x.to !== x.from ? '～' : ''}</span>${x.to !== x.from ? `<wbr><span class="nw">(${toCn(x.to)})</span>` : ''}`);
+  const time = (a, b) => `<span class="t1">${a}</span><span class="t2">${b}</span>`;
   return [...new Set(slots.map(x => x.d))].sort().map(d => {
     const list = slots.filter(x => x.d === d);
     const evs = EVENT_ORDER.filter(ev => list.some(x => x.ev === ev)).sort((a, b) => /團/.test(a) - /團/.test(b));
     // 以所有出現過的時間點切成列；跨多列的時段合併成一格
     const cuts = [...new Set(list.flatMap(x => [x.s, x.e]))].sort();
     const rows = cuts.slice(0, -1).map((t, i) => [t, cuts[i + 1]]).filter(([a, b]) => list.some(x => x.s < b && x.e > a));
-    const body = rows.map(([a, b], ri) => `<tr><td class="nowrap tm">${a}-${b}</td>${evs.map(ev => {
+    const body = rows.map(([a, b]) => `<tr><td class="tm">${time(a, b)}</td>${evs.map(ev => {
       const x = list.find(y => y.ev === ev && y.s <= a && y.e > a);
       if (!x) return '<td></td>';
       if (x.s !== a) return '';
       const span = rows.filter(([p, q]) => p >= x.s && q <= x.e).length;
-      return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''}">${text(x)}</td>`;
+      return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''}">${nums(x)}</td>`;
     }).join('')}</tr>`).join('');
-    return `<div class="panel"><h2>${esc(dayLabel(s, d, list[0].day))}</h2><div style="overflow-x:auto"><table class="tt"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+    const table = `<div class="ttw"><table class="tt"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+    // 手機：每個開始時間一列，右側列出這個時間開始的項目與場次
+    const starts = [...new Set(list.map(x => x.s))].sort();
+    const cards = starts.map(t => {
+      const items = list.filter(x => x.s === t).sort((p, q) => evs.indexOf(p.ev) - evs.indexOf(q.ev));
+      const end = cuts.find(c => c > t);
+      return `<div class="tl"><div class="tm">${time(t, end)}</div><div class="ti">${items.map(x => `<div class="tr ${x.draw ? 'dr' : ''}"><span class="te">${x.ev}</span><span class="tn">${nums(x)}</span>${x.e !== end ? `<span class="tx">至 ${x.e}</span>` : ''}</div>`).join('')}</div></div>`;
+    }).join('');
+    return `<div class="panel"><h2>${esc(dayLabel(s, d, list[0].day))}</h2>${table}<div class="tls">${cards}</div></div>`;
   }).join('');
 }
 
@@ -84,8 +95,8 @@ function viewSched() {
   }
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
   const t = bracketSvg(ko, e.team, { pos: e.team });
-  const tree = t.svg ? `<div class="panel"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="small muted">點選場次可查看比分</span><span class="spacer"></span>
-      <button class="btn ghost sm" data-zoom="-1">縮小</button><button class="btn ghost sm" data-zoom="1">放大</button></div>
+  const tree = t.svg ? `<div class="panel"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>
+      <button class="btn ghost sm" data-zoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-zoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div>
     <div class="treebox" style="margin-top:10px">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * zoom)}" height="${Math.round(t.height * zoom)}"`)}</div></div>` : '';
   return `<div class="pills" style="margin-bottom:12px">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
     ${groups ? `<div class="panel"><h2>預賽</h2>${groups}</div>` : ''}${tree}`;
