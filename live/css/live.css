@@ -369,3 +369,5 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 
 .btn.danger-solid { background: var(--red); border-color: var(--red); color: #fff; }
 .btn.danger-solid:hover { background: #8f1d17; }
+
+.wcell .bpt { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }

@@ -1,5 +1,5 @@
 // 大會台
-import { derive, isTeam, POINTS, callText, recallText, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
+import { derive, isTeam, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL } from './store.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
@@ -43,7 +43,7 @@ function viewCtrl(s) {
   const e = D.events.find(x => x.name === curEv);
   const all = [...D.byId.values()];
   const readyN = ev => ev.matches.filter(m => m.status === 'ready').length;
-  const absent = all.filter(m => m.rec.absent && (m.rec.absent.a || m.rec.absent.b) && m.status === 'playing');
+  const absent = all.filter(m => m.status === 'playing').flatMap(m => absences(m).map(ab => ({ m, ab })));
   const reported = all.filter(m => m.status === 'reported');
   const ready = all.filter(m => m.status === 'ready').sort((x, y) => EVENT_ORDER.indexOf(x.ev) - EVENT_ORDER.indexOf(y.ev) || stageOrder(x) - stageOrder(y) || x.num - y.num);
   const calls = (s.calls || []).slice(-4).reverse();
@@ -59,19 +59,22 @@ function viewCtrl(s) {
         ${r.matches.map(card).join('')}</div>`).join('')}</div>
     </div></div>
     <div class="side">
-      ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(m => {
-        const who = m.rec.absent.a && m.rec.absent.b ? 'both' : m.rec.absent.a ? 'a' : 'b';
-        return `<div class="alertbox"><div class="small">第 ${m.tables.join('、')} 桌　${fmtTime(m.rec.absent.ts)}　裁判 ${esc(m.rec.absent.by || '')}</div>
-          <div>${esc(recallText(m, who))}</div>
-          <div class="row" style="margin-top:4px"><button class="btn ghost sm" data-clear-absent="${esc(m.id)}">${icon('check')}已到場</button></div></div>`;
+      ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(({ m, ab }) => {
+        const tb = ab.table || m.tables.join('、');
+        return `<div class="alertbox"><div class="small">第 ${tb} 桌　${fmtTime(ab.ts)} 回報　裁判 ${esc(ab.by || '')}</div>
+          <div>${esc(recallText(m, ab))}</div>
+          <div class="row" style="margin-top:4px">${ab.called ? `<span class="small" style="color:var(--green)">${fmtTime(ab.called)} 已廣播</span>` : ''}<span class="spacer"></span>
+            <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
+            <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
       <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
       <div class="panel"><h2>待確認成績（${reported.length}）</h2>${reported.length ? reported.map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}　${m.score[0]}:${m.score[1]}</span><span class="spacer"></span><button class="btn sm" data-score="${esc(m.id)}">核對</button></div>`).join('') : '<p class="small muted">目前沒有待確認的成績。</p>'}</div>
     </div></div>`;
 }
 function viewTables(s) {
-  const absent = [...D.byId.values()].filter(m => m.rec.absent && (m.rec.absent.a || m.rec.absent.b) && m.status === 'playing');
-  return `<div class="panel">${deskBoard(s, D, { alerts: new Set(absent.map(m => m.id)) })}</div>`;
+  const alerts = new Set();
+  D.byId.forEach(m => { if (m.status === 'playing') absences(m).forEach(ab => String(ab.table || m.tables.join(',')).split(/[^0-9]+/).filter(Boolean).forEach(t => alerts.add(Number(t)))); });
+  return `<div class="panel">${deskBoard(s, D, { alerts })}</div>`;
 }
 /** 這一輪在時間表上的時段 */
 function roundTime(s, r) {
@@ -179,7 +182,7 @@ function scoreModal(m) {
   const lu = m.rec.lineup || {};
   const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}>`;
   const block = (pi, games, title, an, bn, meta, solo) => `<div class="pt ${solo ? 'solo' : ''}"><h4>${title}</h4>
-    <div class="pn"><span>${esc(an)}</span><span>${esc(bn)}</span></div>
+    <div class="pn"><span>${String(an || '').split(/[\/／]/).map(esc).join('<br>')}</span><span>${String(bn || '').split(/[\/／]/).map(esc).join('<br>')}</span></div>
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gr">${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</div>`).join('')}
     <div class="res" data-res="${pi}"></div><div class="meta">${meta}</div></div>`;
   let body;
@@ -506,7 +509,14 @@ document.addEventListener('click', async ev => {
   else if (d.score) openModal('score', d.score);
   else if (d.mid && d.table) openModal('score', d.mid);
   else if ('close' in d) { modal = null; draft = {}; drawModal(); }
-  else if (d.clearAbsent) updateMatch(d.clearAbsent, r => { delete r.absent; });
+  else if (d.clearAbsent || d.called) {
+    const v = d.clearAbsent || d.called, i = v.lastIndexOf('|'), mid = v.slice(0, i), key = v.slice(i + 1);
+    updateMatch(mid, r => {
+      const hold = key === 'm' ? r : ((r.pts || [])[Number(key.slice(1))] || {});
+      if (!hold.absent) return;
+      if (d.called) hold.absent = { ...hold.absent, called: Date.now() }; else delete hold.absent;
+    });
+  }
   else if ('luBack' in d) {
     const w = t.closest('.lu-free'), sel = w.previousElementSibling, k = sel.dataset.luOff[0];
     sel.dataset.lu = sel.dataset.luOff; delete sel.dataset.luOff; sel.hidden = false; w.remove(); markLineup(k);
@@ -521,7 +531,7 @@ document.addEventListener('click', async ev => {
     toast('排點已儲存');
   } else if (d.luClear) { delete draft[d.luClear]; updateMatch(modal.mid, r => { if (r.lineup) delete r.lineup[d.luClear]; }); drawModal(); }
   else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) r.wo = d.wo; else delete r.wo; }); drawModal(); }
-  else if ('confirm' in d) { updateMatch(modal.mid, r => { r.confirmed = true; r.end = Date.now(); r.tables = []; delete r.absent; }); modal = null; drawModal(); toast('成績已確認並鎖定'); }
+  else if ('confirm' in d) { updateMatch(modal.mid, r => { r.confirmed = true; r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); modal = null; drawModal(); toast('成績已確認並鎖定'); }
   else if ('unconfirm' in d) { updateMatch(modal.mid, r => { r.confirmed = false; }); drawModal(); }
   else if ('fillRank' in d) {
     update(s => { const se = s.events.find(x => x.name === curEv); const e = D.events.find(x => x.name === curEv); se.rank = se.rank || {};

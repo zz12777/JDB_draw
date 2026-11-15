@@ -123,15 +123,15 @@ export function board(state, d, opt = {}) {
 export function deskBoard(state, d, opt = {}) {
   const n = state.tables || 24, half = Math.ceil(n / 2);
   // 個人賽：校名一行、姓名一行；團體賽：隊名一行
-  const side = x => `<span class="wn">${x && x.school ? `<span class="sch">${esc(x.school)}</span>` : ''}<span class="nm">${esc((x && x.name) || '')}</span></span>`;
+  const side = x => `<span class="wn">${x && x.school ? `<span class="sch">${esc(x.school)}</span>` : ''}<span class="nm">${String((x && x.name) || '').split(/[\/／]/).map(esc).join('<br>')}</span></span>`;
   const cell = t => {
     const r = t <= half ? 1 : 2, c = t <= half ? t : t - half;
     const pos = `style="--r:${r};--c:${c}"`;
     const x = d.tables.get(t);
     if (!x) return `<button class="wcell" ${pos} data-table="${t}"><span class="bn">${t}</span><span class="bempty">空桌</span></button>`;
     const m = x.m;
-    return `<button class="wcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${m.status === 'reported' ? 'rep' : ''}" ${pos} data-table="${t}" data-mid="${esc(m.id)}">
-      <span class="bn">${t}</span><span class="be">${esc(shortEv(m))}${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}</span>
+    return `<button class="wcell busy ${opt.alerts && opt.alerts.has(t) ? 'alert' : ''} ${m.status === 'reported' ? 'rep' : ''}" ${pos} data-table="${t}" data-mid="${esc(m.id)}">
+      <span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${x.point != null ? `<span class="bpt">第${'一二三四五'[x.point]}點</span>` : ''}
       ${side(m.A)}${side(m.B)}<span class="wsc">${m.score[0]} : ${m.score[1]}</span>
       <span class="wx">${m.status === 'reported' ? '待確認' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
   };

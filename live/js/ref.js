@@ -1,5 +1,5 @@
 // 裁判頁：輸入姓名、選球桌、記錄每局比分、回報未到
-import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner } from './model.js';
+import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner, fmtTime } from './model.js';
 import { getState, subscribe, updateMatch, onAuth } from './store.js';
 import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
 
@@ -31,20 +31,26 @@ function viewMatch() {
   const m = x.m;
   const lu = m.rec.lineup || {};
   const an = sideText(m.A, m.team), bn = sideText(m.B, m.team);
-  const ab = m.rec.absent || {};
   const head = `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div>
     <div class="small muted">${EVENT_FULL[m.ev]} ${esc(m.no)}</div>
     <div class="duel"><div class="n r">${esc(an)}</div><div class="s" id="tot"></div><div class="n">${esc(bn)}</div></div></div>`;
-  const absent = `<div class="panel"><h2>未到回報</h2>
-    ${ab.a || ab.b ? `<div class="alertbox">已回報：${esc([ab.a ? an : '', ab.b ? bn : ''].filter(Boolean).join('、'))} 未到</div><button class="btn ghost" data-absent="none">${icon('check')}已到場，取消回報</button>`
-      : `<div class="row"><button class="btn ghost" data-absent="a">${esc(an)} 未到</button><button class="btn ghost" data-absent="b">${esc(bn)} 未到</button><button class="btn ghost" data-absent="both">雙方未到</button></div>`}</div>`;
+  // 未到回報：在選擇點的頁面回報整隊；進入某一點後回報該點的選手
+  const absentPanel = pi => {
+    const hold = pi == null ? m.rec : (((m.rec.pts || [])[pi]) || {});
+    const ab = hold.absent || {};
+    const who = k => { const S = sideText(k === 'a' ? m.A : m.B, m.team); if (pi == null) return S; const n = lineName(lu[k], pi); return n ? `${S} ${n}` : S; };
+    const key = pi == null ? 'm' : pi;
+    return `<div class="panel"><h2>${pi == null ? '未到回報' : `第${'一二三四五'[pi]}點 未到回報`}</h2>
+      ${ab.a || ab.b ? `<div class="alertbox">已回報：${esc([ab.a ? who('a') : '', ab.b ? who('b') : ''].filter(Boolean).join('、'))} 未到${ab.called ? `　<span class="small">（大會 ${fmtTime(ab.called)} 已廣播）</span>` : ''}</div><button class="btn ghost" data-absent="none|${key}">${icon('check')}已到場，取消回報</button>`
+        : `<div class="row"><button class="btn ghost" data-absent="a|${key}">${esc(who('a'))} 未到</button><button class="btn ghost" data-absent="b|${key}">${esc(who('b'))} 未到</button><button class="btn ghost" data-absent="both|${key}">雙方未到</button></div>`}</div>`;
+  };
   if (m.team && point == null) {
     const def = x.point;
     return `${head}<div class="panel"><h2>請選擇要記錄的點</h2>
       ${POINTS.map((p, i) => { const r = m.result.pts[i]; const pt = (m.rec.pts || [])[i] || {};
         return `<button class="tcell ptsel ${r.winner ? 'fin' : def === i ? 'busy' : ''}" style="margin-bottom:6px" data-point="${i}"><span class="t">${i + 1}</span>
           <span class="who">第${'一二三四五'[i]}點${pt.table ? ` <span class="tchip">第 ${pt.table} 桌</span>` : ''}<br>${esc(lineName(lu.a, i))} vs ${esc(lineName(lu.b, i))}</span>
-          <span class="mins"><span class="big">${r.a}:${r.b}</span></span></button>`; }).join('')}</div>${absent}`;
+          <span class="mins"><span class="big">${r.a}:${r.b}</span></span></button>`; }).join('')}</div>${absentPanel(null)}`;
   }
   const games = m.team ? (((m.rec.pts || [])[point] || {}).g || []) : (m.rec.g || []);
   const pa = m.team ? lineName(lu.a, point) : an, pb = m.team ? lineName(lu.b, point) : bn;
@@ -54,7 +60,7 @@ function viewMatch() {
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gamerow"><span class="small">第${'一二三四五'[gi]}局</span>
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${(games[gi] || [])[0] ?? ''}">
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${(games[gi] || [])[1] ?? ''}"><span data-ok="${gi}"></span></div>`).join('')}
-    <p id="msg" class="small"></p></div>${absent}`;
+    <p id="msg" class="small"></p></div>${absentPanel(m.team ? point : null)}`;
 }
 /** 只更新數字與提示，不重畫輸入框 */
 function refresh() {
@@ -88,8 +94,14 @@ document.addEventListener('click', ev => {
   else if (d.point) { point = Number(d.point); render(); }
   else if (d.absent) {
     const x = D.tables.get(table); if (!x) return;
-    updateMatch(x.m.id, r => { if (d.absent === 'none') delete r.absent; else r.absent = { a: d.absent !== 'b', b: d.absent !== 'a', ts: Date.now(), by: name }; });
-    render(); toast(d.absent === 'none' ? '已取消回報' : '已回報大會');
+    const [kind, key] = d.absent.split('|');
+    updateMatch(x.m.id, r => {
+      let hold = r;
+      if (key !== 'm') { r.pts = r.pts || []; r.pts[key] = r.pts[key] || {}; hold = r.pts[key]; }
+      if (kind === 'none') delete hold.absent;
+      else hold.absent = { a: kind !== 'b', b: kind !== 'a', ts: Date.now(), by: name, table };
+    });
+    render(); toast(kind === 'none' ? '已取消回報' : '已回報大會');
   }
 });
 document.addEventListener('input', ev => {

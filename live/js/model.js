@@ -267,9 +267,30 @@ export function matchTitle(m) {
 export function callText(m, tables = m.tables) {
   return `${m.ev}${m.no}，${sideText(m.A, m.team)}、${sideText(m.B, m.team)}，第 ${tables.join('、')} 桌`;
 }
-export function recallText(m, who) {
-  const names = who === 'both' ? `${sideText(m.A, m.team)}、${sideText(m.B, m.team)}` : sideText(who === 'a' ? m.A : m.B, m.team);
-  return `${m.ev}${m.no}，${names}，請儘速到第 ${m.tables.join('、')} 桌`;
+/**
+ * 未到的再次唱名。ab：{ a, b, table, point }；有 point 時唱名到該點選手。
+ * 例：男團(四)，中正大學A 第三點 甲／乙，請到第 7 桌
+ */
+export function recallText(m, ab) {
+  const lu = m.rec.lineup || {};
+  const one = k => {
+    const S = k === 'a' ? m.A : m.B;
+    if (ab.point == null) return sideText(S, m.team);
+    const v = (lu[k] || [])[ab.point];
+    const who = Array.isArray(v) ? v.filter(Boolean).join('／') : (v || '');
+    return `${sideText(S, m.team)} 第${'一二三四五'[ab.point]}點${who ? ` ${who}` : ''}`;
+  };
+  const names = [ab.a ? one('a') : '', ab.b ? one('b') : ''].filter(Boolean).join('、');
+  const t = ab.table || (m.tables || []).join('、');
+  return `${m.ev}${m.no}，${names}，請到第 ${t} 桌`;
+}
+/** 某場目前所有未到回報：整場一筆、各點各一筆 */
+export function absences(m) {
+  const out = [];
+  const r = m.rec || {};
+  if (r.absent && (r.absent.a || r.absent.b)) out.push({ ...r.absent, point: null, key: 'm' });
+  (r.pts || []).forEach((p, i) => { if (p && p.absent && (p.absent.a || p.absent.b)) out.push({ ...p.absent, point: i, key: `p${i}` }); });
+  return out;
 }
 export const fmtTime = ts => { if (!ts) return ''; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 export const parseTables = text => [...new Set(String(text || '').split(/[^0-9]+/).filter(Boolean).map(Number))];
