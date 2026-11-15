@@ -1,6 +1,7 @@
 // 交大盃籌辦首頁：只有管理員能看。管理員為兩個交大盃信箱，以及由它們加入、尚未到期的帳號。
 import { FIREBASE, ADMINS } from '../live/js/config.js';
 import { esc, icon, toast } from '../live/js/ui.js';
+import { refreshBrand } from '../live/js/brand.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const $ = s => document.querySelector(s);
@@ -37,17 +38,17 @@ const link = (title, url) => `<div class="lnk"><div><b>${title}</b><code>${esc(u
   <div class="row" style="gap:6px"><button class="btn ghost sm" data-copy="${esc(url)}" title="複製網址" aria-label="複製網址">${icon('copy')}</button><a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a></div></div>`;
 
 function render() {
-  $('#top').innerHTML = `<img src="../live/img/logo.png" alt=""><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
+  $('#top').innerHTML = `<img src="../live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
     ${st.user ? `<a href="#" data-signout>登出 ${esc(st.user)}</a>` : ''}`;
   if (!st.ready) return;
   if (!st.admin) {
-    $('#main').innerHTML = `<div class="login"><img src="../live/img/logo.png" alt=""><h2>交大盃籌辦首頁</h2>
+    $('#main').innerHTML = `<div class="login"><img src="../live/img/logo.png" alt="" data-brand><h2>交大盃籌辦首頁</h2>
       ${st.user ? `<p style="color:var(--red)">${esc(st.user)} 沒有管理員權限，或權限已到期。</p><button class="btn ghost" data-signout>改用其他帳號</button>`
         : '<p>僅限管理員登入</p><button class="btn" data-signin>以 Google 帳號登入</button>'}</div>`;
     return;
   }
   $('#main').innerHTML = `
-    <section class="hero"><img src="../live/img/logo.png" alt="">
+    <section class="hero"><img src="../live/img/logo.png" alt="" data-brand>
       <div><h2>交大盃籌辦資源</h2>
         ${st.until ? `<p>你的管理員權限到 ${fmtDate(st.until)} 為止。</p>` : ''}</div></section>
 
@@ -98,7 +99,9 @@ function render() {
       <a href="https://github.com/zz12777/JDB_draw" target="_blank" rel="noopener"><b>程式碼</b><span>GitHub 上的抽籤系統與當日系統</span></a>
     </div></div>
 
+    <div class="panel" id="brand"></div>
     ${st.base ? adminPanel() : ''}`;
+  drawBrand();
 }
 
 function adminPanel() {
@@ -117,10 +120,95 @@ function adminPanel() {
     </tbody></table></div>`;
 }
 
+// ---------------- 視覺 ----------------
+// 上傳圖片後，在圓形範圍內拖曳移動、調整大小，存成各頁的標誌與分頁圖示
+const D = 300; // 編輯畫布大小
+const cr = { img: null, zoom: 1, x: 0, y: 0, bg: '#ffffff', saved: null };
+db.onValue(db.ref(database, 'branding'), s => { cr.saved = s.val(); if (!cr.img) drawBrand(); }, () => {});
+
+function drawBrand() {
+  const host = document.getElementById('brand');
+  if (!host) return;
+  const saved = cr.saved;
+  host.innerHTML = `<h2>視覺</h2>
+    <p class="small muted">上傳新版圖片，調整圓圈內要呈現的範圍，儲存後抽籤系統、當日系統與本頁的標誌和分頁圖示都會更換。</p>
+    <div class="vis">
+      <div class="vis-edit">
+        <canvas id="cv" width="${D * 2}" height="${D * 2}" style="width:${D}px;height:${D}px" class="${cr.img ? 'on' : ''}"></canvas>
+        ${cr.img ? '' : '<div class="vis-empty">選擇圖片後在這裡調整</div>'}
+      </div>
+      <div class="vis-side">
+        <label class="btn ghost">${icon('upload')}選擇圖片<input type="file" accept="image/*" hidden id="vf"></label>
+        ${cr.img ? `<label class="small">大小 <input type="range" id="vz" min="1" max="4" step="0.01" value="${cr.zoom}"></label>
+          <label class="small">背景 <input type="color" id="vb" value="${cr.bg}"></label>
+          <p class="small muted">在圓圈上拖曳可移動圖片。</p>
+          <div class="vis-prev"><span>預覽</span><canvas id="p1" width="120" height="120"></canvas><span class="onblue"><canvas id="p2" width="88" height="88"></canvas></span><canvas id="p3" width="32" height="32"></canvas></div>
+          <div class="row"><button class="btn" data-vsave>儲存並套用</button><button class="btn ghost" data-vcancel>取消</button></div>`
+          : `<div class="vis-prev"><span>目前</span><img src="${esc((saved && saved.logo) || '../live/img/logo.png')}" alt=""></div>
+          ${saved ? `<p class="small muted">${esc(saved.by || '')} 於 ${fmtDate(saved.at || Date.now())} 更新</p><button class="btn ghost sm" data-vreset>恢復原本的圖</button>` : '<p class="small muted">目前使用原本的圖。</p>'}`}
+      </div></div>`;
+  if (cr.img) paint();
+}
+function cover() { return D / Math.min(cr.img.width, cr.img.height); }
+function clamp() {
+  const s = cover() * cr.zoom, w = cr.img.width * s, h = cr.img.height * s;
+  cr.x = Math.max(-(w - D) / 2, Math.min((w - D) / 2, cr.x));
+  cr.y = Math.max(-(h - D) / 2, Math.min((h - D) / 2, cr.y));
+}
+/** 把目前的取景畫到 size 大小的圓形 */
+function drawCrop(ctx, size, mask) {
+  const k = size / D, s = cover() * cr.zoom * k;
+  ctx.clearRect(0, 0, size, size);
+  ctx.save();
+  if (!mask) { ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); ctx.clip(); }
+  ctx.fillStyle = cr.bg; ctx.fillRect(0, 0, size, size);
+  const w = cr.img.width * s, h = cr.img.height * s;
+  ctx.drawImage(cr.img, size / 2 - w / 2 + cr.x * k, size / 2 - h / 2 + cr.y * k, w, h);
+  ctx.restore();
+  if (mask) { // 編輯畫面：圓圈外加深，看得到被裁掉的部分
+    ctx.save(); ctx.fillStyle = 'rgba(20, 35, 59, .55)'; ctx.beginPath(); ctx.rect(0, 0, size, size); ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2, true); ctx.fill('evenodd');
+    ctx.strokeStyle = '#f2b90c'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+  }
+}
+function paint() {
+  const cv = document.getElementById('cv'); if (!cv) return;
+  drawCrop(cv.getContext('2d'), D * 2, true);
+  ['p1', 'p2', 'p3'].forEach(id => { const c = document.getElementById(id); if (c) drawCrop(c.getContext('2d'), c.width, false); });
+}
+function exportImg(size, type) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  drawCrop(c.getContext('2d'), size, false);
+  const v = c.toDataURL(type, 0.9);
+  return v.startsWith(`data:${type}`) ? v : c.toDataURL('image/png');
+}
+let drag = null;
+document.addEventListener('pointerdown', ev => { if (ev.target.id === 'cv' && cr.img) { drag = { x: ev.clientX, y: ev.clientY, ox: cr.x, oy: cr.y }; ev.target.setPointerCapture(ev.pointerId); } });
+document.addEventListener('pointermove', ev => { if (!drag) return; cr.x = drag.ox + ev.clientX - drag.x; cr.y = drag.oy + ev.clientY - drag.y; clamp(); paint(); });
+document.addEventListener('pointerup', () => { drag = null; });
+document.addEventListener('input', ev => {
+  if (ev.target.id === 'vz') { cr.zoom = Number(ev.target.value); clamp(); paint(); }
+  if (ev.target.id === 'vb') { cr.bg = ev.target.value; paint(); }
+});
+document.addEventListener('change', ev => {
+  if (ev.target.id !== 'vf' || !ev.target.files[0]) return;
+  const img = new Image();
+  img.onload = () => { cr.img = img; cr.zoom = 1; cr.x = 0; cr.y = 0; drawBrand(); };
+  img.onerror = () => toast('無法讀取這張圖片');
+  img.src = URL.createObjectURL(ev.target.files[0]);
+});
+
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('button, a[data-signout]');
   if (!t) return;
   const d = t.dataset;
+  if ('vcancel' in d) { cr.img = null; drawBrand(); return; }
+  if ('vsave' in d) {
+    const b = { logo: exportImg(360, 'image/webp'), icon: exportImg(64, 'image/png'), by: st.user, at: Date.now() };
+    try { await db.set(db.ref(database, 'branding'), b); cr.img = null; refreshBrand(b); drawBrand(); toast('新版視覺已套用'); }
+    catch (err) { toast(/permission/i.test(err.message) ? '儲存失敗：資料庫規則尚未更新' : `儲存失敗：${err.message}`); }
+    return;
+  }
+  if ('vreset' in d) { try { await db.remove(db.ref(database, 'branding')); refreshBrand(null); location.reload(); } catch (err) { toast(`失敗：${err.message}`); } return; }
   if ('signin' in d) au.signInWithPopup(auth, new au.GoogleAuthProvider()).catch(err => toast(`登入失敗：${err.message}`));
   else if ('signout' in d) { ev.preventDefault(); au.signOut(auth); }
   else if (d.copy) { try { await navigator.clipboard.writeText(d.copy); toast('已複製網址'); } catch (e) { toast('無法複製，請手動選取'); } }

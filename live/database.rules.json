@@ -70,6 +70,11 @@
         ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
         ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)"
       }
+    },
+    "branding": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+      ".validate": "newData.hasChildren(['logo']) && newData.child('logo').isString() && newData.child('logo').val().length < 700000 && (!newData.child('icon').exists() || newData.child('icon').val().length < 100000)"
     }
   }
 }

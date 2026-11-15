@@ -18,8 +18,8 @@ const ICONS = {
   lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none"/>',
   edit: '<path d="M3 13l.6-3L10.8 2.8l2.4 2.4L6 12.4z" fill="none"/>',
   alert: '<path d="M8 2.2l6 10.8H2z" fill="none"/><path d="M8 6.5v3M8 11.3v.2" fill="none"/>',
-  upload: '<path d="M8 11V3M5 5.8l3-3 3 3M3 13h10" fill="none"/>',
-  download: '<path d="M8 3v8M5 8.2l3 3 3-3M3 13h10" fill="none"/>',
+  upload: '<path d="M8 10.5V2.5M4.8 5.7L8 2.5l3.2 3.2M2.5 10.5v2.3c0 .4.3.7.7.7h9.6c.4 0 .7-.3.7-.7v-2.3" fill="none"/>',
+  download: '<path d="M8 2.5v8M4.8 7.3L8 10.5l3.2-3.2M2.5 10.5v2.3c0 .4.3.7.7.7h9.6c.4 0 .7-.3.7-.7v-2.3" fill="none"/>',
   copy: '<rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1" fill="none"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v5.5a1 1 0 0 0 1 1h1.5" fill="none"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8" fill="none"/>',
   list: '<path d="M5.5 4.5h8M5.5 8h8M5.5 11.5h8M2.5 4.5h.5M2.5 8h.5M2.5 11.5h.5" fill="none"/>',
@@ -147,7 +147,7 @@ export function refOf(m, t) {
 }
 
 export function header(state, role, links) {
-  return `<img src="img/logo.png" alt=""><div><h1>${esc(state.title || '交大盃')}</h1><div class="sub">${esc(state.edition || '')}${role ? `　${role}` : ''}</div></div>
+  return `<img src="img/logo.png" alt="" data-brand><div><h1>${esc(state.title || '交大盃')}</h1><div class="sub">${esc(state.edition || '')}${role ? `　${role}` : ''}</div></div>
     <span class="spacer"></span>${links.map(l => (l[1] ? `<a href="${l[1]}${location.search}">${l[0]}</a>` : l[0])).join('')}`;
 }
 export { EVENT_FULL };

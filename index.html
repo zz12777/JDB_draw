@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>交大盃抽籤系統</title>
-<link rel="icon" type="image/png" href="img/favicon.png">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="live/img/favicon.png">
+<link rel="apple-touch-icon" href="live/img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
@@ -17,8 +17,11 @@
 <body>
 <header class="top">
   <div class="brand">
+    <img class="brand-logo" src="live/img/logo.png" alt="" data-brand>
+    <div>
     <h1>交大盃抽籤系統</h1>
     <span class="sub">報名表單回應 → 完成籤表 → 完成點單</span>
+    </div>
   </div>
   <div class="top-actions">
     <a class="btn ghost" id="btn-feedback" href="https://forms.gle/2qHN331qs5mY14m78" target="_blank" rel="noopener">問題回報/建議提供</a>
@@ -32,5 +35,6 @@
 <footer class="foot">任何產出公開前請經<b>人工檢查</b>及<b>與往年資料對比確認</b>，系統不背鍋唷</footer>
 <div id="toast" class="toast" hidden></div>
 <script type="module" src="js/app.js"></script>
+<script type="module" src="live/js/brand.js"></script>
 </body>
 </html>
