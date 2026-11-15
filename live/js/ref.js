@@ -60,7 +60,8 @@ function viewMatch() {
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gamerow"><span class="small">第${'一二三四五'[gi]}局</span>
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${(games[gi] || [])[0] ?? ''}">
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${(games[gi] || [])[1] ?? ''}"><span data-ok="${gi}"></span></div>`).join('')}
-    <p id="msg" class="small"></p></div>${absentPanel(m.team ? point : null)}`;
+    <p id="msg" class="small"></p>
+    <button class="btn yellow" data-done style="width:100%;justify-content:center;padding:10px">${icon('check')}${m.team ? '本點結束' : '本場結束'}</button></div>${absentPanel(m.team ? point : null)}`;
 }
 /** 只更新數字與提示，不重畫輸入框 */
 function refresh() {
@@ -90,6 +91,7 @@ document.addEventListener('click', ev => {
   else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
     if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => { r.refs = r.refs || {}; r.refs[table] = name; }); else render(); }
   else if ('back' in d) { table = null; point = null; render(); }
+  else if ('done' in d) { document.activeElement && document.activeElement.blur(); table = null; point = null; render(); toast('紀錄已儲存'); window.scrollTo(0, 0); }
   else if ('points' in d) { point = null; render(); }
   else if (d.point) { point = Number(d.point); render(); }
   else if (d.absent) {

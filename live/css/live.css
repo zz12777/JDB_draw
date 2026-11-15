@@ -381,3 +381,14 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .ann .agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 28px; }
 .ann .agrid .ab { max-width: none; margin: 0 0 14px; }
 .alertbox .ameta { color: #8a6a66; }
+
+/* 公開頁球桌：寬螢幕時雙方同一列、比數置中 */
+.bcell .bduel { display: none; }
+@media (min-width: 900px) {
+  .bcell .bs { display: none; }
+  .bcell .bduel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 14px; align-items: center; margin: 12px 0 6px; }
+  .bcell .bduel .nm { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bcell .bduel .nm.r { text-align: right; }
+  .bcell .bduel b { font-size: 26px; color: var(--blue); white-space: nowrap; }
+  .bcell { height: 116px; }
+}

@@ -51,8 +51,7 @@ function render() {
     <section class="hero"><img src="../live/img/logo.png" alt="" data-brand>
       <div><h2>交大盃籌辦資源</h2>
         ${st.until ? `<p>你的管理員權限到 ${fmtDate(st.until)} 為止。</p>` : ''}
-        <div class="row" style="margin-top:12px"><label class="btn ghost">${icon('upload')}選擇圖片<input type="file" accept="image/*" hidden id="vf"></label>
-          ${cr.saved ? '<button class="btn ghost sm" data-vreset>恢復原本的圖</button>' : ''}</div></div></section>
+        <div class="row" style="margin-top:12px"><label class="btn ghost">${icon('upload')}選擇圖片<input type="file" accept="image/*" hidden id="vf"></label></div></div></section>
 
     <div class="sys">
       <div class="panel"><span class="when">報名截止後到賽前</span><h2>${icon('bracket')}抽籤系統</h2>

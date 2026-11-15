@@ -23,7 +23,7 @@ function render() {
   if ($('#q').value !== q && !composing) $('#q').value = q;
   // 搜尋只在賽程、成績公告、即時桌況出現，各自只找當頁的內容
   $('.sbox').style.display = tab === 'time' ? 'none' : '';
-  $('#q').placeholder = tab === 'ann' ? '搜尋成績公告' : tab === 'live' ? '搜尋目前球桌' : '學校、隊名或姓名';
+  $('#q').placeholder = '學校、隊名或姓名';
   const key = tab === 'time' ? '' : q.trim();
   $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
     : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s, key) : key ? viewSearch(s, key) : viewSched();

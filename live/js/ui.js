@@ -110,6 +110,7 @@ export function board(state, d, opt = {}) {
       <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
       <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>
       <div class="bs"><span class="nm">${esc(sideText(m.B, m.team))}</span><b>${m.score[1]}</b></div>
+      <div class="bduel"><span class="nm r">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]} : ${m.score[1]}</b><span class="nm">${esc(sideText(m.B, m.team))}</span></div>
       <div class="bp">${line}</div></${tag}>`;
   };
   const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
