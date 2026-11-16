@@ -12,6 +12,7 @@ import { entryStrong, arrangeRR, allPlayers, recLabel, isGeneral, coverage, setD
 import { parseCsvText } from './reader.js';
 import { computeOverlaps, overlapWorkbook } from './overlap.js';
 import { participantsDocx } from './participants.js';
+import { signinDocx } from './signin.js';
 import { buildSchedule, scheduleWorkbook, DEFAULT_PARAMS, DAY1_COLS, DAY2_COLS, COL_TITLE, fmt as fmtTime } from './schedule.js';
 
 // ---------------- 圖示（線條） ----------------
@@ -280,7 +281,8 @@ function stepEdit() {
       <button class="btn ghost sm" data-addrow>${icon('plus')}新增一列</button>
       <button class="btn ghost sm" data-dlorder>${icon('download')}下載抽籤順序表</button>
       <button class="btn ghost sm" data-dlpart>${icon('download')}參賽名單 Word</button>
-      <button class="btn ghost sm" data-dlov>${icon('download')}重疊名單 Excel</button></div>
+      <button class="btn ghost sm" data-dlov>${icon('download')}重疊名單 Excel</button>
+      <button class="btn ghost sm" data-dlsign>${icon('download')}簽到表 Word</button></div>
     <div class="note small">若陽明交大保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。</div>
     ${flagged ? `<div class="note warn small">有 ${flagged} 筆需要確認（看提醒欄）。</div>` : ''}
     <div class="tbl-wrap scroll"><table>
@@ -814,6 +816,12 @@ function overlapData() {
 async function dlOverlap() {
   download(await workbookBlob(overlapWorkbook(overlapData())), '重疊名單.xlsx');
 }
+async function dlSignin() {
+  const evs = {};
+  ALL_EVENTS.forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
+  const title = ((S.sheetSettings && S.sheetSettings.title) || DEFAULT_TITLE).replace(/全國大專校院桌球錦標賽$/, '');
+  download(await signinDocx(evs, title), `${title}簽到表.docx`);
+}
 async function dlParticipants() {
   const evs = {};
   ALL_EVENTS.forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
@@ -1002,12 +1010,13 @@ function stepHelp() {
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev0 => {
-  const t = ev0.target.closest('[data-dmode],[data-swapok],[data-swapno],[data-dlpart],[data-dlov],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
+  const t = ev0.target.closest('[data-dmode],[data-swapok],[data-swapno],[data-dlpart],[data-dlsign],[data-dlov],[data-dlsched],[data-ovreset],[data-spreset],[data-pdfsheet],[data-sheetclear],[data-dlsheet],[data-step],[data-ev],[data-build],[data-del],[data-addrow],[data-dlorder],[data-promote],[data-paste],[data-newev],[data-plan-reset],[data-dlblank],[data-run],[data-pos],[data-dlfinal],[data-dlblank-ev],[data-dlorder-ev],[data-dlall]');
   if (!t) return;
   const d = t.dataset;
   if (d.dlsched !== undefined) return dlSched();
   if (d.dlov !== undefined) return dlOverlap();
   if (d.dlpart !== undefined) return dlParticipants();
+  if (d.dlsign !== undefined) return dlSignin();
   if (d.ovreset !== undefined) { S.schedule.override = {}; return render(); }
   if (d.spreset !== undefined) { S.schedule.params = {}; S.schedule.override = {}; return render(); }
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }

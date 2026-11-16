@@ -594,7 +594,11 @@ document.addEventListener('change', async ev => {
   else if (d.date) update(s => { s.dates = (s.dates || ['', '']).slice(); s.dates[Number(d.date)] = t.value; });
   else if (d.ann) { const [ev, k] = d.ann.split('|'); update(s => { s.podium = { ...(s.podium || {}) }; s.podium[ev] = { ...s.podium[ev], [k]: t.value.trim() }; }); }
   else if (d.annTitle != null) update(s => { s.annTitle = t.value.trim(); });
-  else if (d.set) update(s => { s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : t.value; });
+  else if (d.set) update(s => {
+    // 改屆數時，成績公告標題裡的舊屆數一起換掉
+    if (d.set === 'edition' && s.edition && s.annTitle && s.annTitle.includes(s.edition)) s.annTitle = s.annTitle.split(s.edition).join(t.value);
+    s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : t.value;
+  });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
   else if ('staff' in d) update(s => { s.staff = [...new Set(t.value.split(/[\n,，、\s]+/).map(x => x.trim()).filter(Boolean))]; });
