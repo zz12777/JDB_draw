@@ -19,7 +19,7 @@ try {
     }
     if (ok) {
       gate.hidden = true;
-      who.innerHTML = `<button class="btn ghost" id="btn-signout" title="登出">登出 ${user.email.replace(/[<>&]/g, '')}</button>`;
+      who.innerHTML = `<button class="btn ghost" id="btn-signout" title="${user.email.replace(/[<>&"]/g, '')}">登出</button>`;
       return;
     }
     who.innerHTML = '';

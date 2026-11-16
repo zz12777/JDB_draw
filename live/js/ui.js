@@ -148,11 +148,11 @@ export function refOf(m, t) {
 }
 
 /**
- * 管理頁面共用的「切換系統」：籌辦首頁、抽籤系統、大會台，目前所在的那個加底線。
+ * 管理頁面共用的「切換系統」：首頁、抽籤系統、大會台，目前所在的那個加底線。
  * root：從本頁到網站根目錄的相對路徑
  */
 export function sysNav(cur, root) {
-  const items = [['home', '籌辦首頁', ''], ['draw', '抽籤系統', 'draw/'], ['desk', '大會台', 'live/desk.html']];
+  const items = [['home', '首頁', ''], ['draw', '抽籤系統', 'draw/'], ['desk', '大會台', 'live/desk.html']];
   return `<nav class="top-nav" aria-label="切換系統">${items.map(([k, t, p]) => `<a class="${k === cur ? 'on' : ''}" href="${root}${p}">${t}</a>`).join('')}</nav>`;
 }
 /** 標題列。opt.nav：要顯示切換系統時填目前系統；links：本頁專用連結；opt.account：登出按鈕 */

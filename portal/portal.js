@@ -39,11 +39,11 @@ const link = (title, url, qr) => `<div class="lnk"><div><b>${title}</b><code>${e
   <div class="row" style="gap:6px">${qr ? `<button class="btn ghost sm" data-qr="${esc(url)}">QR code</button>` : ''}<button class="btn ghost sm" data-copy="${esc(url)}" title="複製網址" aria-label="複製網址">${icon('copy')}</button><a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a></div></div>`;
 
 function render() {
-  $('#top').innerHTML = `<img src="${base}live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
-    <div class="top-actions">${st.admin ? sysNav('home', base) : ''}${st.user ? `<div class="top-group"><a href="#" data-signout>登出 ${esc(st.user)}</a></div>` : ''}</div>`;
+  $('#top').innerHTML = `<img src="${base}live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">首頁</div></div><span class="spacer"></span>
+    <div class="top-actions">${st.admin ? sysNav('home', base) : ''}${st.user ? `<div class="top-group"><a href="#" data-signout title="${esc(st.user)}">登出</a></div>` : ''}</div>`;
   if (!st.ready) return;
   if (!st.admin) {
-    $('#main').innerHTML = `<div class="login"><img src="${base}live/img/logo.png" alt="" data-brand><h2>交大盃籌辦首頁</h2>
+    $('#main').innerHTML = `<div class="login"><img src="${base}live/img/logo.png" alt="" data-brand><h2>交大盃</h2>
       ${st.user ? `<p style="color:var(--red)">${esc(st.user)} 沒有管理員權限，或權限已到期。</p><button class="btn ghost" data-signout>改用其他帳號</button>`
         : '<p>僅限管理員登入</p><button class="btn" data-signin>以 Google 帳號登入</button>'}</div>`;
     return;
@@ -80,10 +80,10 @@ function render() {
           <li>大會核對後確認成績與排名</li>
           <li>包含球桌情形、決賽抽籤、可擔任裁判名單與次數</li>
           <li>成績公告</li>
-          <li>公開頁：賽程、時間表、成績公告、即時桌況</li>
+          <li>即時賽程：賽程、時間表、成績公告、即時桌況</li>
         </ul>
         <p class="small muted">資料存在雲端資料庫，多台電腦與手機即時同步。大會台需以管理員帳號登入。</p>
-        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('公開頁（給參賽者）', URLS.pub, true)}</div></div>
+        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('即時賽程（給參賽者）', URLS.pub, true)}</div></div>
     </div>
 
     <div class="panel"><h2>流程</h2><div class="flow">
@@ -209,7 +209,7 @@ function showQr(url) {
   if (!window.qrcode) { toast('QR code 元件載入失敗，請重新整理'); return; }
   const png = qrCanvas(url, 1024).toDataURL('image/png');
   host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%);text-align:center">
-    <div class="row"><h2>公開頁 QR code</h2><span class="spacer"></span><button class="btn ghost sm" data-qrclose aria-label="關閉" title="關閉">${icon('close')}</button></div>
+    <div class="row"><h2>即時賽程 QR code</h2><span class="spacer"></span><button class="btn ghost sm" data-qrclose aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <img src="${png}" alt="" style="width:260px;height:260px;margin:12px auto 6px;display:block">
     <p class="small muted" style="word-break:break-all">${esc(url)}</p>
     <a class="btn" href="${png}" download="交大盃即時賽程QRcode.png">${icon('download')}下載圖片</a></div></div>`;
