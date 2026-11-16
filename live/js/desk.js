@@ -1,6 +1,7 @@
 // 大會台
 import { derive, isTeam, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
-import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL } from './store.js';
+import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory } from './store.js';
+import { histKey, entryFromState } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
@@ -247,6 +248,13 @@ function drawModal() {
   const m = D.byId.get(modal.mid);
   host.innerHTML = `<div class="modal-bg">${modal.kind === 'score' ? scoreModal(m) : lineupModal(m)}</div>`;
   refreshScore();
+}
+
+/** 公布、取消公布或修改成績後，存一份到歷屆名次（清除全部資料不會刪到） */
+function syncHistory() {
+  const s = getState();
+  if (!s.edition) return;
+  saveHistory(histKey(s.edition), entryFromState(s)).catch(err => toast(`歷屆名次未存到：${err.message || err}`));
 }
 
 // ---------------- 決賽抽籤 ----------------
@@ -557,8 +565,8 @@ document.addEventListener('click', async ev => {
     try { await navigator.clipboard.writeText(rows.map(r => r.join('\t')).join('\n')); toast(`已複製 ${rows.length} 列，請貼到猛將資料庫試算表最下方`); } catch (e) { toast('無法複製'); }
     return;
   }
-  if (d.pub) { const e = D.events.find(x => x.name === d.pub); const v = podiumText(e); update(s => { s.podium = { ...(s.podium || {}), [d.pub]: v }; }); toast(`${ANN_NAME[d.pub]} 已公布`); return; }
-  if (d.unpub) { update(s => { const p = { ...(s.podium || {}) }; delete p[d.unpub]; s.podium = p; }); return; }
+  if (d.pub) { const e = D.events.find(x => x.name === d.pub); const v = podiumText(e); update(s => { s.podium = { ...(s.podium || {}), [d.pub]: v }; }); syncHistory(); toast(`${ANN_NAME[d.pub]} 已公布`); return; }
+  if (d.unpub) { update(s => { const p = { ...(s.podium || {}) }; delete p[d.unpub]; s.podium = p; }); syncHistory(); return; }
   if (d.rollset) { const [k, v] = d.rollset.split('|'); update(s => { const se = s.events.find(x => x.name === curEv); se.roll = se.roll || {}; se.roll[k] = se.roll[k] === v ? '' : v; }); return; }
   if (d.fpub) {
     const on = d.fpub === '1';
@@ -633,7 +641,7 @@ document.addEventListener('change', async ev => {
   else if (d.roll) update(s => { const se = s.events.find(x => x.name === curEv); se.roll = se.roll || {}; se.roll[d.roll] = t.value; });
   else if (d.fpos) update(s => { const se = s.events.find(x => x.name === curEv); se.finalPos = se.finalPos || {}; se.finalPos[d.fpos] = t.value ? Number(t.value) || '' : ''; });
   else if (d.date) update(s => { s.dates = (s.dates || ['', '']).slice(); s.dates[Number(d.date)] = t.value; });
-  else if (d.ann) { const [ev, k] = d.ann.split('|'); update(s => { s.podium = { ...(s.podium || {}) }; s.podium[ev] = { ...s.podium[ev], [k]: t.value.trim() }; }); }
+  else if (d.ann) { const [ev, k] = d.ann.split('|'); update(s => { s.podium = { ...(s.podium || {}) }; s.podium[ev] = { ...s.podium[ev], [k]: t.value.trim() }; }); syncHistory(); }
   else if (d.annTitle != null) update(s => { s.annTitle = t.value.trim(); });
   else if (d.set) update(s => {
     // 改屆數時，成績公告標題裡的舊屆數一起換掉

@@ -2,10 +2,10 @@
 import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { slotOf } from './timetable.js';
 import { toCn } from '../../js/util.js';
-import { getState, subscribe, auth, onAuth } from './store.js';
+import { getState, subscribe, auth, onAuth, loadHistory } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
 import { bracketSvg } from './tree.js';
-import { HISTORY } from './history.js';
+import { mergeHistory, entryFromState } from './history.js';
 
 let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
@@ -72,18 +72,14 @@ function viewAnn(s, key) {
     ${list.length ? `<div class="agrid">${list.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(([l, v]) => line(l, v)).join('')}</div>`).join('')}</div>` : '<p class="muted small" style="text-align:center">查無相關成績。</p>'}</div>`;
 }
 
-/** 歷屆名次：今年大會公布的成績也會先排在最前面 */
+/** 歷屆名次：舊資料、資料庫存的各屆，加上今年正在公布的 */
+let savedHist = null, histLoading = false;
 function histList(s) {
-  const list = [...HISTORY];
-  const pub = s.podium || {};
-  const evs = ANN_ORDER.filter(ev => pub[ev] && ['c', 'r', 's1', 's2'].some(k => pub[ev][k]));
-  if (evs.length && !list.some(y => y.edition === s.edition)) {
-    const year = Number(String((s.dates || [])[0] || '').slice(0, 4)) || new Date().getFullYear();
-    const p = {};
-    evs.forEach(ev => { p[ev] = [['冠軍', pub[ev].c], ['亞軍', pub[ev].r], ['季軍', pub[ev].s1], ['季軍', pub[ev].s2]].filter(([, v]) => v); });
-    list.unshift({ year, edition: s.edition, p });
+  if (savedHist === null && !histLoading) {
+    histLoading = true;
+    loadHistory().then(h => { savedHist = h; }).catch(() => { savedHist = {}; }).finally(() => { histLoading = false; render(); });
   }
-  return list;
+  return mergeHistory(savedHist, entryFromState(s));
 }
 function viewHist(s, key) {
   const list = histList(s);
@@ -98,8 +94,9 @@ function viewHist(s, key) {
     const out = list.map(y => year(y)).join('');
     return out || '<div class="panel"><p class="muted small" style="text-align:center">查無相關名次。</p></div>';
   }
-  if (!list.some(y => y.year === hy)) hy = list[0].year;
-  return `<div class="pills" style="margin-bottom:12px">${list.map(y => `<button class="${y.year === hy ? 'on' : ''}" data-hy="${y.year}">${y.year}</button>`).join('')}</div>${year(list.find(y => y.year === hy))}`;
+  // 沒點過年份就顯示最新一屆（資料庫的資料晚一點才到，也會自動換成最新的）
+  const cur = list.find(y => y.year === hy) || list[0];
+  return `<div class="pills" style="margin-bottom:12px">${list.map(y => `<button class="${y === cur ? 'on' : ''}" data-hy="${y.year}">${y.year}</button>`).join('')}</div>${year(cur)}`;
 }
 
 const shown = m => m.status !== 'wait' && m.status !== 'ready';

@@ -133,6 +133,8 @@ function localRemote() {
       }
       localStorage.setItem(KEY, JSON.stringify(t));
     },
+    async setHistory(key, v) { const h = this.history(); if (v == null) delete h[key]; else h[key] = v; localStorage.setItem('jdb-live-history', JSON.stringify(h)); },
+    history() { try { return JSON.parse(localStorage.getItem('jdb-live-history') || '{}'); } catch (e) { return {}; } },
   };
 }
 
@@ -170,6 +172,7 @@ async function sdkRemote() {
   return {
     stamp: () => db.serverTimestamp(),
     write: up => db.update(db.ref(database, ROOT), up),
+    setHistory: (key, v) => db.set(db.ref(database, `history/${key}`), v),
   };
 }
 
@@ -205,8 +208,22 @@ function pollRemote() {
   return { stamp: () => Date.now(), write: async () => { throw new Error('公開頁不可修改資料'); } };
 }
 
+// ---------------- 歷屆名次（不分屆，放在資料庫最外層的 history） ----------------
+/** 存一屆的名次；v 為 null 時刪除 */
+export function saveHistory(key, v) {
+  if (!remote.setHistory) return Promise.reject(new Error('尚未連線'));
+  return remote.setHistory(key, v == null ? null : JSON.stringify(v));
+}
+/** 讀出資料庫裡所有屆的名次 */
+export async function loadHistory() {
+  if (LOCAL) return localRemote.cache ? localRemote.cache.history() : {};
+  const r = await fetch(`${FIREBASE.databaseURL}/history.json`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) || {};
+}
+
 // 連線建立前先放一個暫存的，避免畫面一開始就呼叫 update 時出錯
 remote = { stamp: () => Date.now(), write: async () => { throw new Error('尚未連線'); } };
-if (LOCAL) remote = localRemote();
+if (LOCAL) remote = localRemote.cache = localRemote();
 else if (ROLE === 'public') remote = pollRemote();
 else sdkRemote().then(r => { remote = r; }).catch(err => { auth.error = `無法連線資料庫：${err.message}`; emitAuth(); });
