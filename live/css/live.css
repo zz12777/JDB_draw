@@ -400,3 +400,9 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
   .bcell .bduel b { font-size: 26px; color: var(--blue); white-space: nowrap; }
   .bcell { height: 116px; }
 }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; }
+.seg button { border: 0; border-left: 1px solid var(--line); background: none; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 14px; color: var(--ink); white-space: nowrap; }
+.seg button:first-child { border-left: 0; }
+.seg button.on { background: var(--blue); color: #fff; }
+.seg button.no.on { background: var(--red); }
+.alertbox.remind { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin: 0 0 12px; }

@@ -28,7 +28,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s);
+  $('#main').innerHTML = drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
 }
 
 function viewLogin() {
@@ -238,12 +238,48 @@ function drawModal() {
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
     return;
   }
+  if (modal.kind === 'unpub') {
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>取消公開${esc(curEv)}決賽籤表</h2>
+      <p>即時賽程頁面的決賽籤表會回到空白，籤號資料不會刪除，之後可以再公開。</p>
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-fpub="0" data-ok>確認取消公開</button></div></div></div>`;
+    return;
+  }
   const m = D.byId.get(modal.mid);
   host.innerHTML = `<div class="modal-bg">${modal.kind === 'score' ? scoreModal(m) : lineupModal(m)}</div>`;
   refreshScore();
 }
 
 // ---------------- 決賽抽籤 ----------------
+/** 決賽籤號的問題：空字串代表沒問題或還沒填 */
+function fposErr(e, se, g, k) {
+  const fp = se.finalPos || {}, half = e.final.size / 2;
+  const p = Number(fp[g.letter + k]);
+  if (!p) return '';
+  if (p < 1 || p > e.final.size) return '超出範圍';
+  if (Object.values(fp).filter(x => Number(x) === p).length > 1) return '籤號重複';
+  if (e.final.mark.get(p) !== k) return `此為${e.final.mark.get(p)}軍籤位`;
+  const other = Number(fp[g.letter + (k === '冠' ? '亞' : '冠')]);
+  if (other && (other <= half) === (p <= half)) return '同組冠亞軍須分在上下半區';
+  return '';
+}
+/** 每組冠亞軍隊伍都選好、籤號都填了且沒有問題 */
+function drawDone(e, se) {
+  return !!(se && e.final && e.groups.length) && e.groups.every(g => g.rank && g.rank.c && g.rank.r && ['冠', '亞'].every(k => Number((se.finalPos || {})[g.letter + k]) && !fposErr(e, se, g, k)));
+}
+const REMIND_MS = 30 * 60 * 1000;
+/** 抽完的時間記下來；抽完超過 30 分鐘還沒公開就提醒 */
+function drawReminders(s) {
+  const late = [];
+  D.events.filter(e => e.team && e.final).forEach(e => {
+    const se = s.events.find(x => x.name === e.name);
+    const done = drawDone(e, se);
+    if (done && !se.finalDone && !se.finalPub) setTimeout(() => update(t => { const x = t.events.find(y => y.name === e.name); if (x && !x.finalDone) x.finalDone = Date.now(); }));
+    else if (!done && se && se.finalDone) setTimeout(() => update(t => { const x = t.events.find(y => y.name === e.name); if (x) delete x.finalDone; }));
+    if (done && se.finalDone && !se.finalPub && Date.now() - se.finalDone > REMIND_MS) late.push(e.name);
+  });
+  return late.length ? `<div class="alertbox remind"><b>${late.join('、')}決賽籤已全部抽完超過 30 分鐘，尚未公開到即時賽程。</b>
+    ${late.map(n => `<button class="btn sm" data-gopub="${esc(n)}">前往${esc(n)}決賽抽籤</button>`).join('')}</div>` : '';
+}
 function viewDraw(s) {
   const teams = D.events.filter(e => e.team && e.final);
   if (!teams.length) return '<div class="panel"><p class="muted">尚無團體賽資料。</p></div>';
@@ -254,16 +290,7 @@ function viewDraw(s) {
   const marks = [...e.final.mark.entries()];
   const used = new Map();
   Object.entries(se.finalPos || {}).forEach(([k, p]) => { if (p) used.set(Number(p), (used.get(Number(p)) || []).concat(k)); });
-  const check = (g, k) => {
-    const key = g.letter + k, p = Number((se.finalPos || {})[key]);
-    if (!p) return '';
-    if (p < 1 || p > e.final.size) return '超出範圍';
-    if (used.get(p).length > 1) return '籤號重複';
-    if (e.final.mark.get(p) !== k) return `此為${e.final.mark.get(p)}軍籤位`;
-    const other = Number((se.finalPos || {})[g.letter + (k === '冠' ? '亞' : '冠')]);
-    if (other && (other <= half) === (p <= half)) return '同組冠亞軍須分在上下半區';
-    return '';
-  };
+  const check = (g, k) => fposErr(e, se, g, k);
   const hint = g => {
     const c = Number((se.finalPos || {})[g.letter + '冠']);
     return c ? (c <= half ? '下半區' : '上半區') : '';
@@ -277,7 +304,7 @@ function viewDraw(s) {
     const cls = k === '冠' ? 'gc' : 'gr';
     return `<td class="${cls} first"><select data-rank="${g.letter}|${rk}"><option value=""></option>${g.teams.map(t => `<option ${cur === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
         ${!cur && sug ? `<div class="small muted">名次試算：${esc(sug.team)}${sug.tie ? '（同勝場，請確認）' : ''}</div>` : ''}</td>
-      <td class="${cls}"><select data-roll="${g.letter + k}"><option value=""></option>${['到', '代抽', '未到'].map(x => `<option ${roll === x ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+      <td class="${cls}"><div class="seg">${['到', '代抽', '未到'].map(x => `<button class="${roll === x ? 'on' : ''}${x === '未到' ? ' no' : ''}" data-rollset="${g.letter + k}|${x}">${x}</button>`).join('')}</div></td>
       <td class="${cls}"><input type="text" inputmode="numeric" style="width:56px" data-fpos="${g.letter + k}" value="${(se.finalPos || {})[g.letter + k] || ''}">
         ${err ? `<div class="small" style="color:var(--red)">${err}</div>` : k === '亞' && hint(g) && !(se.finalPos || {})[g.letter + k] ? `<div class="small muted">應抽${hint(g)}</div>` : ''}</td>`;
   };
@@ -291,7 +318,10 @@ function viewDraw(s) {
       <tr><th class="gc first">隊伍</th><th class="gc">點名</th><th class="gc">籤號</th><th class="gr first">隊伍</th><th class="gr">點名</th><th class="gr">籤號</th></tr></thead><tbody>
     ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
-    <div class="panel"><h2>決賽籤表</h2><div class="treebox">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
+    <div class="panel"><div class="row"><h2 style="margin:0">決賽籤表</h2><span class="spacer"></span>
+      ${se.finalPub ? `<span class="small muted">${fmtTime(se.finalPub)} 已公開到即時賽程</span><button class="btn ghost sm" data-fpub="0">取消公開</button>`
+        : `${drawDone(e, se) ? '' : '<span class="small muted">全部抽完後才能公開</span>'}<button class="btn sm" data-fpub="1" ${drawDone(e, se) ? '' : 'disabled'}>${icon('check')}確定並公開</button>`}</div>
+    <div class="treebox" style="margin-top:10px">${bracketSvg(e.matches.filter(m => m.stage === 'F'), true, { pos: true }).svg}</div></div>
     <div class="panel"><h2>決賽第一輪賽程</h2><table class="list frt"><thead><tr><th>場次</th><th colspan="3">賽程</th></tr></thead><tbody>
       ${e.matches.filter(m => m.stage === 'F').filter(m => m.src.some(x => x.pos != null)).map(m => {
         const side = x => {
@@ -451,6 +481,8 @@ function applyBracket(ev, sheets, fileName) {
     } else {
       e = { name: ev, kind: 'rr', groups: r.st.groups.map(g => ({ letter: g.letter, teams: Array.from({ length: g.size }, (_, j) => r.byPos.get(g.startPos + j).name) })),
         rosters: (old && old.rosters) || {}, rank: (old && old.rank) || {}, finalPos: (old && old.finalPos) || {}, roll: (old && old.roll) || {} };
+      if (old && old.finalPub) e.finalPub = old.finalPub;
+      if (old && old.finalDone) e.finalDone = old.finalDone;
     }
     e.file = fileName || '';
     s.events = s.events.filter(x => x.name !== ev).concat(e);
@@ -527,6 +559,15 @@ document.addEventListener('click', async ev => {
   }
   if (d.pub) { const e = D.events.find(x => x.name === d.pub); const v = podiumText(e); update(s => { s.podium = { ...(s.podium || {}), [d.pub]: v }; }); toast(`${ANN_NAME[d.pub]} 已公布`); return; }
   if (d.unpub) { update(s => { const p = { ...(s.podium || {}) }; delete p[d.unpub]; s.podium = p; }); return; }
+  if (d.rollset) { const [k, v] = d.rollset.split('|'); update(s => { const se = s.events.find(x => x.name === curEv); se.roll = se.roll || {}; se.roll[k] = se.roll[k] === v ? '' : v; }); return; }
+  if (d.fpub) {
+    const on = d.fpub === '1';
+    if (!on && !('ok' in d)) { modal = { kind: 'unpub' }; drawModal(); return; }
+    if (!on) { modal = null; drawModal(); }
+    update(s => { const se = s.events.find(x => x.name === curEv); if (on) se.finalPub = Date.now(); else delete se.finalPub; });
+    toast(on ? `${curEv}決賽籤表已公開` : `${curEv}決賽籤表已取消公開`); return;
+  }
+  if (d.gopub) { tab = 'draw'; curEv = d.gopub; render(); return; }
   if (d.tab) { tab = d.tab; render(); }
   else if (d.reftab) { refTab = d.reftab; render(); }
   else if (d.ev) { curEv = d.ev; render(); }

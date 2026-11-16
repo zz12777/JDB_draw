@@ -14,7 +14,8 @@ const TAB_ICON = { sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables
 
 function render() {
   const s = getState();
-  D = derive(s);
+  // 決賽籤號要等大會台按「確定並公開」才顯示
+  D = derive({ ...s, events: (s.events || []).map(e => (e.finalPub ? e : { ...e, finalPos: {} })) });
   $('#top').innerHTML = header(s, '即時賽程', []);
   if (tab === 'time' && !s.sched) tab = 'sched';
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}<span>${t}</span></button>`).join('');
@@ -130,8 +131,11 @@ function viewSched() {
   const tree = t.svg ? `<div class="panel"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>
       <button class="btn ghost sm" data-zoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-zoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div>
     <div class="treebox" style="margin-top:10px">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * zoom)}" height="${Math.round(t.height * zoom)}"`)}</div></div>` : '';
+  const pre = groups ? `<div class="panel"><h2>預賽</h2>${groups}</div>` : '';
+  // 決賽籤表公開後排到預賽上面
+  const pub = e.team && (getState().events || []).some(x => x.name === e.name && x.finalPub);
   return `<div class="pills" style="margin-bottom:12px">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
-    ${groups ? `<div class="panel"><h2>預賽</h2>${groups}</div>` : ''}${tree}`;
+    ${pub ? tree + pre : pre + tree}`;
 }
 
 /** 這一場是否和關鍵字有關：學校、隊名、姓名，團體賽開賽後也找排點 */
