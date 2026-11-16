@@ -6,9 +6,10 @@ import { refreshBrand } from '../live/js/brand.js';
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const $ = s => document.querySelector(s);
 const key = email => String(email || '').toLowerCase().replace(/\./g, ',');
-const base = new URL('../', location.href).href;
+// 網站根目錄（不論本頁放在哪一層）
+const base = new URL('../', import.meta.url).href;
 const URLS = {
-  draw: base,
+  draw: `${base}draw/`,
   desk: `${base}live/desk.html`,
   ref: `${base}live/ref.html`,
   pub: `${base}live/`,
@@ -38,17 +39,17 @@ const link = (title, url, qr) => `<div class="lnk"><div><b>${title}</b><code>${e
   <div class="row" style="gap:6px">${qr ? `<button class="btn ghost sm" data-qr="${esc(url)}">QR code</button>` : ''}<button class="btn ghost sm" data-copy="${esc(url)}" title="複製網址" aria-label="複製網址">${icon('copy')}</button><a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a></div></div>`;
 
 function render() {
-  $('#top').innerHTML = `<img src="../live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
+  $('#top').innerHTML = `<img src="${base}live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
     ${st.admin ? `<a href="${URLS.draw}">抽籤系統</a><a href="${URLS.desk}">大會台</a>` : ''}${st.user ? `<a href="#" data-signout>登出 ${esc(st.user)}</a>` : ''}`;
   if (!st.ready) return;
   if (!st.admin) {
-    $('#main').innerHTML = `<div class="login"><img src="../live/img/logo.png" alt="" data-brand><h2>交大盃籌辦首頁</h2>
+    $('#main').innerHTML = `<div class="login"><img src="${base}live/img/logo.png" alt="" data-brand><h2>交大盃籌辦首頁</h2>
       ${st.user ? `<p style="color:var(--red)">${esc(st.user)} 沒有管理員權限，或權限已到期。</p><button class="btn ghost" data-signout>改用其他帳號</button>`
         : '<p>僅限管理員登入</p><button class="btn" data-signin>以 Google 帳號登入</button>'}</div>`;
     return;
   }
   $('#main').innerHTML = `
-    <section class="hero"><img src="../live/img/logo.png" alt="" data-brand>
+    <section class="hero"><img src="${base}live/img/logo.png" alt="" data-brand>
       <div><h2>交大盃籌辦資源</h2>
         ${st.until ? `<p>你的管理員權限到 ${fmtDate(st.until)} 為止。</p>` : ''}
         <div class="row" style="margin-top:12px"><label class="btn ghost">${icon('upload')}選擇圖片<input type="file" accept="image/*" hidden id="vf"></label></div></div></section>

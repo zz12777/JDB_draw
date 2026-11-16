@@ -189,3 +189,21 @@ table.mini th, table.mini td { border: 1px solid var(--line); padding: 3px 8px; 
 .top .btn.ghost:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .7); }
 .top .btn.ghost.danger { color: #ffd2cf; }
 .top .btn .icon, .top .btn svg { color: inherit; }
+
+/* 標題列按鈕分組：切換系統、專案檔、其他 */
+.top-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.top-nav { display: flex; gap: 2px; padding-right: 14px; border-right: 1px solid rgba(255, 255, 255, .3); }
+.top-nav a { color: #fff; text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+.top-nav a:hover { background: rgba(255, 255, 255, .12); }
+.top-group { display: flex; gap: 6px; align-items: center; padding-right: 14px; border-right: 1px solid rgba(255, 255, 255, .3); }
+.top-group:last-child { border-right: 0; padding-right: 0; }
+#who:empty { display: none; }
+
+/* 登入畫面 */
+#gate { position: fixed; inset: 0; z-index: 100; background: #f3f6fb; display: grid; place-items: center; padding: 20px; }
+#gate[hidden] { display: none; }
+.gate-card { background: #fff; border: 1px solid var(--line); border-top: 4px solid #f2b90c; border-radius: 10px; padding: 28px 24px; width: min(420px, 100%); text-align: center; }
+.gate-card img { width: 120px; height: 120px; border-radius: 50%; margin-bottom: 8px; }
+.gate-card h2 { margin: 0 0 6px; color: #14407f; }
+.gate-card p { color: var(--muted); margin: 8px 0 16px; }
+.gate-card .gate-err { color: var(--bad); }
