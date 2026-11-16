@@ -124,15 +124,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '猛將資料庫', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '簽到表', '猛將資料庫', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 7 ? `<span class="n">${i + 1}</span>` : icon(i === 7 ? 'star' : 'help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 8 ? `<span class="n">${i + 1}</span>` : icon(i === 8 ? 'star' : 'help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepStrong, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepSignin, stepStrong, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -281,8 +281,7 @@ function stepEdit() {
       <button class="btn ghost sm" data-addrow>${icon('plus')}新增一列</button>
       <button class="btn ghost sm" data-dlorder>${icon('download')}下載抽籤順序表</button>
       <button class="btn ghost sm" data-dlpart>${icon('download')}參賽名單 Word</button>
-      <button class="btn ghost sm" data-dlov>${icon('download')}重疊名單 Excel</button>
-      <button class="btn ghost sm" data-dlsign>${icon('download')}簽到表 Word</button></div>
+      <button class="btn ghost sm" data-dlov>${icon('download')}重疊名單 Excel</button></div>
     <div class="note small">若陽明交大保留名額不在表單裡，請用「新增一列」或右邊的「貼上名單」加入。</div>
     ${flagged ? `<div class="note warn small">有 ${flagged} 筆需要確認（看提醒欄）。</div>` : ''}
     <div class="tbl-wrap scroll"><table>
@@ -816,6 +815,14 @@ function overlapData() {
 async function dlOverlap() {
   download(await workbookBlob(overlapWorkbook(overlapData())), '重疊名單.xlsx');
 }
+// ---------------- 步驟 8：簽到表 ----------------
+function stepSignin() {
+  const n = ALL_EVENTS.filter(e => S.events[e] && S.events[e].entries.length).length;
+  $('#main').innerHTML = !n ? `<section class="panel"><div class="empty">還沒有名單，請先完成步驟 1、2。</div></section>`
+    : `<section class="panel"><div class="row"><h2>簽到表</h2><span class="spacer"></span>
+      <button class="btn sm" data-dlsign>${icon('download')}簽到表 Word</button></div>
+      <p class="small muted">依步驟 2 的名單產生，分成只報個人賽的學校、大專男子團體、大專女子團體、社會團體四頁。同校多隊合成一列，備註與停車證欄留空，現場手寫。</p></section>`;
+}
 async function dlSignin() {
   const evs = {};
   ALL_EVENTS.forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
@@ -850,7 +857,7 @@ async function loadSheet() {
   } catch (err) {
     sheetStatus = { state: 'fail', msg: err.name === 'AbortError' ? '逾時' : err.message };
   }
-  if (S.step === 3 || S.step === 7) render();
+  if (S.step === 3 || S.step === 8) render();
 }
 const strongOpen = new Set();
 const KIND_TEXT = { 全大運: '全大運決賽前八', 盃賽: '交大盃與其他盃賽前四' };
