@@ -23,7 +23,7 @@ let rosterMiss = [], rosterGuess = [];
 function render() {
   const s = getState();
   D = derive(s);
-  $('#top').innerHTML = header(s, '大會台', [['籌辦首頁', '../'], ['抽籤系統', '../draw/'], ['公開頁', 'index.html'], ['裁判紀錄區', 'ref.html'], ...(auth.cloud && auth.user ? [[`<a href="#" data-signout>登出 ${esc(auth.user)}</a>`, '']] : [])]);
+  $('#top').innerHTML = header(s, '大會台', [['公開頁', 'index.html'], ['裁判紀錄區', 'ref.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout>登出 ${esc(auth.user)}</a>` : '' });
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';

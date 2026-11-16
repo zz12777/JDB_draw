@@ -1166,7 +1166,6 @@ document.addEventListener('drop', e => {
 });
 
 // 專案檔
-$('#btn-feedback').innerHTML = `${icon('chat')}問題回報/建議提供`;
 $('#btn-export').innerHTML = `${icon('save')}匯出專案檔`;
 $('#lbl-import').outerHTML = `${icon('open')}匯入專案檔`;
 $('#btn-reset').innerHTML = `${icon('reset')}清除全部`;

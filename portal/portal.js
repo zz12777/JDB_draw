@@ -1,6 +1,6 @@
 // 交大盃籌辦首頁：只有管理員能看。管理員為兩個交大盃信箱，以及由它們加入、尚未到期的帳號。
 import { FIREBASE, ADMINS } from '../live/js/config.js';
-import { esc, icon, toast } from '../live/js/ui.js';
+import { esc, icon, toast, sysNav } from '../live/js/ui.js';
 import { refreshBrand } from '../live/js/brand.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -40,7 +40,7 @@ const link = (title, url, qr) => `<div class="lnk"><div><b>${title}</b><code>${e
 
 function render() {
   $('#top').innerHTML = `<img src="${base}live/img/logo.png" alt="" data-brand><div><h1>交大盃</h1><div class="sub">籌辦首頁</div></div><span class="spacer"></span>
-    ${st.admin ? `<a href="${URLS.draw}">抽籤系統</a><a href="${URLS.desk}">大會台</a>` : ''}${st.user ? `<a href="#" data-signout>登出 ${esc(st.user)}</a>` : ''}`;
+    <div class="top-actions">${st.admin ? sysNav('home', base) : ''}${st.user ? `<div class="top-group"><a href="#" data-signout>登出 ${esc(st.user)}</a></div>` : ''}</div>`;
   if (!st.ready) return;
   if (!st.admin) {
     $('#main').innerHTML = `<div class="login"><img src="${base}live/img/logo.png" alt="" data-brand><h2>交大盃籌辦首頁</h2>

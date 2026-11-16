@@ -147,8 +147,18 @@ export function refOf(m, t) {
   return p ? p.ref : (r.ref || '');
 }
 
-export function header(state, role, links) {
+/**
+ * 管理頁面共用的「切換系統」：籌辦首頁、抽籤系統、大會台，目前所在的那個加底線。
+ * root：從本頁到網站根目錄的相對路徑
+ */
+export function sysNav(cur, root) {
+  const items = [['home', '籌辦首頁', ''], ['draw', '抽籤系統', 'draw/'], ['desk', '大會台', 'live/desk.html']];
+  return `<nav class="top-nav" aria-label="切換系統">${items.map(([k, t, p]) => `<a class="${k === cur ? 'on' : ''}" href="${root}${p}">${t}</a>`).join('')}</nav>`;
+}
+/** 標題列。opt.nav：要顯示切換系統時填目前系統；links：本頁專用連結；opt.account：登出按鈕 */
+export function header(state, role, links = [], opt = {}) {
+  const group = list => (list.length ? `<div class="top-group">${list.join('')}</div>` : '');
   return `<img src="img/logo.png" alt="" data-brand><div><h1>${esc(state.title || '交大盃')}</h1><div class="sub">${esc(state.edition || '')}${role ? `　${role}` : ''}</div></div>
-    <span class="spacer"></span>${links.map(l => (l[1] ? `<a href="${l[1]}${location.search}">${l[0]}</a>` : l[0])).join('')}`;
+    <span class="spacer"></span><div class="top-actions">${opt.nav ? sysNav(opt.nav, '../') : ''}${group(links.map(l => `<a href="${l[1]}${location.search}">${l[0]}</a>`))}${group(opt.account ? [opt.account] : [])}</div>`;
 }
 export { EVENT_FULL };
