@@ -1,7 +1,7 @@
 // 大會台
 import { derive, isTeam, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
-import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory } from './store.js';
-import { histKey, entryFromState } from './history.js';
+import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory } from './store.js';
+import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
@@ -439,7 +439,61 @@ function viewAnn(s) {
         : `<span class="${auto && auto[k] ? '' : 'muted'}">${esc((auto && auto[k]) || '未產生')}</span>`}</td>`).join('')}
         <td class="nowrap">${p ? `<span class="chip playing">已公布</span> <button class="btn ghost sm" data-unpub="${ev}">取消公布</button>`
           : `<button class="btn sm" data-pub="${ev}" ${ready ? '' : 'disabled'}>公布</button>`}</td></tr>`;
-    }).join('')}</tbody></table></div>`;
+    }).join('')}</tbody></table></div>${histPanel()}`;
+}
+
+// ---------------- 歷屆名次（可修改，存到資料庫 history） ----------------
+let histSaved = null, histSel = null, histDraft = null;
+const RANKS = ['冠軍', '亞軍', '季軍', '殿軍'];
+function histPanel() {
+  if (histSaved === null) { histSaved = {}; loadHistory().then(h => { histSaved = h; render(); }).catch(() => {}); }
+  const list = mergeHistory(histSaved, null);
+  if (!histDraft) {
+    const y = list.find(x => x.edition === histSel) || list[0];
+    if (!y) return '';
+    histSel = y.edition; histDraft = JSON.parse(JSON.stringify(y));
+  }
+  const h = histDraft;
+  const inFile = HISTORY.some(y => y.edition === h.edition);
+  const saved = !h.isNew && histSaved[histKey(h.edition)] != null;
+  return `<div class="panel"><div class="row"><h2 style="margin:0">歷屆名次</h2><span class="spacer"></span><button class="btn ghost sm" data-hnew>${icon('plus')}新增一屆</button></div>
+    <p class="small muted">修改後按儲存，即時賽程的歷屆名次就會更新。今年的名次在上方公布成績時會自動存入。</p>
+    <div class="pills" style="margin:8px 0 12px">${list.map(y => `<button class="${!h.isNew && y.edition === h.edition ? 'on' : ''}" data-hsel="${esc(y.edition)}">${y.year}</button>`).join('')}${h.isNew ? '<button class="on">新的一屆</button>' : ''}</div>
+    <div class="row" style="margin-bottom:10px"><label>年份 <input type="number" data-hyear value="${h.year}" style="width:90px"></label>
+      <label>屆數 ${h.isNew ? `<input type="text" data-hed value="${esc(h.edition)}" placeholder="例如 第十四屆" style="width:140px">` : `<b>${esc(h.edition)}</b>`}</label></div>
+    <div class="agrid hedit">${ANN_ORDER.map(ev => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>
+      ${(h.p[ev] || []).map(([r, v], i) => `<div class="row hrow"><select data-hd="${ev}|${i}|0">${RANKS.map(x => `<option ${x === r ? 'selected' : ''}>${x}</option>`).join('')}</select>
+        <input type="text" data-hd="${ev}|${i}|1" value="${esc(v)}" placeholder="學校 姓名或隊名"><button class="btn ghost sm" data-hdel="${ev}|${i}" title="刪除這一列">${icon('close')}</button></div>`).join('')}
+      <button class="btn ghost sm" data-hadd="${ev}">${icon('plus')}新增一列</button></div>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn sm" data-hsave>${icon('check')}儲存</button>
+      <button class="btn ghost sm" data-hcancel>放棄修改</button><span class="spacer"></span>
+      ${saved ? `<button class="btn ghost sm danger" data-hrevert>${inFile ? '還原成原始資料' : '刪除這一屆'}</button>` : ''}</div></div>`;
+}
+function histClick(d) {
+  if ('hnew' in d) { histDraft = { year: new Date().getFullYear(), edition: '', p: {}, isNew: true }; }
+  else if (d.hsel) { histSel = d.hsel; histDraft = null; }
+  else if ('hcancel' in d) { histDraft = null; }
+  else if (d.hadd) { (histDraft.p[d.hadd] = histDraft.p[d.hadd] || []).push([RANKS[Math.min(3, histDraft.p[d.hadd].length)], '']); }
+  else if (d.hdel) { const [ev, i] = d.hdel.split('|'); histDraft.p[ev].splice(Number(i), 1); }
+  else if ('hsave' in d) {
+    const h = histDraft;
+    const ed = String(h.edition || '').trim();
+    if (!ed) { toast('請填屆數'); return; }
+    if (h.isNew && mergeHistory(histSaved, null).some(y => y.edition === ed)) { toast(`${ed} 已經有資料，請直接點年份修改`); return; }
+    const p = {};
+    ANN_ORDER.forEach(ev => { const rows = (h.p[ev] || []).map(([r, v]) => [r, String(v).trim()]).filter(([, v]) => v); if (rows.length) p[ev] = rows; });
+    const out = { year: Number(h.year) || new Date().getFullYear(), edition: ed, p };
+    const key = histKey(ed);
+    saveHistory(key, out).then(() => { histSaved = { ...histSaved, [key]: JSON.stringify(out) }; histSel = ed; histDraft = null; render(); toast('歷屆名次已儲存'); })
+      .catch(err => toast(`儲存失敗：${err.message || err}`));
+    return;
+  } else if ('hrevert' in d) {
+    const key = histKey(histDraft.edition);
+    saveHistory(key, null).then(() => { const n = { ...histSaved }; delete n[key]; histSaved = n; histDraft = null; render(); toast('已更新'); })
+      .catch(err => toast(`失敗：${err.message || err}`));
+    return;
+  }
+  render();
 }
 
 // ---------------- 資料設定 ----------------
@@ -575,6 +629,7 @@ document.addEventListener('click', async ev => {
     update(s => { const se = s.events.find(x => x.name === curEv); if (on) se.finalPub = Date.now(); else delete se.finalPub; });
     toast(on ? `${curEv}決賽籤表已公開` : `${curEv}決賽籤表已取消公開`); return;
   }
+  if (['hnew', 'hsel', 'hcancel', 'hadd', 'hdel', 'hsave', 'hrevert'].some(k => k in d)) { histClick(d); return; }
   if (d.gopub) { tab = 'draw'; curEv = d.gopub; render(); return; }
   if (d.tab) { tab = d.tab; render(); }
   else if (d.reftab) { refTab = d.reftab; render(); }
@@ -663,6 +718,11 @@ document.addEventListener('change', async ev => {
 // 比分：邊輸入邊存，不重畫輸入框
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (histDraft && (t.dataset.hd || 'hyear' in t.dataset || 'hed' in t.dataset)) {
+    if (t.dataset.hd) { const [e, i, f] = t.dataset.hd.split('|'); histDraft.p[e][Number(i)][Number(f)] = t.value; }
+    else if ('hyear' in t.dataset) histDraft.year = t.value; else histDraft.edition = t.value;
+    return;
+  }
   if (t.dataset.lu && t.tagName === 'INPUT') { draft[t.dataset.lu[0]] = readLineup(t.dataset.lu[0]); return; }
   if (!t.dataset.g || !modal) return;
   const [pi, gi, side] = t.dataset.g.split('|');

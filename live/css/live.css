@@ -406,3 +406,10 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .seg button.on { background: var(--blue); color: #fff; }
 .seg button.no.on { background: var(--red); }
 .alertbox.remind { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin: 0 0 12px; }
+.hedit .hrow { gap: 6px; margin-bottom: 6px; flex-wrap: nowrap; }
+.hedit .hrow select { width: 76px; flex: none; }
+.hedit .hrow input { flex: 1; min-width: 0; }
+.hedit .hrow .btn { flex: none; padding: 4px 6px; }
+.hedit { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 24px; }
+.hedit .ab { margin-bottom: 12px; }
+.hedit h3 { font-size: 15px; margin: 0 0 8px; color: var(--blue); }
