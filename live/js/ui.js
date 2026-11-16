@@ -8,6 +8,7 @@ export const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const ICONS = {
   bracket: '<path d="M2 3.5h4v4H2M2 12.5h4v-5M6 5.5h4v5H6M10 8h4" fill="none"/>',
   clock: '<circle cx="8" cy="8" r="6" fill="none"/><path d="M8 4.5V8l2.5 1.5" fill="none"/>',
+  medal: '<circle cx="8" cy="10" r="3.8" fill="none"/><path d="M5.6 7 3.5 1.8h3L8 5.2M10.4 7l2.1-5.2h-3L8 5.2" fill="none"/>',
   trophy: '<path d="M5 2.5h6v3.5a3 3 0 0 1-6 0zM5 3.5H2.8v1a2.2 2.2 0 0 0 2.4 2.2M11 3.5h2.2v1a2.2 2.2 0 0 1-2.4 2.2M8 9v3M5.5 13.5h5" fill="none"/>',
   tables: '<rect x="2" y="2.5" width="5" height="4.5" rx="0.8" fill="none"/><rect x="9" y="2.5" width="5" height="4.5" rx="0.8" fill="none"/><rect x="2" y="9" width="5" height="4.5" rx="0.8" fill="none"/><rect x="9" y="9" width="5" height="4.5" rx="0.8" fill="none"/>',
   search: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14" fill="none"/>',

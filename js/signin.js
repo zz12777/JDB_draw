@@ -1,5 +1,5 @@
 // 簽到表 Word：只報個人賽的學校、大專男子團體、大專女子團體、社會團體各一頁
-// 欄位比照往年範本：學校單位、簽到欄、備註、張數（備註與張數留空，現場手寫）
+// 欄位比照往年範本：學校單位、簽到欄、備註、停車證（備註與停車證留空，現場手寫）
 import { unitFromTeam } from './schools.js';
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -7,12 +7,12 @@ const FONT = '<w:rFonts w:ascii="Microsoft JhengHei" w:hAnsi="Microsoft JhengHei
 const run = (t, sz, bold = false) => `<w:r><w:rPr>${FONT}${bold ? '<w:b/><w:bCs/>' : ''}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr><w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
 const para = (inner, { jc = 'center', after = 0, pageBreak = false } = {}) =>
   `<w:p><w:pPr>${pageBreak ? '<w:pageBreakBefore/>' : ''}<w:spacing w:after="${after}"/><w:jc w:val="${jc}"/></w:pPr>${inner}</w:p>`;
-const GRID = [4201, 2778, 2211, 1003];
+const GRID = [4001, 2778, 2111, 1303];
 const B = (bottom = 4) => `<w:tcBorders><w:top w:val="single" w:sz="4" w:color="000000"/><w:left w:val="single" w:sz="4" w:color="000000"/><w:bottom w:val="single" w:sz="${bottom}" w:color="000000"/><w:right w:val="single" w:sz="4" w:color="000000"/></w:tcBorders>`;
 const cell = (t, w, sz, head) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${B(head ? 12 : 4)}<w:vAlign w:val="center"/></w:tcPr>${para(t ? run(t, sz) : '')}</w:tc>`;
 const tr = (cells, h, head) => `<w:tr><w:trPr><w:cantSplit/>${head ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${h}" w:hRule="atLeast"/></w:trPr>${cells}</w:tr>`;
 function table(rows) {
-  const head = tr(['學校單位', '簽到欄', '備註', '張數'].map((t, i) => cell(t, GRID[i], 28, true)).join(''), 420, true);
+  const head = tr(['學校單位', '簽到欄', '備註', '停車證'].map((t, i) => cell(t, GRID[i], 28, true)).join(''), 420, true);
   const body = rows.map(r => tr([r, '', '', ''].map((t, i) => cell(t, GRID[i], 28, false)).join(''), 620, false)).join('');
   return `<w:tbl><w:tblPr><w:tblW w:w="10193" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${GRID.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${head}${body}</w:tbl>`;
 }

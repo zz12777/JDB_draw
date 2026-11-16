@@ -5,11 +5,12 @@ import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
 import { bracketSvg } from './tree.js';
+import { HISTORY } from './history.js';
 
-let tab = 'sched', curEv = null, q = '', zoom = 1, detail = null, composing = false;
+let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['sched', '賽程'], ['time', '時間表'], ['ann', '成績公告'], ['live', '即時桌況']];
-const TAB_ICON = { sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables' };
+const TABS = [['sched', '賽程'], ['time', '時間表'], ['ann', '成績公告'], ['live', '即時桌況'], ['hist', '歷屆名次']];
+const TAB_ICON = { sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables', hist: 'medal' };
 
 function render() {
   const s = getState();
@@ -25,7 +26,7 @@ function render() {
   $('.sbox').style.display = tab === 'time' ? 'none' : '';
   $('#q').placeholder = '學校、隊名或姓名';
   const key = tab === 'time' ? '' : q.trim();
-  $('#content').innerHTML = !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
+  $('#content').innerHTML = tab === 'hist' ? viewHist(s, key) : !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
     : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s, key) : key ? viewSearch(s, key) : viewSched();
   drawDetail();
 }
@@ -68,6 +69,36 @@ function viewAnn(s, key) {
   const list = ANN_ORDER.map(ev => [ev, key ? rows(ev).filter(([, v]) => v && v.includes(key)) : rows(ev)]).filter(([, r]) => r.length);
   return `<div class="panel ann"><h2>${esc(s.annTitle || '成績公告')}</h2>
     ${list.length ? `<div class="agrid">${list.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(([l, v]) => line(l, v)).join('')}</div>`).join('')}</div>` : '<p class="muted small" style="text-align:center">查無相關成績。</p>'}</div>`;
+}
+
+/** 歷屆名次：今年大會公布的成績也會先排在最前面 */
+function histList(s) {
+  const list = [...HISTORY];
+  const pub = s.podium || {};
+  const evs = ANN_ORDER.filter(ev => pub[ev] && ['c', 'r', 's1', 's2'].some(k => pub[ev][k]));
+  if (evs.length && !list.some(y => y.edition === s.edition)) {
+    const year = Number(String((s.dates || [])[0] || '').slice(0, 4)) || new Date().getFullYear();
+    const p = {};
+    evs.forEach(ev => { p[ev] = [['冠軍', pub[ev].c], ['亞軍', pub[ev].r], ['季軍', pub[ev].s1], ['季軍', pub[ev].s2]].filter(([, v]) => v); });
+    list.unshift({ year, edition: s.edition, p });
+  }
+  return list;
+}
+function viewHist(s, key) {
+  const list = histList(s);
+  if (!list.length) return '<div class="panel"><p class="muted">尚無資料。</p></div>';
+  const mark = v => (key && v.includes(key) ? esc(v).split(esc(key)).join(`<mark>${esc(key)}</mark>`) : esc(v));
+  const line = ([l, v]) => `<div class="al"><span class="ak">${l}：</span><span>${mark(v)}</span></div>`;
+  const year = (y, rows) => {
+    const evs = ANN_ORDER.map(ev => [ev, (y.p[ev] || []).filter(([, v]) => !key || v.includes(key))]).filter(([, r]) => r.length);
+    return evs.length ? `<div class="panel ann"><h2>${y.year} ${esc(y.edition)}</h2><div class="agrid">${evs.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(line).join('')}</div>`).join('')}</div></div>` : '';
+  };
+  if (key) {
+    const out = list.map(y => year(y)).join('');
+    return out || '<div class="panel"><p class="muted small" style="text-align:center">查無相關名次。</p></div>';
+  }
+  if (!list.some(y => y.year === hy)) hy = list[0].year;
+  return `<div class="pills" style="margin-bottom:12px">${list.map(y => `<button class="${y.year === hy ? 'on' : ''}" data-hy="${y.year}">${y.year}</button>`).join('')}</div>${year(list.find(y => y.year === hy))}`;
 }
 
 const shown = m => m.status !== 'wait' && m.status !== 'ready';
@@ -148,6 +179,7 @@ document.addEventListener('click', ev => {
   const b = ev.target.closest('button');
   if (b) {
     if (b.dataset.tab) { tab = b.dataset.tab; q = ''; render(); }
+    else if (b.dataset.hy) { hy = Number(b.dataset.hy); render(); }
     else if (b.dataset.ev) { curEv = b.dataset.ev; render(); }
     else if (b.dataset.zoom) { zoom = Math.min(1.6, Math.max(0.4, zoom + 0.2 * Number(b.dataset.zoom))); render(); }
     else if ('close' in b.dataset) { detail = null; drawDetail(); }
