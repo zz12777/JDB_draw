@@ -134,7 +134,7 @@ function drawDetail() {
   const host = $('#modal');
   const m = detail && D.byId.get(detail);
   if (!m) { host.hidden = true; host.innerHTML = ''; return; }
-  const games = g => (g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null).map(x => `${x[0]}-${x[1]}`).join('　');
+  const games = g => (g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null).map(x => `${x[0]}:${x[1]}`).join('　');
   const wo = m.rec.wo; // 'a'：A 勝（B 棄權）
   const block = (title, an, bn, r, gs) => `<div class="drow ${r.a + r.b || r.winner || wo ? '' : 'idle'}"><div class="dn r ${r.winner === 'a' ? 'w' : ''}">${an}</div>
     <div class="dc"><div class="small muted">${title}</div><div class="ds">${r.a + r.b || r.winner ? `${r.a} : ${r.b}` : wo ? '' : '<span class="small muted">未進行</span>'}</div></div>
@@ -148,9 +148,11 @@ function drawDetail() {
   } else {
     // 個人賽：各局由上往下排列，同記分時的樣子
     const gs = wo ? [] : (m.rec.g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null);
-    body = gs.length ? `<table class="dgv">${gs.map((g, i) => { const w = gameWinner(g); return `<tr><td class="${w === 'a' ? 'w' : ''}">${g[0]}</td><td class="gl">第${'一二三四五'[i]}局</td><td class="${w === 'b' ? 'w' : ''}">${g[1]}</td></tr>`; }).join('')}</table>` : '';
+    body = gs.length ? `<table class="dgv">${gs.map((g, i) => { const w = gameWinner(g); return `<tr><td class="${w === 'a' ? 'w' : ''}">${g[0]}</td><td class="gl">:</td><td class="${w === 'b' ? 'w' : ''}">${g[1]}</td></tr>`; }).join('')}</table>` : '';
   }
-  const nm = k => { const x = k === 'a' ? m.A : m.B; const lost = wo && wo !== k; return `<span class="${lost ? 'lost' : ''}">${esc(sideText(x, m.team))}</span>${lost ? '<span class="wo-tag">棄權</span>' : ''}`; };
+  const nm = k => { const x = k === 'a' ? m.A : m.B; const lost = wo && wo !== k; const t = String(sideText(x, m.team) || ''), sp = m.team ? -1 : t.indexOf(' ');
+    // 個人賽：校名一行、姓名一行（雙打保留斜線）
+    return `<span class="${lost ? 'lost' : ''}">${sp > 0 ? `${esc(t.slice(0, sp))}<br>${esc(t.slice(sp + 1))}` : esc(t)}</span>${lost ? '<span class="wo-tag">棄權</span>' : ''}`; };
   host.hidden = false;
   host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(640px,100%)"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}</h2>${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${nm('a')}</div><div class="s">${shown(m) ? `${m.score[0]} : ${m.score[1]}` : 'vs'}</div><div class="n">${nm('b')}</div></div>${shown(m) ? body : ''}</div></div>`;
