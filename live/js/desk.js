@@ -5,6 +5,8 @@ import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
+import { buildNotices, noticesHtml, KIND_NAME } from './notices.js';
+import { checkinSections, missingLineup } from './units.js';
 import { readWorkbookValues } from '../../js/reader.js';
 import { parseFinalBracket } from '../../js/finalparse.js';
 import { readRosterDocx } from './roster.js';
@@ -17,19 +19,19 @@ let modal = null; // { kind: 'score' | 'lineup', mid }
 let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['notice', '大會提醒'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
 let refTab = 'avail';
 let rosterMiss = [], rosterGuess = [];
 
 function render() {
   const s = getState();
   D = derive(s);
-  $('#top').innerHTML = header(s, '大會台', [['即時賽程', './'], ['裁判紀錄區', 'ref.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
+  $('#top').innerHTML = header(s, '大會台', [['即時賽程', './'], ['裁判紀錄區', 'ref.html'], ['簽到處', 'checkin.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
+  $('#main').innerHTML = noticeBanner(s) + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
 }
 
 function viewLogin() {
@@ -255,6 +257,119 @@ function syncHistory() {
   const s = getState();
   if (!s.edition) return;
   saveHistory(histKey(s.edition), entryFromState(s)).catch(err => toast(`歷屆名次未存到：${err.message || err}`));
+}
+
+// ---------------- 大會提醒 ----------------
+// 由賽程時間表推算（notices.js），大會可以改時間、改文字、刪除或自己加；時間到在上方提醒。
+const NOW = () => { const q = new URLSearchParams(location.search).get('now'); const d = q ? new Date(q) : new Date(); return Number.isNaN(d.getTime()) ? new Date() : d; };
+const hm = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const WEEK = '日一二三四五六';
+function dayName(s, d) {
+  const date = (s.dates || [])[d - 1];
+  const x = date ? new Date(`${date}T00:00:00`) : null;
+  return `第${'一二三四'[d - 1] || d}天${x && !Number.isNaN(x.getTime()) ? ` ${x.getMonth() + 1}/${x.getDate()}（${WEEK[x.getDay()]}）` : ''}`;
+}
+function noticeList(s) {
+  const n = s.notices || {}, edit = n.edit || {}, del = new Set(n.del || []);
+  const gen = buildNotices((s.sched && s.sched.slots) || []).map(x => ({ ...x, id: `${x.d}|${x.kind}|${x.text}` }));
+  return gen.filter(x => !del.has(x.id)).map(x => (edit[x.id] ? { ...x, ...edit[x.id], edited: true } : x))
+    .concat((n.add || []).map(x => ({ ...x, own: true })))
+    .map(x => ({ ...x, min: hm(x.t) }))
+    .sort((a, b) => a.d - b.d || a.min - b.min);
+}
+const dueAt = (s, x) => { const d = (s.dates || [])[x.d - 1]; if (!d) return null; const t = new Date(`${d}T${x.t}:00`).getTime(); return Number.isNaN(t) ? null : t; };
+const EV_IN_TEXT = [['大專男團', '男團'], ['大專女團', '女團'], ['社會組', '社團']];
+/** 催交點單時，列出有團賽但還沒勾「已簽到且領點單」的隊伍 */
+function lineupMissing(s, x) {
+  if (x.kind !== 'lineup' || !/催交|領決賽點單/.test(x.text)) return '';
+  if (/決賽/.test(x.text)) return '';
+  const codes = EV_IN_TEXT.filter(([w]) => x.text.includes(w)).map(([, c]) => c);
+  const name = Object.fromEntries(EV_IN_TEXT.map(([w, c]) => [c, w]));
+  const parts = codes.map(c => [c, missingLineup(s, c)]).filter(([, m]) => m.length);
+  return parts.length ? parts.map(([c, m]) => `<div class="small" style="margin-top:4px">${name[c]}尚未領點單：${m.map(r => `${esc(r.label)}${r.note ? `（${esc(r.note)}）` : ''}`).join('、')}</div>`).join('')
+    : '<div class="small" style="margin-top:4px">簽到處顯示各隊都已領點單。</div>';
+}
+/** 時間到 30 分鐘內、還沒按已處理的提醒 */
+function noticeBanner(s) {
+  const now = NOW().getTime(), done = (s.notices || {}).done || {};
+  const due = noticeList(s).filter(x => { const t = dueAt(s, x); return t && now >= t && now < t + 30 * 60000 && !done[x.id]; });
+  return due.map(x => `<div class="alertbox notice-due"><div class="row"><span class="tag-k ${x.kind}">${KIND_NAME[x.kind]}</span><b>${x.t}</b><span style="flex:1">${esc(x.text)}</span>
+    <button class="btn sm" data-ndone="${esc(x.id)}">${icon('check')}已處理</button></div>${lineupMissing(s, x)}</div>`).join('');
+}
+let nday = null;
+function viewNotice(s) {
+  const list = noticeList(s), done = (s.notices || {}).done || {};
+  const days = [...new Set(list.map(x => x.d))];
+  const now = NOW().getTime();
+  if (nday === null || !days.includes(nday)) {
+    const today = (s.dates || []).findIndex(d => d && new Date(`${d}T00:00:00`).toDateString() === NOW().toDateString());
+    nday = days.includes(today + 1) ? today + 1 : (days[0] || 1);
+  }
+  const secs = checkinSections(s), ci = s.checkin || {};
+  const all = secs.flatMap(x => x.rows), ok = all.filter(r => ci[r.key] && ci[r.key].ok).length;
+  const miss = missingLineup(s);
+  const notes = all.filter(r => ci[r.key] && ci[r.key].note);
+  const n = s.notices || {};
+  const changed = (n.del || []).length || Object.keys(n.edit || {}).length;
+  const rows = list.filter(x => x.d === nday);
+  return `<div class="panel"><div class="row"><h2 style="margin:0">簽到與點單</h2><span class="spacer"></span>
+      <a class="btn ghost sm" href="checkin.html${location.search}" target="_blank">開啟簽到處頁面</a></div>
+    ${secs.length ? `<p class="small">已簽到 <b>${ok}</b> / ${all.length}；有團體賽還沒領點單 <b>${miss.length}</b> 隊。</p>
+      ${secs.filter(x => x.team).map(x => { const m = missingLineup(s, x.code); return m.length ? `<p class="small muted" style="margin:2px 0">${esc(x.title.replace(/\s*\d+[組隊]$/, ''))}尚未領點單：${m.map(r => esc(r.label)).join('、')}</p>` : ''; }).join('')}
+      ${notes.length ? `<div class="small"><b>簽到處備註</b><ul style="margin:4px 0 0;padding-left:18px">${notes.map(r => `<li>${esc(r.label)}：${esc(ci[r.key].note)}</li>`).join('')}</ul></div>` : ''}`
+      : '<p class="small muted">匯入籤表後才會有簽到名單。</p>'}</div>
+    <div class="panel"><div class="row"><h2 style="margin:0">大會注意事項</h2><span class="spacer"></span>
+      ${changed ? '<button class="btn ghost sm" data-nreset>還原成系統推算</button>' : ''}
+      <button class="btn sm" data-nprint ${list.length ? '' : 'disabled'}>${icon('download')}列印大會注意事項</button></div>
+      <p class="small muted">${s.sched ? '依資料設定上傳的賽程時間表推算，時間到會在每一頁上方提醒。可以直接改時間、文字，或刪除、新增。' : '請先到資料設定上傳賽程時間表，系統才會推算提醒時間。也可以先自己新增。'}</p>
+      ${days.length > 1 ? `<div class="pills" style="margin:8px 0">${days.map(d => `<button class="${d === nday ? 'on' : ''}" data-nday="${d}">${dayName(s, d)}</button>`).join('')}</div>` : ''}
+      <table class="list ntab"><thead><tr><th style="width:96px">時間</th><th style="width:56px">類別</th><th>事項</th><th style="width:150px"></th></tr></thead><tbody>
+      ${rows.map(x => {
+        const t = dueAt(s, x);
+        const st = done[x.id] ? 'done' : t && now >= t && now < t + 30 * 60000 ? 'due' : t && now >= t ? 'past' : '';
+        return `<tr class="${st}"><td><input type="text" inputmode="numeric" maxlength="5" data-nt="${esc(x.id)}" value="${x.t}"></td><td><span class="tag-k ${x.kind}">${KIND_NAME[x.kind]}</span></td>
+          <td><input type="text" data-ntext="${esc(x.id)}" value="${esc(x.text)}" style="width:100%"></td>
+          <td class="nowrap"><button class="btn ghost sm" data-ndone="${esc(x.id)}">${done[x.id] ? `${fmtTime(done[x.id])} 已處理` : '已處理'}</button>
+            <button class="btn ghost sm" data-ndel="${esc(x.id)}" title="刪除">${icon('close')}</button></td></tr>`;
+      }).join('')}
+      <tr><td><input type="text" inputmode="numeric" maxlength="5" id="nnew-t" placeholder="17:40"></td><td><select id="nnew-k">${Object.entries(KIND_NAME).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></td>
+        <td><input type="text" id="nnew-x" placeholder="自己新增的提醒，例如 17:40 女團先叫" style="width:100%"></td><td><button class="btn ghost sm" data-nadd>${icon('plus')}新增</button></td></tr>
+      </tbody></table></div>`;
+}
+function noticeClick(d) {
+  const s = getState();
+  if (d.nday) { nday = Number(d.nday); render(); return true; }
+  if (d.ndone) { update(t => { const n = t.notices = t.notices || {}; n.done = n.done || {}; if (n.done[d.ndone]) delete n.done[d.ndone]; else n.done[d.ndone] = Date.now(); }); return true; }
+  if (d.ndel) { update(t => { const n = t.notices = t.notices || {}; if (d.ndel.startsWith('own-')) n.add = (n.add || []).filter(x => x.id !== d.ndel); else n.del = [...new Set([...(n.del || []), d.ndel])]; }); return true; }
+  if ('nreset' in d) { update(t => { const n = t.notices = t.notices || {}; delete n.del; delete n.edit; }); return true; }
+  if ('nadd' in d) {
+    const mm = $('#nnew-t').value.trim().replace('：', ':').match(/^(\d{1,2}):?(\d{2})$/);
+    const tm = mm && Number(mm[1]) < 24 && Number(mm[2]) < 60 ? `${mm[1].padStart(2, '0')}:${mm[2]}` : '', tx = $('#nnew-x').value.trim();
+    if (!tm || !tx) { toast('請填時間（例如 17:40）和事項'); return true; }
+    update(t => { const n = t.notices = t.notices || {}; n.add = (n.add || []).concat({ id: `own-${Date.now()}`, d: nday || 1, t: tm, kind: $('#nnew-k').value, text: tx }); });
+    return true;
+  }
+  if ('nprint' in d) {
+    const html = noticesHtml(`${s.edition || ''}${s.title || '交大盃'} 大會注意事項時間表`, noticeList(s), dd => dayName(s, dd));
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    window.open(url, '_blank');
+    return true;
+  }
+  return false;
+}
+function noticeChange(t) {
+  const id = t.dataset.nt || t.dataset.ntext;
+  if (!id) return false;
+  const field = t.dataset.nt ? 't' : 'text';
+  let v = t.value.trim();
+  if (field === 't') { const m = v.replace('：', ':').match(/^(\d{1,2}):?(\d{2})$/); v = m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${m[1].padStart(2, '0')}:${m[2]}` : ''; if (!v) toast('時間請輸入像 17:40 這樣的格式'); }
+  if (!v) { render(); return true; }
+  update(st => {
+    const n = st.notices = st.notices || {};
+    if (id.startsWith('own-')) { const x = (n.add || []).find(y => y.id === id); if (x) x[field] = v; }
+    else { n.edit = n.edit || {}; n.edit[id] = { ...(n.edit[id] || {}), [field]: v }; }
+  });
+  return true;
 }
 
 // ---------------- 決賽抽籤 ----------------
@@ -629,6 +744,7 @@ document.addEventListener('click', async ev => {
     update(s => { const se = s.events.find(x => x.name === curEv); if (on) se.finalPub = Date.now(); else delete se.finalPub; });
     toast(on ? `${curEv}決賽籤表已公開` : `${curEv}決賽籤表已取消公開`); return;
   }
+  if (noticeClick(d)) return;
   if (['hnew', 'hsel', 'hcancel', 'hadd', 'hdel', 'hsave', 'hrevert'].some(k => k in d)) { histClick(d); return; }
   if (d.gopub) { tab = 'draw'; curEv = d.gopub; render(); return; }
   if (d.tab) { tab = d.tab; render(); }
@@ -678,6 +794,7 @@ document.addEventListener('click', async ev => {
 
 document.addEventListener('change', async ev => {
   const t = ev.target, d = t.dataset;
+  if (noticeChange(t)) return;
   if (d.lu) {
     const side = d.lu[0];
     if (t.value === '__other') {

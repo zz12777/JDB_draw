@@ -12,6 +12,7 @@ const URLS = {
   draw: `${base}draw/`,
   desk: `${base}live/desk.html`,
   ref: `${base}live/ref.html`,
+  checkin: `${base}live/checkin.html`,
   pub: `${base}live/`,
 };
 const st = { ready: false, user: null, base: false, admin: false, until: null, list: {}, error: '' };
@@ -83,7 +84,7 @@ function render() {
           <li>即時賽程：賽程、時間表、成績公告、即時桌況</li>
         </ul>
         <p class="small muted">資料存在雲端資料庫，多台電腦與手機即時同步。大會台需以管理員帳號登入。</p>
-        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('即時賽程（給參賽者）', URLS.pub, true)}</div></div>
+        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('簽到處', URLS.checkin)}${link('即時賽程（給參賽者）', URLS.pub, true)}</div></div>
     </div>
 
     <div class="panel"><h2>流程</h2><div class="flow">

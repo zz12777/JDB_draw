@@ -66,6 +66,14 @@
           }
         }
       },
+      "checkin": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        "$key": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().length < 600"
+        }
+      },
       "desk": {
         ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
         ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)"

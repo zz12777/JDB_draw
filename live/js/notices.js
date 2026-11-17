@@ -159,7 +159,10 @@ tr { break-inside: avoid; }
 tr.call td, tr.info td { color: #4a5a70; }
 tr.lineup td:nth-child(3), tr.draw td:nth-child(3), tr.award td:nth-child(3) { font-weight: 600; }
 .rules { margin-top: 16px; border: 1px solid #c9d5e8; border-radius: 4px; padding: 8px 12px; break-inside: avoid; }
+.pbtn { position: fixed; top: 12px; right: 12px; background: #143d7a; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font: inherit; font-size: 14px; cursor: pointer; }
+@media print { .pbtn { display: none; } }
+@media screen { body { max-width: 820px; margin: 24px auto; padding: 0 16px; } }
 .rules h3 { margin: 0 0 4px; font-size: 13px; color: #143d7a; } .rules ol { margin: 0; padding-left: 20px; } .rules li { margin: 2px 0; }
-</style></head><body><h1>${escH(title)}</h1><p class="sub">依賽程時間表推算，實際進度若有落差，以現場狀況調整。</p>${body}
+</style></head><body><button class="pbtn" onclick="print()">列印</button><h1>${escH(title)}</h1><p class="sub">依賽程時間表推算，實際進度若有落差，以現場狀況調整。</p>${body}
 <div class="rules"><h3>叫場原則</h3><ol>${RULES.map(r => `<li>${escH(r)}</li>`).join('')}</ol></div></body></html>`;
 }

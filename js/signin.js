@@ -53,13 +53,19 @@ function indRows(events) {
 }
 
 /** events: { 項目: [entry] }；title：例如「第十三屆TIBHAR交大盃」 */
-export async function signinDocx(events, title, JSZipLib = globalThis.JSZip) {
-  const parts = [];
+/** 簽到表分區：[{ code, title, team, rows: [學校或隊伍] }]，抽籤系統和當日簽到處共用 */
+export function signinSections(events) {
+  const out = [];
   const ind = indRows(events);
-  if (ind.rows.length) parts.push([`(只報個人賽 ${ind.schools}校)`, ind.rows]);
-  const m = teamRows(events['男團']); if (m.length) parts.push([`(大專男子團體組 ${m.length}組)`, m]);
-  const w = teamRows(events['女團']); if (w.length) parts.push([`(大專女子團體組 ${w.length}組)`, w]);
-  const so = teamRows(events['社團']); if (so.length) parts.push([`(社會團體組 ${so.length}隊)`, so]);
+  if (ind.rows.length) out.push({ code: 'ind', title: `只報個人賽 ${ind.schools}校`, team: false, rows: ind.rows });
+  const m = teamRows(events['男團']); if (m.length) out.push({ code: '男團', title: `大專男子團體組 ${m.length}組`, team: true, rows: m });
+  const w = teamRows(events['女團']); if (w.length) out.push({ code: '女團', title: `大專女子團體組 ${w.length}組`, team: true, rows: w });
+  const so = teamRows(events['社團']); if (so.length) out.push({ code: '社團', title: `社會團體組 ${so.length}隊`, team: true, rows: so });
+  return out;
+}
+
+export async function signinDocx(events, title, JSZipLib = globalThis.JSZip) {
+  const parts = signinSections(events).map(x => [`(${x.title})`, x.rows]);
   const body = parts.map(([sub, rows], i) =>
     para(run(`${title}簽到表`, 48, true), { pageBreak: i > 0 }) + para(run(sub, 24), { after: 120 }) + table(rows)).join('');
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';

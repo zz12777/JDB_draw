@@ -413,3 +413,32 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .hedit { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 24px; }
 .hedit .ab { margin-bottom: 12px; }
 .hedit h3 { font-size: 15px; margin: 0 0 8px; color: var(--blue); }
+
+/* 簽到處 */
+.ckl { display: flex; flex-direction: column; }
+.ckr { display: grid; grid-template-columns: minmax(120px, 1.2fr) auto minmax(140px, 1fr); gap: 8px 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ckr:last-child { border-bottom: 0; }
+.ckn { font-weight: 600; }
+.ckb { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.ckb .box { width: 20px; height: 20px; border: 1.5px solid #9aa7ba; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; background: #fff; }
+.ckb .box svg { width: 15px; height: 15px; stroke: #fff; stroke-width: 2.4; }
+.ckr.ok .ckb { color: var(--blue); border-color: var(--blue-2); background: var(--blue-soft); font-weight: 600; }
+.ckr.ok .ckb .box { background: var(--blue); border-color: var(--blue); }
+.ckt { font-size: 12px; font-weight: 400; color: var(--muted); }
+.ckm { width: 100%; min-width: 0; }
+@media (max-width: 640px) {
+  .ckr { grid-template-columns: 1fr auto; }
+  .ckm { grid-column: 1 / -1; }
+}
+
+/* 大會提醒 */
+.alertbox.notice-due { background: var(--yellow-soft); border-color: var(--yellow); margin: 0 0 10px; padding: 10px 12px; }
+.alertbox.notice-due .row { gap: 10px; }
+.tag-k { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; background: #fff; }
+.tag-k.prep { color: var(--blue); border-color: var(--blue-2); background: var(--blue-soft); }
+.tag-k.lineup { color: #7a5600; border-color: var(--yellow); background: var(--yellow-soft); font-weight: 600; }
+.tag-k.draw { color: #fff; border-color: var(--blue); background: var(--blue); }
+.tag-k.award { color: #7a5600; border-color: #e0b100; background: #ffe58a; }
+.ntab td:first-child input { width: 64px; font-variant-numeric: tabular-nums; }
+.ntab tr.past td, .ntab tr.done td { opacity: .55; }
+.ntab tr.due td { background: var(--yellow-soft); }
