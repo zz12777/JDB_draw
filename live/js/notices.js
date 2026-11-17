@@ -136,7 +136,7 @@ export function noticesHtml(title, list, dayLabel = (d, day) => day) {
   }).join('');
   return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${escH(title)}</title>
 <style>
-@page { size: A4; margin: 14mm 12mm; }
+@page { size: A4; margin: 0; }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; color: #1b2a41; margin: 0; font-size: 12.5px; }
 h1 { font-size: 20px; margin: 0 0 4px; color: #143d7a; }
@@ -160,9 +160,12 @@ tr.call td, tr.info td { color: #4a5a70; }
 tr.lineup td:nth-child(3), tr.draw td:nth-child(3), tr.award td:nth-child(3) { font-weight: 600; }
 .rules { margin-top: 16px; border: 1px solid #c9d5e8; border-radius: 4px; padding: 8px 12px; break-inside: avoid; }
 .pbtn { position: fixed; top: 12px; right: 12px; background: #143d7a; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font: inherit; font-size: 14px; cursor: pointer; }
-@media print { .pbtn { display: none; } }
+@media print { .pbtn { display: none; } body { padding: 0 12mm; } }
+/* 頁面邊界設為 0，瀏覽器就不會印出網址、日期那些頁首頁尾；上下留白改用每頁重複的表頭表尾 */
+.pg { width: 100%; border-collapse: collapse; } .pg > thead > tr > td, .pg > tfoot > tr > td { height: 13mm; padding: 0; border: 0; } .pg > tbody > tr > td { padding: 0; border: 0; }
+@media screen { .pg > thead, .pg > tfoot { display: none; } }
 @media screen { body { max-width: 820px; margin: 24px auto; padding: 0 16px; } }
 .rules h3 { margin: 0 0 4px; font-size: 13px; color: #143d7a; } .rules ol { margin: 0; padding-left: 20px; } .rules li { margin: 2px 0; }
-</style></head><body><button class="pbtn" onclick="print()">列印</button><h1>${escH(title)}</h1><p class="sub">依賽程時間表推算，實際進度若有落差，以現場狀況調整。</p>${body}
-<div class="rules"><h3>叫場原則</h3><ol>${RULES.map(r => `<li>${escH(r)}</li>`).join('')}</ol></div></body></html>`;
+</style></head><body><button class="pbtn" onclick="print()">列印</button><table class="pg"><thead><tr><td></td></tr></thead><tfoot><tr><td></td></tr></tfoot><tbody><tr><td><h1>${escH(title)}</h1><p class="sub">依賽程時間表推算，實際進度若有落差，以現場狀況調整。</p>${body}
+<div class="rules"><h3>叫場原則</h3><ol>${RULES.map(r => `<li>${escH(r)}</li>`).join('')}</ol></div></td></tr></tbody></table></body></html>`;
 }

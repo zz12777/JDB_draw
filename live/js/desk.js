@@ -287,7 +287,7 @@ function lineupMissing(s, x) {
   const codes = EV_IN_TEXT.filter(([w]) => x.text.includes(w)).map(([, c]) => c);
   const name = Object.fromEntries(EV_IN_TEXT.map(([w, c]) => [c, w]));
   const parts = codes.map(c => [c, missingLineup(s, c)]).filter(([, m]) => m.length);
-  return parts.length ? parts.map(([c, m]) => `<div class="small" style="margin-top:4px">${name[c]}尚未領點單：${m.map(r => `${esc(r.label)}${r.note ? `（${esc(r.note)}）` : ''}`).join('、')}</div>`).join('')
+  return parts.length ? parts.map(([c, m]) => `<div class="small" style="margin-top:4px"><b>${name[c]}</b>尚未領點單：${m.map(r => `${esc(r.label)}${r.note ? `（${esc(r.note)}）` : ''}`).join('、')}</div>`).join('')
     : '<div class="small" style="margin-top:4px">簽到處顯示各隊都已領點單。</div>';
 }
 /** 時間到 30 分鐘內、還沒按已處理的提醒 */
@@ -319,13 +319,13 @@ function viewNotice(s) {
   return `<div class="panel"><div class="row"><h2 style="margin:0">簽到與點單</h2><span class="spacer"></span>
       <a class="btn ghost sm" href="checkin.html${location.search}" target="_blank">開啟簽到處頁面</a></div>
     ${secs.length ? `<p class="small">已簽到 <b>${ok}</b> / ${all.length}；有團體賽還沒領點單 <b>${miss.length}</b> 隊。</p>
-      ${secs.filter(x => x.team).map(x => { const m = missingLineup(s, x.code); return m.length ? `<p class="small muted" style="margin:2px 0">${esc(x.title.replace(/\s*\d+[組隊]$/, ''))}尚未領點單：${m.map(r => esc(r.label)).join('、')}</p>` : ''; }).join('')}
+      ${secs.filter(x => x.team).map(x => { const m = missingLineup(s, x.code); return m.length ? `<p class="small muted" style="margin:2px 0"><b>${esc(x.title.replace(/\s*\d+[組隊]$/, ''))}</b>尚未領點單：${m.map(r => esc(r.label)).join('、')}</p>` : ''; }).join('')}
       ${notes.length ? `<div class="small"><b>簽到處備註</b><ul style="margin:4px 0 0;padding-left:18px">${notes.map(r => `<li>${esc(r.label)}：${esc(ci[r.key].note)}</li>`).join('')}</ul></div>` : ''}`
       : '<p class="small muted">匯入籤表後才會有簽到名單。</p>'}</div>
     <div class="panel"><div class="row"><h2 style="margin:0">大會注意事項</h2><span class="spacer"></span>
       ${changed ? '<button class="btn ghost sm" data-nreset>還原成系統推算</button>' : ''}
       <button class="btn sm" data-nprint ${list.length ? '' : 'disabled'}>${icon('download')}列印大會注意事項</button></div>
-      <p class="small muted">${s.sched ? '依資料設定上傳的賽程時間表推算，時間到時，分頁名稱旁會出現紅色數字，提醒會列在這一頁最上方。可以直接改時間、文字，或刪除、新增。' : '請先到資料設定上傳賽程時間表，系統才會推算提醒時間。也可以先自己新增。'}</p>
+      <p class="small muted">${s.sched ? '依資料設定上傳的賽程時間表推算，實際依現場情形為主。' : '請先到資料設定上傳賽程時間表，系統才會推算提醒時間。也可以先自己新增。'}</p>
       ${days.length > 1 ? `<div class="pills" style="margin:8px 0">${days.map(d => `<button class="${d === nday ? 'on' : ''}" data-nday="${d}">${dayName(s, d)}</button>`).join('')}</div>` : ''}
       <table class="list ntab"><thead><tr><th style="width:96px">時間</th><th style="width:56px">類別</th><th>事項</th><th style="width:150px"></th></tr></thead><tbody>
       ${rows.map(x => {
