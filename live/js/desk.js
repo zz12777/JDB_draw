@@ -28,10 +28,11 @@ function render() {
   D = derive(s);
   $('#top').innerHTML = header(s, '大會台', [['即時賽程', './'], ['裁判紀錄區', 'ref.html'], ['簽到處', 'checkin.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
-  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('');
+  const due = dueNotices(s).length;
+  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}${k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : ''}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = noticeBanner(s) + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
+  $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
 }
 
 function viewLogin() {
@@ -290,10 +291,13 @@ function lineupMissing(s, x) {
     : '<div class="small" style="margin-top:4px">簽到處顯示各隊都已領點單。</div>';
 }
 /** 時間到 30 分鐘內、還沒按已處理的提醒 */
-function noticeBanner(s) {
+function dueNotices(s) {
   const now = NOW().getTime(), done = (s.notices || {}).done || {};
-  const due = noticeList(s).filter(x => { const t = dueAt(s, x); return t && now >= t && now < t + 30 * 60000 && !done[x.id]; });
-  return due.map(x => `<div class="alertbox notice-due"><div class="row"><span class="tag-k ${x.kind}">${KIND_NAME[x.kind]}</span><b>${x.t}</b><span style="flex:1">${esc(x.text)}</span>
+  return noticeList(s).filter(x => { const t = dueAt(s, x); return t && now >= t && now < t + 30 * 60000 && !done[x.id]; });
+}
+/** 大會提醒分頁上方：時間到、還沒按已處理的提醒（其他分頁只在分頁名稱旁顯示數字） */
+function noticeBanner(s) {
+  return dueNotices(s).map(x => `<div class="alertbox notice-due"><div class="row"><span class="tag-k ${x.kind}">${KIND_NAME[x.kind]}</span><b>${x.t}</b><span style="flex:1">${esc(x.text)}</span>
     <button class="btn sm" data-ndone="${esc(x.id)}">${icon('check')}已處理</button></div>${lineupMissing(s, x)}</div>`).join('');
 }
 let nday = null;
@@ -321,7 +325,7 @@ function viewNotice(s) {
     <div class="panel"><div class="row"><h2 style="margin:0">大會注意事項</h2><span class="spacer"></span>
       ${changed ? '<button class="btn ghost sm" data-nreset>還原成系統推算</button>' : ''}
       <button class="btn sm" data-nprint ${list.length ? '' : 'disabled'}>${icon('download')}列印大會注意事項</button></div>
-      <p class="small muted">${s.sched ? '依資料設定上傳的賽程時間表推算，時間到會在每一頁上方提醒。可以直接改時間、文字，或刪除、新增。' : '請先到資料設定上傳賽程時間表，系統才會推算提醒時間。也可以先自己新增。'}</p>
+      <p class="small muted">${s.sched ? '依資料設定上傳的賽程時間表推算，時間到時，分頁名稱旁會出現紅色數字，提醒會列在這一頁最上方。可以直接改時間、文字，或刪除、新增。' : '請先到資料設定上傳賽程時間表，系統才會推算提醒時間。也可以先自己新增。'}</p>
       ${days.length > 1 ? `<div class="pills" style="margin:8px 0">${days.map(d => `<button class="${d === nday ? 'on' : ''}" data-nday="${d}">${dayName(s, d)}</button>`).join('')}</div>` : ''}
       <table class="list ntab"><thead><tr><th style="width:96px">時間</th><th style="width:56px">類別</th><th>事項</th><th style="width:150px"></th></tr></thead><tbody>
       ${rows.map(x => {

@@ -57,7 +57,7 @@ export function buildNotices(raw) {
       if (pre.length) preAt.set(pre[0].s, (preAt.get(pre[0].s) || []).concat(e));
     });
     preAt.forEach((evs, st) => {
-      add(d, day, toMin(st) - 30, 'lineup', `催交${join(evs)}預賽點單，尚未領點單的隊伍看簽到處備註`);
+      add(d, day, toMin(st) - 30, 'lineup', `催交${join(evs)}預賽點單`);
       add(d, day, toMin(st) - 10, 'lineup', `${join(evs)}預賽點單收齊`);
     });
 

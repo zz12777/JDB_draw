@@ -28,7 +28,7 @@ function render() {
         const word = sec.team ? '已簽到且領點單' : '已簽到';
         return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}</div>
           <button class="ckb" data-ck="${esc(r.key)}" aria-pressed="${x.ok ? 'true' : 'false'}"><span class="box">${x.ok ? icon('check') : ''}</span>${word}${x.ok && x.t ? `<span class="ckt">${fmtTime(x.t)}</span>` : ''}</button>
-          <input type="text" class="ckm" data-note="${esc(r.key)}" value="${esc(x.note || '')}" placeholder="${sec.team ? '備註，例如尚未領點單' : '備註'}"></div>`;
+          <input type="text" class="ckm" data-note="${esc(r.key)}" value="${esc(x.note || '')}" placeholder="備註"></div>`;
       }).join('')}</div></div>`;
   }).join('');
   $('#main').innerHTML = `<div class="panel"><div class="row"><label class="sbox" style="flex:1;min-width:200px">${icon('search')}<input id="q" class="search" type="search" placeholder="學校或隊名" value="${esc(q)}"></label>

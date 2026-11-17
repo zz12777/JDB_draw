@@ -442,3 +442,4 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .ntab td:first-child input { width: 64px; font-variant-numeric: tabular-nums; }
 .ntab tr.past td, .ntab tr.done td { opacity: .55; }
 .ntab tr.due td { background: var(--yellow-soft); }
+.tabs button .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; vertical-align: 2px; }
