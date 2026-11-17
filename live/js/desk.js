@@ -187,15 +187,17 @@ function lineupWarn(l) {
 }
 
 // ---------------- 成績 ----------------
+/** 「中原大學 鮑起萱/蔡羽婷」排成校名一行、姓名一行（雙打保留斜線） */
+const twoLine = t => { const x = String(t || '').trim(), i = x.indexOf(' '); return i > 0 ? `${esc(x.slice(0, i))}<br>${esc(x.slice(i + 1))}` : esc(x); };
 function scoreModal(m) {
   const locked = m.status === 'done';
   const dis = locked ? 'disabled' : '';
   const lu = m.rec.lineup || {};
   const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}>`;
   const block = (pi, games, title, an, bn, meta, solo) => `<div class="pt ${solo ? 'solo' : ''}"><h4>${title}</h4>
-    <div class="pn"><span>${String(an || '').split(/[\/／]/).map(esc).join('<br>')}</span><span>${String(bn || '').split(/[\/／]/).map(esc).join('<br>')}</span></div>
+    ${an || bn ? `<div class="pn"><span>${twoLine(an)}</span><span>${twoLine(bn)}</span></div>` : ''}
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gr">${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</div>`).join('')}
-    <div class="res" data-res="${pi}"></div><div class="meta">${meta}</div></div>`;
+    <div class="res" data-res="${pi}" ${solo ? 'hidden' : ''}></div><div class="meta">${meta}</div></div>`;
   let body;
   if (m.team) {
     const pts = m.rec.pts || [];
@@ -205,10 +207,11 @@ function scoreModal(m) {
       return block(i, x.g || [], `第${'一二三四五'[i]}點 ${p.dbl ? '雙打' : '單打'}`, lineName(lu.a, i), lineName(lu.b, i), meta);
     }).join('');
   } else {
-    body = block('x', m.rec.g || [], '各局比分', sideText(m.A), sideText(m.B), m.rec.ref ? `裁判 ${esc(m.rec.ref)}` : '', true);
+    // 個人賽：雙方姓名和總比數只在上方顯示一次，這裡只放各局比分
+    body = block('x', m.rec.g || [], '各局比分', '', '', m.rec.ref ? `裁判 ${esc(m.rec.ref)}` : '', true);
   }
-  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
-    <div class="duel"><div class="n r">${esc(sideText(m.A, m.team))}</div><div class="total" id="sc-total"></div><div class="n">${esc(sideText(m.B, m.team))}</div></div>
+  return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}${m.status === 'playing' && m.tables.length ? `<span class="small muted">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
+    <div class="duel"><div class="n r">${m.team ? esc(sideText(m.A, true)) : twoLine(sideText(m.A))}</div><div class="total" id="sc-total"></div><div class="n">${m.team ? esc(sideText(m.B, true)) : twoLine(sideText(m.B))}</div></div>
     <div class="pts">${body}</div>
     <p class="small" id="sc-note" style="color:var(--red);min-height:18px"></p>
     <div class="row">
@@ -290,9 +293,9 @@ function viewRec(s) {
   return `<div class="panel"><h2>待確認成績（${reported.length}）</h2>
       ${reported.length ? `<table class="list"><tbody>${reported.map(m => `<tr><td class="nowrap"><b>${esc(m.ev)}</b>${esc(m.no)}</td><td>${names(m)}</td><td class="nowrap"><b>${m.score[0]} : ${m.score[1]}</b></td>
         <td class="nowrap" style="text-align:right"><button class="btn sm" data-score="${esc(m.id)}">${icon('score')}核對</button></td></tr>`).join('')}</tbody></table>`
-        : '<p class="small muted">目前沒有待確認的成績。裁判按下本場結束後會出現在這裡。</p>'}</div>
+        : ''}</div>
     ${e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${D.events.map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}${repN(x.name) ? `<span class="badge">${repN(x.name)}</span>` : ''}</button>`).join('')}</div>
-      <div class="legend" style="margin:0 0 8px"><span><span class="lg rep"></span>待確認</span><span><span class="lg busy"></span>進行中</span><span class="muted">點場次或比數可以看紀錄、確認成績</span></div>
+      <div class="legend" style="margin:0 0 8px"><span><span class="lg rep"></span>待確認</span><span><span class="lg live"></span>進行中</span><span class="muted">點場次或比數可以看紀錄、確認成績</span></div>
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
       ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : ''}`;
 }

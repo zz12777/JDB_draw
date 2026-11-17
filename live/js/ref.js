@@ -91,7 +91,13 @@ document.addEventListener('click', ev => {
   else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
     if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => { r.refs = r.refs || {}; r.refs[table] = name; }); else render(); }
   else if ('back' in d) { table = null; point = null; render(); }
-  else if ('done' in d) { document.activeElement && document.activeElement.blur(); table = null; point = null; render(); toast('紀錄已儲存'); window.scrollTo(0, 0); }
+  else if ('done' in d) {
+    // 團體賽按「本點結束」回到這一桌的選點頁面，個人賽按「本場結束」回到球桌列表
+    document.activeElement && document.activeElement.blur();
+    const x = D.tables.get(table);
+    if (!(x && x.m.team)) table = null;
+    point = null; render(); toast('紀錄已儲存'); window.scrollTo(0, 0);
+  }
   else if ('points' in d) { point = null; render(); }
   else if (d.point) { point = Number(d.point); render(); }
   else if (d.absent) {

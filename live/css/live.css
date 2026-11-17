@@ -446,7 +446,8 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 
 /* 紀錄組 */
 table.grp td.rep { background: var(--yellow-soft); font-weight: 700; }
-table.grp td.live { background: var(--blue-soft); }
+table.grp td.live { background: #e3f3e7; color: #1f6b3a; box-shadow: inset 0 0 0 1px #9fd3ad; }
+.legend .lg.live { background: #e3f3e7; border-color: #9fd3ad; }
 .rech { font-size: 15px; color: var(--blue); margin: 12px 0 6px; }
 .pills button .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; }
 .wcell.idle { opacity: .6; border-style: dashed; }
