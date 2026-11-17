@@ -10,7 +10,7 @@ export function bracketSvg(matches, team, opt = {}) {
   const byNum = new Map(matches.map(m => [m.num, m]));
   const refd = new Set(matches.flatMap(m => m.src.filter(s => s.ref != null).map(s => s.ref)));
   const root = matches.find(m => !refd.has(m.num));
-  // opt.pos：隊名前加籤號（團體決賽）
+  // opt.pos：隊名前加籤號（團體決賽）；opt.noTables：不顯示桌次（紀錄組）
   const leafText = s => { const t = sideText(s, team) || ''; return opt.pos && s.name && s.pos != null ? `${s.pos}　${t}` : t; };
   const maxLen = Math.max(4, ...matches.flatMap(m => [m.A, m.B].filter((_, i) => m.src[i].pos != null).map(s => leafText(s).length)));
   const NAME = Math.min(300, maxLen * 14 + 16);
@@ -38,7 +38,7 @@ export function bracketSvg(matches, team, opt = {}) {
       if (show) svg.push(`<text x="${x - 8}" y="${k.y - 5}" class="sc ${win ? 'b' : ''}" text-anchor="end">${m.score[i]}</text>`);
     });
     svg.push(`<text x="${x + 5}" y="${p.y - 5}" class="no ${m.status === 'playing' ? 'live' : ''}" data-mid="${esc(m.id)}">${esc(m.no)}</text>`);
-    if (m.status === 'playing' && m.tables.length) svg.push(`<text x="${x + 5}" y="${p.y + 13}" class="tb">第 ${m.tables.join('、')} 桌</text>`);
+    if (!opt.noTables && m.status === 'playing' && m.tables.length) svg.push(`<text x="${x + 5}" y="${p.y + 13}" class="tb">第 ${m.tables.join('、')} 桌</text>`);
   });
   const rp = pos.get(root.num), rx = X(root);
   const champ = root.winner ? sideText(root.winner === 'a' ? root.A : root.B, team) : '';

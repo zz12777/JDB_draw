@@ -2,7 +2,7 @@
 import { derive, isTeam, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory } from './store.js';
 import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
-import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName } from './ui.js';
+import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
 import { buildNotices, noticesHtml, KIND_NAME } from './notices.js';
@@ -19,7 +19,7 @@ let modal = null; // { kind: 'score' | 'lineup', mid }
 let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['notice', '大會提醒'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '大會提醒'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
 let refTab = 'avail';
 let rosterMiss = [], rosterGuess = [];
 
@@ -28,11 +28,12 @@ function render() {
   D = derive(s);
   $('#top').innerHTML = header(s, '大會台', [['即時賽程', './'], ['裁判紀錄區', 'ref.html'], ['簽到處', 'checkin.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
-  const due = dueNotices(s).length;
-  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}${k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : ''}</button>`).join('');
+  const due = dueNotices(s).length, rep = [...D.byId.values()].filter(m => m.status === 'reported').length;
+  const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'rec' && rep ? `<span class="badge" title="${rep} 場待確認">${rep}</span>` : '');
+  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
-  $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
+  $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
 }
 
 function viewLogin() {
@@ -72,7 +73,6 @@ function viewCtrl(s) {
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
       <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
-      <div class="panel"><h2>待確認成績（${reported.length}）</h2>${reported.length ? reported.map(m => `<div class="row small" style="margin-bottom:4px"><b>${esc(shortEv(m))}</b><span>${names(m)}　${m.score[0]}:${m.score[1]}</span><span class="spacer"></span><button class="btn sm" data-score="${esc(m.id)}">核對</button></div>`).join('') : '<p class="small muted">目前沒有待確認的成績。</p>'}</div>
     </div></div>`;
 }
 function viewTables(s) {
@@ -117,16 +117,23 @@ function planned(m) {
   return x ? `<span class="muted">表定 ${x.s}</span>` : '';
 }
 
-function setTables(mid, text) {
+function setTables(mid, text, force = false) {
   const s = getState();
   const m = D.byId.get(mid);
   const tables = parseTables(text);
   const bad = tables.find(t => t < 1 || t > (s.tables || 24));
   if (bad != null) { toast(`沒有第 ${bad} 桌`); render(); return; }
-  const busy = tables.find(t => D.tables.has(t) && D.tables.get(t).m.id !== mid && D.tables.get(t).m.status === 'playing');
-  if (busy != null) { toast(`第 ${busy} 桌正在進行 ${shortEv(D.tables.get(busy).m)}，請先確認`); render(); return; }
+  const taken = tables.filter(t => D.tables.has(t) && D.tables.get(t).m.id !== mid && D.tables.get(t).m.status === 'playing');
+  // 個人賽或只用一桌的團體賽：不能搶
+  const hard = taken.find(t => { const o = D.tables.get(t).m; return !(o.team && o.tables.length > 1); });
+  if (hard != null) { toast(`第 ${hard} 桌正在進行 ${shortEv(D.tables.get(hard).m)}，請先確認`); render(); return; }
+  // 團體賽分多桌：這桌的點已打完就直接收回；還沒有紀錄的先問一聲
+  const ask = taken.filter(t => !D.tables.get(t).idle);
+  if (ask.length && !force) { modal = { kind: 'reclaim', mid, text, tables: ask }; drawModal(); render(); return; }
   const added = tables.filter(t => !m.tables.includes(t));
   update(st => {
+    // 收回別場團體賽的桌子：從那場的桌次拿掉，那場在其他桌繼續
+    taken.forEach(t => { const o = D.tables.get(t).m, r = st.m[o.id]; if (r && r.tables) r.tables = r.tables.filter(x => Number(x) !== t); });
     const rec = st.m[mid] = st.m[mid] || {};
     rec.tables = tables;
     if (tables.length && !rec.start) rec.start = Date.now();
@@ -242,6 +249,13 @@ function drawModal() {
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
     return;
   }
+  if (modal.kind === 'reclaim') {
+    const lines = modal.tables.map(t => { const o = D.tables.get(t).m; return `第 ${t} 桌目前是 ${esc(shortEv(o))}（${names(o)}）的其中一桌，收回後改在第 ${o.tables.filter(x => Number(x) !== t).join('、')} 桌繼續。`; });
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(460px,100%)"><h2>收回球桌</h2>${lines.map(l => `<p>${l}</p>`).join('')}
+      <p class="small muted">這桌的裁判沒有紀錄比數，系統無法判斷是否打完，請確認後再收回。</p>
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn" data-reclaim>收回並派桌</button></div></div></div>`;
+    return;
+  }
   if (modal.kind === 'unpub') {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>取消公開${esc(curEv)}決賽籤表</h2>
       <p>即時賽程頁面的決賽籤表會回到空白，籤號資料不會刪除，之後可以再公開。</p>
@@ -258,6 +272,29 @@ function syncHistory() {
   const s = getState();
   if (!s.edition) return;
   saveHistory(histKey(s.edition), entryFromState(s)).catch(err => toast(`歷屆名次未存到：${err.message || err}`));
+}
+
+// ---------------- 紀錄組 ----------------
+// 只看成績：待確認的場次、各項目籤表（和即時賽程同步），點場次叫出紀錄核對並鎖定。不顯示桌次與排點。
+let recEv = null;
+function viewRec(s) {
+  const all = [...D.byId.values()];
+  const reported = all.filter(m => m.status === 'reported').sort((a, b) => (a.rec.u || 0) - (b.rec.u || 0));
+  if (!recEv || !D.events.some(e => e.name === recEv)) recEv = (reported[0] && reported[0].ev) || (D.events[0] && D.events[0].name);
+  const e = D.events.find(x => x.name === recEv);
+  const shown = m => m.status !== 'wait' && m.status !== 'ready';
+  const mark = m => (m.status === 'reported' ? 'rep' : m.status === 'playing' ? 'live' : '');
+  const ko = e ? (e.team ? e.matches.filter(m => m.stage === 'F') : e.matches) : [];
+  const t = e ? bracketSvg(ko, e.team, { pos: e.team, noTables: true }) : { svg: '' };
+  const repN = ev => reported.filter(m => m.ev === ev).length;
+  return `<div class="panel"><h2>待確認成績（${reported.length}）</h2>
+      ${reported.length ? `<table class="list"><tbody>${reported.map(m => `<tr><td class="nowrap"><b>${esc(m.ev)}</b>${esc(m.no)}</td><td>${names(m)}</td><td class="nowrap"><b>${m.score[0]} : ${m.score[1]}</b></td>
+        <td class="nowrap" style="text-align:right"><button class="btn sm" data-score="${esc(m.id)}">${icon('score')}核對</button></td></tr>`).join('')}</tbody></table>`
+        : '<p class="small muted">目前沒有待確認的成績。裁判按下本場結束後會出現在這裡。</p>'}</div>
+    ${e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${D.events.map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}${repN(x.name) ? `<span class="badge">${repN(x.name)}</span>` : ''}</button>`).join('')}</div>
+      <div class="legend" style="margin:0 0 8px"><span><span class="lg rep"></span>待確認</span><span><span class="lg busy"></span>進行中</span><span class="muted">點場次或比數可以看紀錄、確認成績</span></div>
+      ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
+      ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : ''}`;
 }
 
 // ---------------- 大會提醒 ----------------
@@ -727,7 +764,7 @@ async function importRoster(file) {
 
 // ---------------- 事件 ----------------
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('button, [data-table], [data-signout]');
+  const t = ev.target.closest('button, [data-table], [data-signout], [data-mid]');
   if (t && 'signout' in t.dataset) ev.preventDefault();
   if (!t) { if (ev.target.classList.contains('modal-bg')) { modal = null; draft = {}; drawModal(); } return; }
   const d = t.dataset;
@@ -748,6 +785,9 @@ document.addEventListener('click', async ev => {
     update(s => { const se = s.events.find(x => x.name === curEv); if (on) se.finalPub = Date.now(); else delete se.finalPub; });
     toast(on ? `${curEv}決賽籤表已公開` : `${curEv}決賽籤表已取消公開`); return;
   }
+  if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
+  if (d.recev) { recEv = d.recev; render(); return; }
+  if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
   if (noticeClick(d)) return;
   if (['hnew', 'hsel', 'hcancel', 'hadd', 'hdel', 'hsave', 'hrevert'].some(k => k in d)) { histClick(d); return; }
   if (d.gopub) { tab = 'draw'; curEv = d.gopub; render(); return; }

@@ -213,8 +213,11 @@ export function derive(state) {
   [...byId.values()].filter(m => m.status === 'playing' || m.status === 'reported').sort((x, y) => (x.status === 'playing') - (y.status === 'playing')).forEach(m => {
     m.tables.forEach(t => {
       let point = null;
-      if (m.team && m.rec.pts) m.rec.pts.forEach((p, i) => { if (p && Number(p.table) === Number(t) && !m.result.pts[i].winner) point = i; });
-      tables.set(Number(t), { m, point });
+      let finished = false;
+      if (m.team && m.rec.pts) m.rec.pts.forEach((p, i) => { if (p && Number(p.table) === Number(t)) { if (m.result.pts[i].winner) finished = true; else point = i; } });
+      // 團體賽分多桌：這桌的點打完、還沒開下一點，大會可以把這桌派給其他場
+      const idle = m.team && m.status === 'playing' && m.tables.length > 1 && point == null && finished;
+      tables.set(Number(t), { m, point, idle });
     });
   });
   return { events: events.sort((x, y) => EVENT_ORDER.indexOf(x.name) - EVENT_ORDER.indexOf(y.name)), byId, tables };

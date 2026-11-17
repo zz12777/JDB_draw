@@ -443,3 +443,10 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
 .ntab tr.past td, .ntab tr.done td { opacity: .55; }
 .ntab tr.due td { background: var(--yellow-soft); }
 .tabs button .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; vertical-align: 2px; }
+
+/* 紀錄組 */
+table.grp td.rep { background: var(--yellow-soft); font-weight: 700; }
+table.grp td.live { background: var(--blue-soft); }
+.rech { font-size: 15px; color: var(--blue); margin: 12px 0 6px; }
+.pills button .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; }
+.wcell.idle { opacity: .6; border-style: dashed; }

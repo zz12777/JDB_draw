@@ -3,7 +3,7 @@ import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner,
 import { slotOf } from './timetable.js';
 import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth, loadHistory } from './store.js';
-import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT } from './ui.js';
+import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables } from './ui.js';
 import { bracketSvg } from './tree.js';
 import { mergeHistory, entryFromState } from './history.js';
 
@@ -102,27 +102,7 @@ function viewHist(s, key) {
 const shown = m => m.status !== 'wait' && m.status !== 'ready';
 function viewSched() {
   const e = D.events.find(x => x.name === curEv);
-  let groups = '';
-  if (e.team) {
-    const N = Math.max(...e.groups.map(g => g.teams.length));
-    groups = e.groups.map(g => {
-// 比照完成籤表：左下半寫場次，對角一條斜線，右上半寫比數（列的隊伍在前）
-      const find = (a, b) => g.matches.find(x => (x.A.name === a && x.B.name === b) || (x.A.name === b && x.B.name === a));
-      const cell = (a, b, i, j) => {
-        const m = find(a, b);
-        if (!m) return '<td></td>';
-        if (i > j) return `<td class="lk no" data-mid="${esc(m.id)}">${esc(m.no)}</td>`;
-        if (!shown(m)) return '<td></td>';
-        const mine = m.A.name === a;
-        return `<td class="lk sc" data-mid="${esc(m.id)}">${m.score[mine ? 0 : 1]}:${m.score[mine ? 1 : 0]}</td>`;
-      };
-      const st = t => g.table.rows.find(r => r.team === t);
-      const tag = t => (g.rank.c === t ? ' <span class="chip ready">冠</span>' : g.rank.r === t ? ' <span class="chip reported">亞</span>' : '');
-      const pad = n => '<td></td>'.repeat(n);
-      return `<table class="grp"><thead><tr><th class="hd">${g.letter} 組</th>${Array.from({ length: N }, (_, i) => `<th>${g.teams[i] ? `${i + 1}<span class="tn"> ${esc(g.teams[i])}</span>` : ''}</th>`).join('')}<th class="wl">勝</th><th class="wl">敗</th></tr></thead><tbody>
-        ${g.teams.map((t, i) => `<tr><td class="nm"><span class="ix">${i + 1}</span>${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
-    }).join('');
-  }
+  const groups = e.team ? groupTables(e, shown) : '';
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
   const t = bracketSvg(ko, e.team, { pos: e.team });
   const tree = t.svg ? `<div class="panel"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>

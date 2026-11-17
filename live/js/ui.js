@@ -133,12 +133,37 @@ export function deskBoard(state, d, opt = {}) {
     const x = d.tables.get(t);
     if (!x) return `<button class="wcell" ${pos} data-table="${t}"><span class="bn">${t}</span><span class="bempty">空桌</span></button>`;
     const m = x.m;
-    return `<button class="wcell busy ${opt.alerts && opt.alerts.has(t) ? 'alert' : ''} ${m.status === 'reported' ? 'rep' : ''}" ${pos} data-table="${t}" data-mid="${esc(m.id)}">
+    return `<button class="wcell busy ${opt.alerts && opt.alerts.has(t) ? 'alert' : ''} ${m.status === 'reported' ? 'rep' : ''} ${x.idle ? 'idle' : ''}" ${pos} data-table="${t}" data-mid="${esc(m.id)}">
       <span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${x.point != null ? `<span class="bpt">第${'一二三四五'[x.point]}點</span>` : ''}
       ${side(m.A)}${side(m.B)}<span class="wsc">${m.score[0]} : ${m.score[1]}</span>
-      <span class="wx">${m.status === 'reported' ? '待確認' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
+      <span class="wx">${m.status === 'reported' ? '待確認' : x.idle ? '這桌的點已打完，可派其他場' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
   };
   return `<div class="wboard" style="--half:${half}"><div class="wdesk">大會台</div>${Array.from({ length: n }, (_, i) => cell(i + 1)).join('')}</div>`;
+}
+
+/**
+ * 團體賽預賽循環表：比照完成籤表，左下半寫場次，對角一條斜線，右上半寫比數（列的隊伍在前）。
+ * shown(m)：要不要顯示比數；opt.mark(m)：額外加在格子上的 class
+ */
+export function groupTables(e, shown, opt = {}) {
+  const N = Math.max(...e.groups.map(g => g.teams.length));
+  return e.groups.map(g => {
+    const find = (a, b) => g.matches.find(x => (x.A.name === a && x.B.name === b) || (x.A.name === b && x.B.name === a));
+    const mk = m => (opt.mark ? ` ${opt.mark(m)}` : '');
+    const cell = (a, b, i, j) => {
+      const m = find(a, b);
+      if (!m) return '<td></td>';
+      if (i > j) return `<td class="lk no${mk(m)}" data-mid="${esc(m.id)}">${esc(m.no)}</td>`;
+      if (!shown(m)) return `<td class="${mk(m).trim()}"></td>`;
+      const mine = m.A.name === a;
+      return `<td class="lk sc${mk(m)}" data-mid="${esc(m.id)}">${m.score[mine ? 0 : 1]}:${m.score[mine ? 1 : 0]}</td>`;
+    };
+    const st = t => g.table.rows.find(r => r.team === t);
+    const tag = t => (g.rank.c === t ? ' <span class="chip ready">冠</span>' : g.rank.r === t ? ' <span class="chip reported">亞</span>' : '');
+    const pad = n => '<td></td>'.repeat(n);
+    return `<table class="grp"><thead><tr><th class="hd">${g.letter} 組</th>${Array.from({ length: N }, (_, i) => `<th>${g.teams[i] ? `${i + 1}<span class="tn"> ${esc(g.teams[i])}</span>` : ''}</th>`).join('')}<th class="wl">勝</th><th class="wl">敗</th></tr></thead><tbody>
+      ${g.teams.map((t, i) => `<tr><td class="nm"><span class="ix">${i + 1}</span>${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
+  }).join('');
 }
 
 /** 某場在某桌的裁判姓名 */
