@@ -1,8 +1,8 @@
 // 簽到處：不用登入。有團體賽的隊伍勾「已簽到且領點單」，只報個人賽的勾「已簽到」，備註寫給大會看。
 import { fmtTime } from './model.js';
 import { getState, subscribe, onAuth, auth, setCheckin } from './store.js';
-import { esc, $, icon, header } from './ui.js';
-import { checkinSections } from './units.js';
+import { esc, $, icon, header, toast } from './ui.js';
+import { checkinSections, signinWord, signinTitle } from './units.js';
 
 let q = '', onlyTodo = false, pending = false;
 
@@ -33,7 +33,9 @@ function render() {
   }).join('');
   $('#main').innerHTML = `<div class="panel"><div class="row"><label class="sbox" style="flex:1;min-width:200px">${icon('search')}<input id="q" class="search" type="search" placeholder="學校或隊名" value="${esc(q)}"></label>
       <div class="pills"><button class="${onlyTodo ? '' : 'on'}" data-todo="0">全部</button><button class="${onlyTodo ? 'on' : ''}" data-todo="1">未簽到</button></div>
-      <span class="small muted">已簽到 ${done} / ${all.length}</span></div></div>
+      <span class="small muted">已簽到 ${done} / ${all.length}</span>
+      <button class="btn ghost sm" data-dlsign>${icon('download')}下載簽到表 Word</button></div>
+      <p class="small muted" style="margin:8px 0 0">名單來自大會台匯入的最新籤表，大會台重新匯入後，這裡和簽到表會自動更新。</p></div>
     ${body || '<div class="panel"><p class="small muted" style="text-align:center">沒有符合的名單。</p></div>'}`;
 }
 
@@ -44,12 +46,23 @@ subscribe(refresh);
 onAuth(refresh);
 
 document.addEventListener('click', ev => {
-  const b = ev.target.closest('[data-ck],[data-todo]');
+  const b = ev.target.closest('[data-ck],[data-todo],[data-dlsign]');
   if (!b) return;
+  if (b.dataset.dlsign !== undefined) { downloadSignin(); return; }
   if (b.dataset.todo) { onlyTodo = b.dataset.todo === '1'; render(); return; }
   const k = b.dataset.ck, x = (getState().checkin || {})[k] || {};
   setCheckin(k, { ...x, ok: !x.ok, t: Date.now() });
 });
+async function downloadSignin() {
+  try {
+    const s = getState();
+    const blob = await signinWord(s);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `${signinTitle(s)}簽到表.docx`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (err) { toast(`簽到表產生失敗：${err.message || err}`); }
+}
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.dataset.note === undefined) return;
