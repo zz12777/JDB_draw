@@ -451,3 +451,4 @@ table.grp td.live { background: #e3f3e7; color: #1f6b3a; box-shadow: inset 0 0 0
 .rech { font-size: 15px; color: var(--blue); margin: 12px 0 6px; }
 .pills button .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; }
 .wcell.idle { opacity: .6; border-style: dashed; }
+.ckp { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 600; color: #7a5600; background: var(--yellow-soft); border: 1px solid var(--yellow); border-radius: 4px; padding: 0 6px; vertical-align: 1px; }

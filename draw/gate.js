@@ -1,6 +1,6 @@
 // 抽籤系統的登入限制：只有管理員（兩個交大盃信箱，或由它們加入且未到期的帳號）能使用。
-// 抽籤資料仍只存在這台電腦的瀏覽器，不會上傳。
-import { FIREBASE, ADMINS } from '../live/js/config.js';
+// 抽籤資料仍只存在這台電腦的瀏覽器，不會上傳；只有步驟 8 的停車證張數會同步到資料庫。
+import { FIREBASE, ADMINS, ROOT } from '../live/js/config.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const gate = document.getElementById('gate');
@@ -19,6 +19,12 @@ try {
     }
     if (ok) {
       gate.hidden = true;
+      // 步驟 8 的停車證：同步到資料庫，簽到處和大會台會讀到（抽籤資料本身仍只存在這台電腦）
+      const ref = db.ref(db.getDatabase(app), `${ROOT}/parking`);
+      window.__drawCloud = {
+        saveParking: obj => db.set(ref, JSON.stringify(obj)),
+        loadParking: async () => { const v = (await db.get(ref)).val(); try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; } },
+      };
       who.innerHTML = `<button class="btn ghost" id="btn-signout" title="${user.email.replace(/[<>&"]/g, '')}">登出</button>`;
       return;
     }

@@ -1,6 +1,6 @@
 // 簽到表 Word：只報個人賽的學校、大專男子團體、大專女子團體、社會團體各一頁
-// 欄位比照往年範本：學校單位、簽到欄、備註、停車證（備註與停車證留空，現場手寫）
-import { unitFromTeam } from './schools.js';
+// 欄位比照往年範本：學校單位、簽到欄、備註、停車證（備註留空現場手寫；停車證依資料庫的停車證張數填入）
+import { unitFromTeam, looseKey } from './schools.js';
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const FONT = '<w:rFonts w:ascii="Microsoft JhengHei" w:hAnsi="Microsoft JhengHei" w:eastAsia="Microsoft JhengHei" w:cs="Microsoft JhengHei"/>';
@@ -13,7 +13,7 @@ const cell = (t, w, sz, head) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>
 const tr = (cells, h, head) => `<w:tr><w:trPr><w:cantSplit/>${head ? '<w:tblHeader/>' : ''}<w:trHeight w:val="${h}" w:hRule="atLeast"/></w:trPr>${cells}</w:tr>`;
 function table(rows) {
   const head = tr(['學校單位', '簽到欄', '備註', '停車證'].map((t, i) => cell(t, GRID[i], 28, true)).join(''), 420, true);
-  const body = rows.map(r => tr([r, '', '', ''].map((t, i) => cell(t, GRID[i], 28, false)).join(''), 620, false)).join('');
+  const body = rows.map(r => tr([r.label, '', '', r.park ? String(r.park) : ''].map((t, i) => cell(t, GRID[i], 28, false)).join(''), 620, false)).join('');
   return `<w:tbl><w:tblPr><w:tblW w:w="10193" w:type="dxa"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${GRID.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>${head}${body}</w:tbl>`;
 }
 
@@ -27,9 +27,9 @@ function teamRows(list) {
     m.get(unit).push(name);
   });
   return [...m.entries()].map(([unit, names]) => {
-    if (names.length === 1) return names[0];
+    if (names.length === 1) return { unit, label: names[0] };
     const suffix = names.map(n => (n.startsWith(unit) ? n.slice(unit.length).trim().replace(/^[(（](.*)[)）]$/, '$1') : ''));
-    return suffix.every(Boolean) ? `${unit} ${suffix.join('、')}` : names.join('、');
+    return { unit, label: suffix.every(Boolean) ? `${unit} ${suffix.join('、')}` : names.join('、') };
   });
 }
 
@@ -48,12 +48,11 @@ function indRows(events) {
     });
   });
   const rows = [];
-  order.forEach(s => ['男', '女'].forEach(g => { if (has.get(s).has(g)) rows.push(`${s} (${g})`); }));
+  order.forEach(s => ['男', '女'].forEach(g => { if (has.get(s).has(g)) rows.push({ unit: s, label: `${s} (${g})` }); }));
   return { rows, schools: order.length };
 }
 
-/** events: { 項目: [entry] }；title：例如「第十三屆TIBHAR交大盃」 */
-/** 簽到表分區：[{ code, title, team, rows: [學校或隊伍] }]，抽籤系統和當日簽到處共用 */
+/** 簽到表分區：[{ code, title, team, rows: [{ unit, label }] }] */
 export function signinSections(events) {
   const out = [];
   const ind = indRows(events);
@@ -64,8 +63,23 @@ export function signinSections(events) {
   return out;
 }
 
-export async function signinDocx(events, title, JSZipLib = globalThis.JSZip) {
-  const parts = signinSections(events).map(x => [`(${x.title})`, x.rows]);
+/**
+ * 停車證張數：parking 是 { 單位: 張數 }。同一單位出現在好幾列時，只填在第一次出現的那一列，避免重複發證。
+ * 會在每一列加上 park（張數）與 parkUnit（資料庫裡的單位名稱）
+ */
+export function withParking(sections, parking = {}) {
+  const idx = new Map(Object.entries(parking || {}).filter(([, n]) => Number(n) > 0).map(([k, n]) => [looseKey(k), [k, Number(n)]]));
+  const used = new Set();
+  sections.forEach(sec => sec.rows.forEach(r => {
+    const hit = idx.get(looseKey(r.unit));
+    if (hit && !used.has(hit[0])) { r.park = hit[1]; r.parkUnit = hit[0]; used.add(hit[0]); }
+  }));
+  return { sections, unmatched: [...idx.values()].filter(([k]) => !used.has(k)) };
+}
+/** events: { 項目: [entry] }；title：例如「第十三屆TIBHAR交大盃」；opt.parking：{ 單位: 張數 } */
+export async function signinDocx(events, title, opt = {}) {
+  const JSZipLib = opt.JSZip || globalThis.JSZip;
+  const parts = withParking(signinSections(events), opt.parking).sections.map(x => [`(${x.title})`, x.rows]);
   const body = parts.map(([sub, rows], i) =>
     para(run(`${title}簽到表`, 48, true), { pageBreak: i > 0 }) + para(run(sub, 24), { after: 120 }) + table(rows)).join('');
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';

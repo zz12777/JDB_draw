@@ -26,7 +26,7 @@ function render() {
       <div class="ckl">${rows.map(r => {
         const x = ci[r.key] || {};
         const word = sec.team ? '已簽到且領點單' : '已簽到';
-        return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}</div>
+        return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}${r.park ? `<span class="ckp" title="停車證張數">停車證 ${r.park} 張</span>` : ''}</div>
           <button class="ckb" data-ck="${esc(r.key)}" aria-pressed="${x.ok ? 'true' : 'false'}"><span class="box">${x.ok ? icon('check') : ''}</span>${word}${x.ok && x.t ? `<span class="ckt">${fmtTime(x.t)}</span>` : ''}</button>
           <input type="text" class="ckm" data-note="${esc(r.key)}" value="${esc(x.note || '')}" placeholder="備註"></div>`;
       }).join('')}</div></div>`;

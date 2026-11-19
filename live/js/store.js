@@ -11,7 +11,7 @@ import { FIREBASE, ROOT, ADMINS, POLL_SECONDS } from './config.js';
 const ROLE = document.documentElement.dataset.role || 'public';
 export const LOCAL = new URLSearchParams(location.search).has('local') || !FIREBASE;
 const listeners = new Set(), authListeners = new Set();
-const raw = { meta: null, events: null, m: {}, calls: null, staff: null, notices: null, checkin: {} };
+const raw = { meta: null, events: null, m: {}, calls: null, staff: null, notices: null, checkin: {}, parking: null };
 let state = emptyState();
 let remote = null;
 export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, error: '', loaded: false };
@@ -63,7 +63,7 @@ function assemble() {
   for (const id of Object.keys(raw.m || {})) m[id] = nodeToRec(raw.m[id]);
   state = { ...emptyState(), ...Object.fromEntries(META_KEYS.filter(k => meta[k] !== undefined).map(k => [k, meta[k]])),
     events: parse(raw.events, []), m, calls: parse(raw.calls, []), staff: parse(raw.staff, []),
-    notices: parse(raw.notices, {}), checkin: Object.fromEntries(Object.entries(raw.checkin || {}).map(([k, v]) => [k, parse(v, {})])) };
+    notices: parse(raw.notices, {}), parking: parse(raw.parking, {}), checkin: Object.fromEntries(Object.entries(raw.checkin || {}).map(([k, v]) => [k, parse(v, {})])) };
 }
 const metaOf = s => JSON.stringify(Object.fromEntries(META_KEYS.map(k => [k, s[k] ?? null])));
 
@@ -83,6 +83,7 @@ export function update(fn) {
   if (JSON.stringify(next.calls || []) !== JSON.stringify(before.calls || [])) up['desk/calls'] = JSON.stringify(next.calls || []);
   if (JSON.stringify(next.staff || []) !== JSON.stringify(before.staff || [])) up['desk/staff'] = JSON.stringify(next.staff || []);
   if (JSON.stringify(next.notices || {}) !== JSON.stringify(before.notices || {})) up['desk/notices'] = JSON.stringify(next.notices || {});
+  if (JSON.stringify(next.parking || {}) !== JSON.stringify(before.parking || {})) up.parking = JSON.stringify(next.parking || {});
   const ids = new Set([...Object.keys(before.m || {}), ...Object.keys(next.m || {})]);
   ids.forEach(id => {
     const a = flatten((before.m || {})[id]), b = flatten((next.m || {})[id]);
@@ -106,7 +107,7 @@ export function replaceState(s) {
   emit(true);
   remote.write({ 'pub/meta': metaOf(next), 'pub/events': JSON.stringify(next.events || []), 'pub/m': Object.keys(tree).length ? tree : null,
     'desk/calls': JSON.stringify(next.calls || []), 'desk/staff': JSON.stringify(next.staff || []),
-    'desk/notices': JSON.stringify(next.notices || {}), checkin: null })
+    'desk/notices': JSON.stringify(next.notices || {}), checkin: null, parking: JSON.stringify(next.parking || {}) })
     .catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
 /** 簽到處：一列一格，各台裝置同時勾不同列不會互相蓋掉 */
@@ -129,7 +130,7 @@ function localRemote() {
   const KEY = 'jdb-live-tree';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
   const push = () => { const t = load(); const pub = t.pub || {}, desk = t.desk || {};
-    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {};
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
     auth.loaded = true; assemble(); };
   window.addEventListener('storage', e => { if (e.key === KEY) { push(); emit(false); } });
   push();
@@ -163,7 +164,10 @@ async function sdkRemote() {
   db.onValue(at('pub/meta'), s => receive('meta', s.val()), fail);
   db.onValue(at('pub/events'), s => receive('events', s.val()), fail);
   db.onValue(at('pub/m'), s => receive('m', s.val()), fail);
-  if (ROLE === 'desk' || ROLE === 'checkin') db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail);
+  if (ROLE === 'desk' || ROLE === 'checkin') {
+    db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail);
+    db.onValue(at('parking'), s => receive('parking', s.val()), fail);
+  }
   if (au) {
     const a = au.getAuth(app);
     let offs = [];

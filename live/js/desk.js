@@ -676,11 +676,25 @@ function viewSetup(s) {
     <div class="panel"><h2>匯入賽程時間表（Excel 檔）</h2>
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇賽程時間表<input type="file" accept=".xlsx" hidden data-sched></label>
       <span class="small muted">${s.sched ? esc(s.sched.file || '') : ''}</span></div></div>
+    ${parkPanel(s)}
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
       ${LOCAL || !s.events.length ? '<button class="btn ghost" data-demo>載入示範資料</button>' : ''}
       <button class="btn ghost danger" data-wipe>清除全部資料</button></div></div>`;
+}
+
+// ---------------- 停車證 ----------------
+// 抽籤系統從繳費表單整理後同步過來；之後追加申請的，在這裡直接改。簽到處的名單和簽到表會跟著更新。
+function parkPanel(s) {
+  const rows = Object.entries(s.parking || {});
+  const total = rows.reduce((a, [, n]) => a + (Number(n) || 0), 0);
+  return `<div class="panel"><div class="row"><h2 style="margin:0">停車證</h2><span class="spacer"></span><span class="small muted">共 ${rows.length} 個單位、${total} 張</span></div>
+    <p class="small muted">由抽籤系統步驟 8 從繳費表單同步過來，追加申請可以直接在這裡修改。簽到處的名單與簽到表會依校名自動帶入張數。</p>
+    <table class="list"><thead><tr><th>單位</th><th style="width:110px">張數</th><th style="width:60px"></th></tr></thead><tbody>
+    ${rows.map(([u, n]) => `<tr><td>${esc(u)}</td><td><input type="number" min="0" style="width:80px" data-parkn="${esc(u)}" value="${Number(n) || 0}"></td><td><button class="btn ghost sm" data-parkdel="${esc(u)}" title="刪除">${icon('close')}</button></td></tr>`).join('')}
+    <tr><td><input type="text" id="park-u" placeholder="學校或單位名稱" style="width:100%"></td><td><input type="number" id="park-n" min="1" value="1" style="width:80px"></td><td><button class="btn ghost sm" data-parkadd>${icon('plus')}新增</button></td></tr>
+    </tbody></table></div>`;
 }
 
 /** 由檔名或工作表名稱判斷項目 */
@@ -791,6 +805,12 @@ document.addEventListener('click', async ev => {
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
+  if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; }); return; }
+  if ('parkadd' in d) {
+    const u = $('#park-u').value.trim(), n = Math.max(0, Number($('#park-n').value) || 0);
+    if (!u || !n) { toast('請填單位名稱和張數'); return; }
+    update(st => { const p = { ...(st.parking || {}) }; p[u] = (Number(p[u]) || 0) + n; st.parking = p; }); return;
+  }
   if (noticeClick(d)) return;
   if (['hnew', 'hsel', 'hcancel', 'hadd', 'hdel', 'hsave', 'hrevert'].some(k => k in d)) { histClick(d); return; }
   if (d.gopub) { tab = 'draw'; curEv = d.gopub; render(); return; }
@@ -842,6 +862,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', async ev => {
   const t = ev.target, d = t.dataset;
   if (noticeChange(t)) return;
+  if (d.parkn) { const n = Math.max(0, Number(t.value) || 0); update(st => { st.parking = { ...(st.parking || {}), [d.parkn]: n }; }); return; }
   if (d.lu) {
     const side = d.lu[0];
     if (t.value === '__other') {
