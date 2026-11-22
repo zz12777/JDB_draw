@@ -97,6 +97,7 @@ function render() {
 
     <div class="panel"><h2>相關資源</h2><div class="res">
       <a href="https://docs.google.com/spreadsheets/d/1oXrar8-PJ2dkPQxfqPcpRjuZymbHljeCh486AXuX5Cc/edit?usp=sharing" target="_blank" rel="noopener"><b>猛將資料庫試算表</b><span>歷屆名次，請用交大盃信箱開啟編輯</span></a>
+      <a href="https://docs.google.com/presentation/d/1aShjDmIyPohnXjChnB2U_LsyDY85MJUb/edit?usp=sharing&amp;ouid=101657985704309911789&amp;rtpof=true&amp;sd=true" target="_blank" rel="noopener"><b>團體賽互咬計算簡報</b><span>預賽同勝場的名次算法，僅供內部參考</span></a>
       <a href="https://forms.gle/2qHN331qs5mY14m78" target="_blank" rel="noopener"><b>問題回報與建議</b><span>系統問題或改進建議</span></a>
       <a href="https://console.firebase.google.com/project/nctu-ttc/overview" target="_blank" rel="noopener"><b>Firebase 主控台</b><span>當日系統的資料庫與登入設定</span></a>
       <a href="https://github.com/zz12777/JDB_draw" target="_blank" rel="noopener"><b>程式碼</b><span>GitHub 上的抽籤系統與當日系統</span></a>

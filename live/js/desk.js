@@ -285,6 +285,20 @@ function drawModal() {
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
     return;
   }
+  if (modal.kind === 'tierules') {
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(560px,100%)"><div class="row"><h2>團體賽預賽互咬規則</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
+      <ol style="padding-left:22px;line-height:1.8;margin:8px 0">
+        <li><b>勝場數</b>多者名次在前。</li>
+        <li>勝場相同的隊伍，<b>只看他們彼此之間的比賽</b>，依序比：點數勝率（勝點／敗點）、局數勝率（勝局／敗局）、分數勝率（得分／失分）。</li>
+        <li>比出一部分高低後，仍然相同的隊伍重新從第 2 步比起，同樣只看他們彼此之間的比賽。</li>
+        <li>只剩<b>兩隊</b>相同時，看兩隊之間的勝負。</li>
+        <li>全部都相同，由<b>裁判長抽籤</b>決定。</li>
+      </ol>
+      <div class="tiebox"><b>例：三隊各 1 勝 1 敗</b><br>A 3:0 勝 B、B 3:1 勝 C、C 3:2 勝 A。<br>點數：A 5:3、C 4:5、B 3:4，勝率 A &gt; C &gt; B，名次為 A、C、B。</div>
+      <p class="small muted" style="margin-top:10px">棄權：整場棄權算 3:0、每點 3:0、每局 11:0。此說明與簡報僅供內部參考，請勿提供給參賽隊伍。</p>
+      <p><a href="https://docs.google.com/presentation/d/1aShjDmIyPohnXjChnB2U_LsyDY85MJUb/edit?usp=sharing&amp;ouid=101657985704309911789&amp;rtpof=true&amp;sd=true" target="_blank" rel="noopener">開啟互咬計算簡報</a></p></div></div>`;
+    return;
+  }
   if (modal.kind === 'busy') {
     const rows = modal.busy.map(b => `<li><b>${esc(b.who)}</b> 正在第 ${b.o.tables.join('、')} 桌打 ${esc(shortEv(b.o))}</li>`).join('');
     const team = modal.busy.some(b => b.team);
@@ -525,13 +539,13 @@ function viewDraw(s) {
   const allDone = e.groups.every(g => g.table.all);
   const finals = e.matches.filter(m => m.stage === 'F' && m.roundIdx === 0);
   return `<div class="panel"><div class="row"><div class="pills">${teams.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
-      <span class="spacer"></span><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
+      <span class="spacer"></span><button class="btn ghost sm" data-tierules>互咬規則</button><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
     <p class="small muted">名次試算依互咬規則：先比勝場；同勝場只算這幾隊彼此的比賽，依序比點數、局數、分數勝率；只剩兩隊看兩隊對戰結果；全部相同由裁判長抽籤。</p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
     <div style="overflow-x:auto"><table class="list drawt"><thead><tr><th rowspan="2">組別</th><th rowspan="2">預賽戰績</th><th colspan="3" class="gc first gtop">冠軍</th><th colspan="3" class="gr first gtop">亞軍</th></tr>
       <tr><th class="gc first">隊伍</th><th class="gc">點名</th><th class="gc">籤號</th><th class="gr first">隊伍</th><th class="gr">點名</th><th class="gr">籤號</th></tr></thead><tbody>
-    ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `<div>${r.rank}. ${esc(r.team)} ${r.w} 勝 ${r.l} 敗${r.lot ? ' <span style="color:var(--red)">需抽籤</span>' : ''}</div>`).join('')}
-      ${tieNote(g)}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
+    ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `<div>${r.rank}. ${esc(r.team)} ${r.w} 勝 ${r.l} 敗${g.table.all && r.lot ? ' <span style="color:var(--red)">需抽籤</span>' : ''}</div>`).join('')}
+      ${g.table.all ? tieNote(g) : ''}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><div class="row"><h2 style="margin:0">決賽籤表</h2><span class="spacer"></span>
       ${se.finalPub ? `<span class="small muted">${fmtTime(se.finalPub)} 已公開到即時賽程</span><button class="btn ghost sm" data-fpub="0">取消公開</button>`
@@ -850,6 +864,7 @@ document.addEventListener('click', async ev => {
     update(s => { const se = s.events.find(x => x.name === curEv); if (on) se.finalPub = Date.now(); else delete se.finalPub; });
     toast(on ? `${curEv}決賽籤表已公開` : `${curEv}決賽籤表已取消公開`); return;
   }
+  if ('tierules' in d) { modal = { kind: 'tierules' }; drawModal(); return; }
   if ('busyok' in d && modal && modal.kind === 'busy') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, x.force, true); return; }
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
