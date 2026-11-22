@@ -474,3 +474,5 @@ table.grp td.live { background: #e3f3e7; color: #1f6b3a; box-shadow: inset 0 0 0
 .ev-男單 { background: #143d7a; } .ev-女單 { background: #be185d; } .ev-男雙 { background: #0e7490; } .ev-女雙 { background: #7c3aed; }
 .ev-男團 { background: #d97706; } .ev-女團 { background: #dc2626; } .ev-社團 { background: #15803d; }
 .tiebox { margin-top: 6px; padding: 6px 8px; border-left: 3px solid var(--yellow); background: var(--yellow-soft); color: #5b4a10; line-height: 1.5; }
+/* 成績公告的年份：手機上排成一列，左右滑動 */
+@media (max-width: 640px) { .pills.annyears { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; } .pills.annyears button { flex: none; } }

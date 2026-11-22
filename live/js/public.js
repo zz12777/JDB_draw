@@ -5,11 +5,11 @@ import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth, loadHistory } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables, callList } from './ui.js';
 import { bracketSvg } from './tree.js';
-import { mergeHistory, entryFromState } from './history.js';
+import { mergeHistory } from './history.js';
 
 let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['sched', '賽程'], ['time', '時間表'], ['live', '即時桌況/廣播'], ['ann', '成績公告'], ['hist', '歷屆名次']];
+const TABS = [['sched', '賽程'], ['time', '時間表'], ['live', '即時桌況/廣播'], ['ann', '成績公告']];
 const TAB_ICON = { sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables', hist: 'medal' };
 
 function render() {
@@ -27,8 +27,8 @@ function render() {
   $('.sbox').style.display = tab === 'time' ? 'none' : '';
   $('#q').placeholder = '學校、隊名或姓名';
   const key = tab === 'time' ? '' : q.trim();
-  $('#content').innerHTML = tab === 'hist' ? viewHist(s, key) : !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
-    : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : tab === 'ann' ? viewAnn(s, key) : key ? viewSearch(s, key) : viewSched();
+  $('#content').innerHTML = tab === 'ann' ? viewAnn(s, key) : !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
+    : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : key ? viewSearch(s, key) : viewSched();
   drawDetail();
 }
 
@@ -69,41 +69,43 @@ function viewTime(s) {
 }
 
 /** 成績公告：大會公布前只列出空格 */
-function viewAnn(s, key) {
-  const pub = s.podium || {};
-  const mark = v => (key && v && v.includes(key) ? esc(v).split(esc(key)).join(`<mark>${esc(key)}</mark>`) : esc(v || ''));
-  const line = (label, v) => `<div class="al"><span class="ak">${label}：</span><span>${mark(v)}</span></div>`;
-  const rows = ev => { const p = pub[ev] || {}; return [['冠軍', p.c], ['亞軍', p.r], ['季軍', p.s1], ['季軍', p.s2]]; };
-  const list = ANN_ORDER.map(ev => [ev, key ? rows(ev).filter(([, v]) => v && v.includes(key)) : rows(ev)]).filter(([, r]) => r.length);
-  return `<div class="panel ann"><h2>${esc(s.annTitle || '成績公告')}</h2>
-    ${list.length ? `<div class="agrid">${list.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(([l, v]) => line(l, v)).join('')}</div>`).join('')}</div>` : '<p class="muted small" style="text-align:center">查無相關成績。</p>'}</div>`;
-}
-
-/** 歷屆名次：舊資料、資料庫存的各屆，加上今年正在公布的 */
+/**
+ * 成績公告：本屆（大會台公布的名次）與歷屆名次合在一起，上方用年份切換。
+ * 本屆沒公布任何項目時，仍顯示空的公告表並註明「成績尚未公布」。
+ */
 let savedHist = null, histLoading = false;
-function histList(s) {
+function pastYears(s) {
   if (savedHist === null && !histLoading) {
     histLoading = true;
     loadHistory().then(h => { savedHist = h; }).catch(() => { savedHist = {}; }).finally(() => { histLoading = false; render(); });
   }
-  return mergeHistory(savedHist, entryFromState(s));
+  return mergeHistory(savedHist, null).filter(y => y.edition !== s.edition);
 }
-function viewHist(s, key) {
-  const list = histList(s);
-  if (!list.length) return '<div class="panel"><p class="muted">尚無資料。</p></div>';
-  const mark = v => (key && v.includes(key) ? esc(v).split(esc(key)).join(`<mark>${esc(key)}</mark>`) : esc(v));
-  const line = ([l, v]) => `<div class="al"><span class="ak">${l}：</span><span>${mark(v)}</span></div>`;
-  const year = (y, rows) => {
+function viewAnn(s, key) {
+  const mark = v => (key && v && v.includes(key) ? esc(v).split(esc(key)).join(`<mark>${esc(key)}</mark>`) : esc(v || ''));
+  const line = (l, v) => `<div class="al"><span class="ak">${l}：</span><span>${mark(v)}</span></div>`;
+  const grid = list => `<div class="agrid">${list.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(([l, v]) => line(l, v)).join('')}</div>`).join('')}</div>`;
+  // 本屆
+  const pub = s.podium || {};
+  const rows = ev => { const p = pub[ev] || {}; return [['冠軍', p.c], ['亞軍', p.r], ['季軍', p.s1], ['季軍', p.s2]]; };
+  const any = ANN_ORDER.some(ev => rows(ev).some(([, v]) => v));
+  const curList = ANN_ORDER.map(ev => [ev, key ? rows(ev).filter(([, v]) => v && v.includes(key)) : rows(ev)]).filter(([, r]) => r.length);
+  const current = () => `<div class="panel ann"><h2>${esc(s.annTitle || '成績公告')}</h2>
+    ${!any && !key ? '<p class="muted" style="text-align:center;margin:4px 0 12px">成績尚未公布</p>' : ''}${curList.length ? grid(curList) : '<p class="muted small" style="text-align:center">查無相關成績。</p>'}</div>`;
+  // 歷屆
+  const past = pastYears(s);
+  const pastPanel = y => {
     const evs = ANN_ORDER.map(ev => [ev, (y.p[ev] || []).filter(([, v]) => !key || v.includes(key))]).filter(([, r]) => r.length);
-    return evs.length ? `<div class="panel ann"><h2>${y.year} ${esc(y.edition)}</h2><div class="agrid">${evs.map(([ev, r]) => `<div class="ab"><h3>${ANN_NAME[ev]}</h3>${r.map(line).join('')}</div>`).join('')}</div></div>` : '';
+    return evs.length ? `<div class="panel ann"><h2>${y.year} ${esc(y.edition)}</h2>${grid(evs)}</div>` : '';
   };
   if (key) {
-    const out = list.map(y => year(y)).join('');
-    return out || '<div class="panel"><p class="muted small" style="text-align:center">查無相關名次。</p></div>';
+    const out = (curList.length ? current() : '') + past.map(pastPanel).join('');
+    return out || '<div class="panel"><p class="muted small" style="text-align:center">查無相關成績。</p></div>';
   }
-  // 沒點過年份就顯示最新一屆（資料庫的資料晚一點才到，也會自動換成最新的）
-  const cur = list.find(y => y.year === hy) || list[0];
-  return `<div class="pills" style="margin-bottom:12px">${list.map(y => `<button class="${y === cur ? 'on' : ''}" data-hy="${y.year}">${y.year}</button>`).join('')}</div>${year(cur)}`;
+  const thisYear = Number(String((s.dates || [])[0] || '').slice(0, 4)) || new Date().getFullYear();
+  const sel = past.find(y => y.year === hy);
+  return `<div class="pills annyears" style="margin-bottom:12px"><button class="${sel ? '' : 'on'}" data-hy="cur">${thisYear} 本屆</button>${past.map(y => `<button class="${y === sel ? 'on' : ''}" data-hy="${y.year}">${y.year}</button>`).join('')}</div>
+    ${sel ? pastPanel(sel) : current()}`;
 }
 
 const shown = m => m.status !== 'wait' && m.status !== 'ready';
@@ -170,7 +172,7 @@ document.addEventListener('click', ev => {
   if (b) {
     if (b.dataset.tab) { tab = b.dataset.tab; q = ''; render(); }
     else if (b.dataset.callsmore !== undefined) { callsOpen = !callsOpen; render(); }
-    else if (b.dataset.hy) { hy = Number(b.dataset.hy); render(); }
+    else if (b.dataset.hy) { hy = b.dataset.hy === 'cur' ? null : Number(b.dataset.hy); render(); }
     else if (b.dataset.ev) { curEv = b.dataset.ev; render(); }
     else if (b.dataset.zoom) { zoom = Math.min(1.6, Math.max(0.4, zoom + 0.2 * Number(b.dataset.zoom))); render(); }
     else if ('close' in b.dataset) { detail = null; drawDetail(); }
