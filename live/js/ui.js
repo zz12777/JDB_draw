@@ -175,9 +175,10 @@ export function callList(calls, D, opt = {}) {
     .filter(x => !opt.filter || opt.filter(x)).slice(0, opt.max || 8);
   return list.map(({ c, m }, i) => {
     const tb = (c.tables && c.tables.length ? c.tables : m ? m.tables : []) || [];
-    const body = m ? `<span class="bcm">${esc(m.no)}</span><span class="bcv"><span class="bcs">${esc(sideText(m.A, m.team))}</span><span class="vs">vs</span><span class="bcs">${esc(sideText(m.B, m.team))}</span></span>` : `<span class="bcv">${esc(c.text)}</span>`;
-    return `<div class="bci ${i ? '' : 'new'}"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span>` : ''}${body}
-      ${tb.length ? `<span class="bctb">第 <b>${tb.join('、')}</b> 桌</span>` : ''}</div>`;
+    // 第一行：時間、項目、場次、桌次；第二行：對戰雙方（手機與電腦同一種排法）
+    return `<div class="bci ${i ? '' : 'new'}"><div class="bch"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span><span class="bcm">${esc(m.no)}</span>` : ''}
+      <span class="bctb">${tb.length ? `第 <b>${tb.join('、')}</b> 桌` : ''}</span>${opt.undo ? `<button class="btn ghost sm" data-uncall="${c.ts}" title="收回這則廣播">收回</button>` : ''}</div>
+      <div class="bcv">${m ? `<span class="bcs">${esc(sideText(m.A, m.team))}</span><span class="vs">vs</span><span class="bcs">${esc(sideText(m.B, m.team))}</span>` : esc(c.text)}</div></div>`;
   }).join('');
 }
 

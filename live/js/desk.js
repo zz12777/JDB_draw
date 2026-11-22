@@ -72,7 +72,7 @@ function viewCtrl(s) {
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
-      <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 4 }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
+      <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 4, undo: true }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
     </div></div>`;
 }
 function viewTables(s) {
@@ -173,7 +173,11 @@ function setTables(mid, text, force = false, busyOk = false) {
     const rec = st.m[mid] = st.m[mid] || {};
     rec.tables = tables;
     if (tables.length && !rec.start) rec.start = Date.now();
-    if (!tables.length && !(rec.g || rec.pts)) delete rec.start;
+    if (!tables.length && !(rec.g || rec.pts)) {
+      delete rec.start;
+      // 還沒開打就把桌次刪掉：視為叫錯，順便收回這場的廣播
+      st.calls = (st.calls || []).filter(c => c.mid !== mid);
+    }
     if (added.length) {
       st.calls = (st.calls || []).concat({ ts: Date.now(), mid, tables, text: callText(m, tables) }).slice(-40);
     }
@@ -869,6 +873,7 @@ document.addEventListener('click', async ev => {
   if ('tierules' in d) { modal = { kind: 'tierules' }; drawModal(); return; }
   if ('busyok' in d && modal && modal.kind === 'busy') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, x.force, true); return; }
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
+  if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
   if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; }); return; }

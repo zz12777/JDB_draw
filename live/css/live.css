@@ -455,17 +455,20 @@ table.grp td.live { background: #e3f3e7; color: #1f6b3a; box-shadow: inset 0 0 0
 
 /* 即時賽程：廣播 */
 .bc h2 { margin-bottom: 8px; }
-.bci { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.bci { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .bci:last-child { border-bottom: 0; }
-.bci:not(.new) { opacity: .72; }
+.bci:not(.new) { opacity: .75; }
 .bci.new { background: var(--yellow-soft); margin: 0 -12px; padding: 10px 12px; border-radius: 8px; border-bottom: 0; }
-.bct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 40px; }
+.bch { display: flex; align-items: center; gap: 8px; }
+.bct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
 .bcm { font-weight: 700; }
-.bcv { flex: 1; min-width: 180px; }
-.bcv .vs { color: var(--muted); font-size: 12px; margin: 0 6px; }
-.bcs { display: inline-block; }
-.bctb { margin-left: auto; white-space: nowrap; color: var(--blue); }
+.bctb { margin-left: auto; white-space: nowrap; color: var(--blue); line-height: 1; }
 .bctb b { font-size: 22px; }
+.bcv { margin-top: 4px; line-height: 1.5; }
+.bcv .vs { color: var(--muted); font-size: 12px; margin: 0 8px; }
+.bcs { display: inline-block; }
+.bcmore { display: block; width: 100%; margin-top: 6px; border: 0; background: none; color: var(--blue); font: inherit; font-size: 14px; cursor: pointer; padding: 6px; }
+
 .evtag { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
 /* 個人賽用冷色、團體賽用暖色，男單（深藍）和男團（橘）一眼分得開 */
 .ev-男單 { background: #143d7a; } .ev-女單 { background: #be185d; } .ev-男雙 { background: #0e7490; } .ev-女雙 { background: #7c3aed; }

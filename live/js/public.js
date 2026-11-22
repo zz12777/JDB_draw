@@ -32,10 +32,12 @@ function render() {
   drawDetail();
 }
 
-/** 大會台的廣播 */
+/** 大會台的廣播：只顯示最新一則，按「查看更多」再列出前 4 則 */
+let callsOpen = false;
 function viewCalls(s, key) {
-  const html = callList(s.pcalls, D, { filter: ({ c, m }) => !key || (m ? hit(m, key) : String(c.text).includes(key)) });
-  return html ? `<div class="panel bc"><h2>廣播</h2>${html}</div>` : '';
+  const html = callList(s.pcalls, D, { max: callsOpen || key ? 5 : 1, filter: ({ c, m }) => !key || (m ? hit(m, key) : String(c.text).includes(key)) });
+  const more = !key && (s.pcalls || []).length > 1;
+  return html ? `<div class="panel bc"><h2>廣播</h2>${html}${more ? `<button class="bcmore" data-callsmore>${callsOpen ? '收合' : '查看更多'}</button>` : ''}</div>` : '';
 }
 function viewLive(s, key) {
   return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${viewCalls(s, key)}${board(s, D, key ? { match: m => hit(m, key) } : {})}`;
@@ -167,6 +169,7 @@ document.addEventListener('click', ev => {
   const b = ev.target.closest('button');
   if (b) {
     if (b.dataset.tab) { tab = b.dataset.tab; q = ''; render(); }
+    else if (b.dataset.callsmore !== undefined) { callsOpen = !callsOpen; render(); }
     else if (b.dataset.hy) { hy = Number(b.dataset.hy); render(); }
     else if (b.dataset.ev) { curEv = b.dataset.ev; render(); }
     else if (b.dataset.zoom) { zoom = Math.min(1.6, Math.max(0.4, zoom + 0.2 * Number(b.dataset.zoom))); render(); }
