@@ -459,6 +459,11 @@ function noticeChange(t) {
 }
 
 // ---------------- 決賽抽籤 ----------------
+/** 同勝場的組別：列出互咬的計算過程 */
+function tieNote(g) {
+  const lines = [...new Set(g.table.rows.filter(r => r.tie).flatMap(r => r.why || []))];
+  return lines.length ? `<div class="tiebox">${lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>` : '';
+}
 /** 決賽籤號的問題：空字串代表沒問題或還沒填 */
 function fposErr(e, se, g, k) {
   const fp = se.finalPos || {}, half = e.final.size / 2;
@@ -512,7 +517,7 @@ function viewDraw(s) {
     const roll = (se.roll || {})[g.letter + k] || '';
     const cls = k === '冠' ? 'gc' : 'gr';
     return `<td class="${cls} first"><select data-rank="${g.letter}|${rk}"><option value=""></option>${g.teams.map(t => `<option ${cur === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
-        ${!cur && sug ? `<div class="small muted">名次試算：${esc(sug.team)}${sug.tie ? '（同勝場，請確認）' : ''}</div>` : ''}</td>
+        ${!cur && sug ? `<div class="small muted">名次試算：${esc(sug.team)}${sug.lot ? '（需由裁判長抽籤）' : ''}</div>` : ''}</td>
       <td class="${cls}"><div class="seg">${['到', '代抽', '未到'].map(x => `<button class="${roll === x ? 'on' : ''}${x === '未到' ? ' no' : ''}" data-rollset="${g.letter + k}|${x}">${x}</button>`).join('')}</div></td>
       <td class="${cls}"><input type="text" inputmode="numeric" style="width:56px" data-fpos="${g.letter + k}" value="${(se.finalPos || {})[g.letter + k] || ''}">
         ${err ? `<div class="small" style="color:var(--red)">${err}</div>` : k === '亞' && hint(g) && !(se.finalPos || {})[g.letter + k] ? `<div class="small muted">應抽${hint(g)}</div>` : ''}</td>`;
@@ -521,11 +526,12 @@ function viewDraw(s) {
   const finals = e.matches.filter(m => m.stage === 'F' && m.roundIdx === 0);
   return `<div class="panel"><div class="row"><div class="pills">${teams.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
       <span class="spacer"></span><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
-    <p class="small muted">名次試算僅比勝場，同勝場請以選單指定。</p>
+    <p class="small muted">名次試算依互咬規則：先比勝場；同勝場只算這幾隊彼此的比賽，依序比點數、局數、分數勝率；只剩兩隊看兩隊對戰結果；全部相同由裁判長抽籤。</p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
     <div style="overflow-x:auto"><table class="list drawt"><thead><tr><th rowspan="2">組別</th><th rowspan="2">預賽戰績</th><th colspan="3" class="gc first gtop">冠軍</th><th colspan="3" class="gr first gtop">亞軍</th></tr>
       <tr><th class="gc first">隊伍</th><th class="gc">點名</th><th class="gc">籤號</th><th class="gr first">隊伍</th><th class="gr">點名</th><th class="gr">籤號</th></tr></thead><tbody>
-    ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `${esc(r.team)} ${r.w} 勝 ${r.l} 敗`).join('<br>')}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
+    ${e.groups.map(g => `<tr><td><b>${g.letter}</b></td><td class="small">${g.table.rows.map(r => `<div>${r.rank}. ${esc(r.team)} ${r.w} 勝 ${r.l} 敗${r.lot ? ' <span style="color:var(--red)">需抽籤</span>' : ''}</div>`).join('')}
+      ${tieNote(g)}${g.table.all ? '' : '<div class="muted">預賽尚未全部確認</div>'}</td>${cell(g, '冠')}${cell(g, '亞')}</tr>`).join('')}
     </tbody></table></div></div>
     <div class="panel"><div class="row"><h2 style="margin:0">決賽籤表</h2><span class="spacer"></span>
       ${se.finalPub ? `<span class="small muted">${fmtTime(se.finalPub)} 已公開到即時賽程</span><button class="btn ghost sm" data-fpub="0">取消公開</button>`
@@ -890,8 +896,8 @@ document.addEventListener('click', async ev => {
   else if ('unconfirm' in d) { updateMatch(modal.mid, r => { r.confirmed = false; }); drawModal(); }
   else if ('fillRank' in d) {
     update(s => { const se = s.events.find(x => x.name === curEv); const e = D.events.find(x => x.name === curEv); se.rank = se.rank || {};
-      e.groups.forEach(g => { if (g.table.all && !g.table.rows[0].tie && !g.table.rows[1].tie) se.rank[g.letter] = { c: g.table.rows[0].team, r: g.table.rows[1].team }; }); });
-    toast('已帶入無同勝場爭議的組別，其餘請以選單指定');
+      e.groups.forEach(g => { if (g.table.all && !g.table.rows[0].lot && !g.table.rows[1].lot) se.rank[g.letter] = { c: g.table.rows[0].team, r: g.table.rows[1].team }; }); });
+    toast('已依互咬規則帶入名次，需要抽籤的組別請以選單指定');
   } else if ('schedClear' in d) update(s => { delete s.sched; });
   else if ('backup' in d) {
     const a = document.createElement('a');

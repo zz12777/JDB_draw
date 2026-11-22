@@ -238,19 +238,71 @@ export function podium(e) {
   return { c: pick(root, true), r: pick(root, false), s: [pick(semis[0], false), pick(semis[1], false)] };
 }
 
-/** 分組循環名次：先比勝場；同勝場時列出點數、局數供大會判斷 */
+// ---------------- 分組循環名次（互咬） ----------------
+// 1. 勝場數多者在前
+// 2. 勝場數相同：只算這幾隊彼此之間的比賽，依序比 點數勝率（勝點／敗點）、局數勝率、分數勝率
+//    某一項分出高低後，仍然相同的幾隊重新從頭比（只看他們彼此之間）
+// 3. 只剩兩隊相同：看兩隊之間的勝負
+// 4. 全部相同：由裁判長抽籤
+// 棄權：整場棄權算 3:0、每點 3:0、每局 11:0；單點棄權算該點 3:0、每局 11:0
+function matchStats(m) {
+  if (m.result && m.result.wo) {
+    const aw = m.winner === 'a';
+    return { p: aw ? [3, 0] : [0, 3], g: aw ? [9, 0] : [0, 9], s: aw ? [99, 0] : [0, 99] };
+  }
+  const st = { p: [m.score[0], m.score[1]], g: [0, 0], s: [0, 0] };
+  ((m.result && m.result.pts) || []).forEach((p, i) => {
+    if (p.wo) { const k = p.winner === 'a' ? 0 : 1; st.g[k] += 3; st.s[k] += 33; return; }
+    st.g[0] += p.a; st.g[1] += p.b;
+    const raw = ((m.rec && m.rec.pts) || [])[i] || {};
+    (raw.g || []).forEach(x => { if (gameWinner(x)) { st.s[0] += Number(x[0]) || 0; st.s[1] += Number(x[1]) || 0; } });
+  });
+  return st;
+}
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+const ratioKey = (w, l) => (l === 0 ? (w === 0 ? '0' : '∞') : `${w / gcd(w, l)}/${l / gcd(w, l)}`);
+const ratioVal = (w, l) => (l === 0 ? (w === 0 ? 0 : Infinity) : w / l);
+const CRIT = [['p', '點數'], ['g', '局數'], ['s', '分數']];
+function breakTie(teams, matches, why) {
+  if (teams.length === 1) return [{ team: teams[0], why }];
+  const among = matches.filter(m => teams.includes(m.A.name) && teams.includes(m.B.name));
+  if (teams.length === 2) {
+    const m = among[0];
+    if (m && m.winner) {
+      const w = m.winner === 'a' ? m.A.name : m.B.name, l = teams.find(t => t !== w);
+      const line = `兩隊對戰 ${m.score[m.winner === 'a' ? 0 : 1]}:${m.score[m.winner === 'a' ? 1 : 0]}，${w} 勝`;
+      return [{ team: w, why: [...why, line] }, { team: l, why: [...why, line] }];
+    }
+    return teams.map(t => ({ team: t, lot: true, why: [...why, '由裁判長抽籤'] }));
+  }
+  const tot = Object.fromEntries(teams.map(t => [t, { p: [0, 0], g: [0, 0], s: [0, 0] }]));
+  among.forEach(m => {
+    const st = matchStats(m), a = tot[m.A.name], b = tot[m.B.name];
+    CRIT.forEach(([k]) => { a[k][0] += st[k][0]; a[k][1] += st[k][1]; b[k][0] += st[k][1]; b[k][1] += st[k][0]; });
+  });
+  for (const [k, label] of CRIT) {
+    const groups = new Map();
+    teams.forEach(t => { const key = ratioKey(...tot[t][k]); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(t); });
+    if (groups.size > 1) {
+      const list = [...groups.values()].sort((x, y) => ratioVal(...tot[y[0]][k]) - ratioVal(...tot[x[0]][k]));
+      return list.flatMap(gr => breakTie(gr, matches, [...why, `${teams.length} 隊${label} ${gr.map(t => `${t} ${tot[t][k][0]}:${tot[t][k][1]}`).join('、')}`])).map(r => r);
+    }
+  }
+  return teams.map(t => ({ team: t, lot: true, why: [...why, `${teams.length} 隊點數、局數、分數勝率都相同，由裁判長抽籤`] }));
+}
 export function standings(g) {
   const rows = g.teams.map(t => ({ team: t, w: 0, l: 0, pf: 0, pa: 0, played: 0 }));
   const of = t => rows.find(r => r.team === t);
-  g.matches.forEach(m => {
-    if (!m.confirmed) return;
+  const done = g.matches.filter(m => m.confirmed);
+  done.forEach(m => {
     const a = of(m.A.name), b = of(m.B.name);
     a.played++; b.played++;
     a.pf += m.score[0]; a.pa += m.score[1]; b.pf += m.score[1]; b.pa += m.score[0];
     if (m.winner === 'a') { a.w++; b.l++; } else { b.w++; a.l++; }
   });
-  const sorted = rows.slice().sort((x, y) => (y.w - x.w) || ((y.pf - y.pa) - (x.pf - x.pa)));
-  sorted.forEach((r, i) => { r.tie = sorted.some((o, j) => j !== i && o.w === r.w); });
+  const byW = [...new Set(rows.map(r => r.w))].sort((x, y) => y - x);
+  const order = byW.flatMap(w => breakTie(rows.filter(r => r.w === w).map(r => r.team), done, []));
+  const sorted = order.map((o, i) => Object.assign(of(o.team), { rank: i + 1, lot: !!o.lot, why: o.why, tie: rows.filter(r => r.w === of(o.team).w).length > 1 }));
   const all = g.matches.every(m => m.confirmed);
   return { rows: sorted, all };
 }
