@@ -9,7 +9,7 @@ import { mergeHistory, entryFromState } from './history.js';
 
 let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['sched', '賽程'], ['time', '時間表'], ['ann', '成績公告'], ['live', '即時桌況'], ['hist', '歷屆名次']];
+const TABS = [['sched', '賽程'], ['time', '時間表'], ['live', '即時桌況/廣播'], ['ann', '成績公告'], ['hist', '歷屆名次']];
 const TAB_ICON = { sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables', hist: 'medal' };
 
 function render() {
@@ -32,8 +32,20 @@ function render() {
   drawDetail();
 }
 
+/** 大會台的廣播：最新的在最上面，項目用顏色區分，桌次放大 */
+function viewCalls(s, key) {
+  const list = (s.pcalls || []).slice().reverse().map(c => ({ c, m: D.byId.get(c.mid) }))
+    .filter(({ c, m }) => !key || (m ? hit(m, key) : String(c.text).includes(key))).slice(0, 8);
+  if (!list.length) return '';
+  return `<div class="panel bc"><h2>廣播</h2>${list.map(({ c, m }, i) => {
+    const tb = (c.tables && c.tables.length ? c.tables : m ? m.tables : []) || [];
+    const body = m ? `<span class="bcm">${esc(m.no)}</span><span class="bcv"><span class="bcs">${esc(sideText(m.A, m.team))}</span><span class="vs">vs</span><span class="bcs">${esc(sideText(m.B, m.team))}</span></span>` : `<span class="bcv">${esc(c.text)}</span>`;
+    return `<div class="bci ${i ? '' : 'new'}"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span>` : ''}${body}
+      ${tb.length ? `<span class="bctb">第 <b>${tb.join('、')}</b> 桌</span>` : ''}</div>`;
+  }).join('')}</div>`;
+}
 function viewLive(s, key) {
-  return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${board(s, D, key ? { match: m => hit(m, key) } : {})}`;
+  return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${viewCalls(s, key)}${board(s, D, key ? { match: m => hit(m, key) } : {})}`;
 }
 
 /** 賽程時間表：每天一張表，列是時段、欄是項目 */

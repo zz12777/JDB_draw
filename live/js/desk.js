@@ -105,6 +105,7 @@ function card(m) {
     <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
       ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : planned(m)}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
+    ${!m.tables.length && m.known && m.status !== 'done' ? (busy => (busy.length ? `<div class="busytag">${busy.map(b => `${esc(b.who)} 在第 ${b.o.tables.join('、')} 桌比賽中`).join('；')}</div>` : ''))(busyOf(m)) : ''}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>
       ${m.team ? `<button class="btn ghost sm" data-lineup="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('list')}排點</button>` : ''}
@@ -117,7 +118,37 @@ function planned(m) {
   return x ? `<span class="muted">表定 ${x.s}</span>` : '';
 }
 
-function setTables(mid, text, force = false) {
+// ---------------- 派桌前檢查：隊伍或選手是否正在別桌比賽 ----------------
+const nm = x => String(x || '').replace(/\s+/g, '');
+/** 一場比賽裡的人：團體賽是「項目|隊名」加上點單上的選手，個人賽是「學校|姓名」 */
+function peopleOf(m) {
+  const out = [];
+  ['A', 'B'].forEach((k, i) => {
+    const S = m[k]; if (!S || !S.name) return;
+    if (m.team) {
+      out.push({ key: `T|${m.ev}|${nm(S.name)}`, label: S.name, team: true });
+      const lu = ((m.rec.lineup || {})[i ? 'b' : 'a']) || [];
+      const unit = nm(unitFromTeam(S.name));
+      lu.flat().filter(Boolean).forEach(p => out.push({ key: `P|${unit}|${nm(p)}`, label: `${S.name} ${p}` }));
+    } else {
+      const names = String(S.name).split(/[\/／]/), schools = String(S.school || '').split(/[\/／]/);
+      names.forEach((p, j) => { const sc = nm(unitFromTeam(schools[schools.length === names.length ? j : 0] || '')); out.push({ key: `P|${sc}|${nm(p)}`, label: `${schools[schools.length === names.length ? j : 0] || ''} ${p}`.trim() }); });
+    }
+  });
+  return out;
+}
+/** 這場的隊伍或選手，現在在哪些別的球桌上比賽 */
+function busyOf(m) {
+  const mine = new Map(peopleOf(m).map(x => [x.key, x]));
+  const out = [];
+  D.byId.forEach(o => {
+    if (o.id === m.id || o.status !== 'playing') return;
+    peopleOf(o).forEach(x => { const me = mine.get(x.key); if (me && !out.some(y => y.who === me.label && y.o === o)) out.push({ who: me.label, team: !!x.team, o }); });
+  });
+  return out;
+}
+
+function setTables(mid, text, force = false, busyOk = false) {
   const s = getState();
   const m = D.byId.get(mid);
   const tables = parseTables(text);
@@ -131,6 +162,8 @@ function setTables(mid, text, force = false) {
   const ask = taken.filter(t => !D.tables.get(t).idle);
   if (ask.length && !force) { modal = { kind: 'reclaim', mid, text, tables: ask }; drawModal(); render(); return; }
   const added = tables.filter(t => !m.tables.includes(t));
+  // 隊伍或選手還在別桌比賽：先提醒，確認後才派桌
+  if (added.length && !busyOk) { const busy = busyOf(m); if (busy.length) { modal = { kind: 'busy', mid, text, force, busy }; drawModal(); render(); return; } }
   update(st => {
     // 收回別場團體賽的桌子：從那場的桌次拿掉，那場在其他桌繼續
     taken.forEach(t => { const o = D.tables.get(t).m, r = st.m[o.id]; if (r && r.tables) r.tables = r.tables.filter(x => Number(x) !== t); });
@@ -139,7 +172,7 @@ function setTables(mid, text, force = false) {
     if (tables.length && !rec.start) rec.start = Date.now();
     if (!tables.length && !(rec.g || rec.pts)) delete rec.start;
     if (added.length) {
-      st.calls = (st.calls || []).concat({ ts: Date.now(), mid, text: callText(m, tables) }).slice(-40);
+      st.calls = (st.calls || []).concat({ ts: Date.now(), mid, tables, text: callText(m, tables) }).slice(-40);
     }
   });
   if (added.length && m.status === 'wait') toast('提醒：此場次尚未符合開賽條件（對戰雙方或點單未齊）');
@@ -250,6 +283,15 @@ function drawModal() {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>清除全部資料</h2>
       <p>籤表、名單、排點、成績與裁判紀錄都會刪除，且無法復原。建議先下載備份檔。</p>
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
+    return;
+  }
+  if (modal.kind === 'busy') {
+    const rows = modal.busy.map(b => `<li><b>${esc(b.who)}</b> 正在第 ${b.o.tables.join('、')} 桌打 ${esc(shortEv(b.o))}</li>`).join('');
+    const team = modal.busy.some(b => b.team);
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(480px,100%)"><h2>${team ? '隊伍還在別桌比賽' : '選手正在別桌比賽'}</h2>
+      <ul style="margin:8px 0 0;padding-left:20px;line-height:1.8">${rows}</ul>
+      <p class="small muted">確認不會撞場再派桌，例如上一場其實已經打完、只是還沒記錄。</p>
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn" data-busyok>仍要派桌</button></div></div></div>`;
     return;
   }
   if (modal.kind === 'reclaim') {
@@ -802,6 +844,7 @@ document.addEventListener('click', async ev => {
     update(s => { const se = s.events.find(x => x.name === curEv); if (on) se.finalPub = Date.now(); else delete se.finalPub; });
     toast(on ? `${curEv}決賽籤表已公開` : `${curEv}決賽籤表已取消公開`); return;
   }
+  if ('busyok' in d && modal && modal.kind === 'busy') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, x.force, true); return; }
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }

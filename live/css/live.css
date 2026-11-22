@@ -452,3 +452,20 @@ table.grp td.live { background: #e3f3e7; color: #1f6b3a; box-shadow: inset 0 0 0
 .pills button .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; }
 .wcell.idle { opacity: .6; border-style: dashed; }
 .ckp { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 600; color: #7a5600; background: var(--yellow-soft); border: 1px solid var(--yellow); border-radius: 4px; padding: 0 6px; vertical-align: 1px; }
+
+/* 即時賽程：廣播 */
+.bc h2 { margin-bottom: 8px; }
+.bci { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.bci:last-child { border-bottom: 0; }
+.bci:not(.new) { opacity: .72; }
+.bci.new { background: var(--yellow-soft); margin: 0 -12px; padding: 10px 12px; border-radius: 8px; border-bottom: 0; }
+.bct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 40px; }
+.bcm { font-weight: 700; }
+.bcv { flex: 1; min-width: 180px; }
+.bcv .vs { color: var(--muted); font-size: 12px; margin: 0 6px; }
+.bcs { display: inline-block; }
+.bctb { margin-left: auto; white-space: nowrap; color: var(--blue); }
+.bctb b { font-size: 22px; }
+.evtag { display: inline-block; font-size: 12px; font-weight: 700; color: #fff; border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+.ev-男單 { background: #143d7a; } .ev-女單 { background: #b03a6a; } .ev-男雙 { background: #1f7a8c; } .ev-女雙 { background: #8a4fb0; }
+.ev-男團 { background: #0b5cad; } .ev-女團 { background: #c2410c; } .ev-社團 { background: #2e8b57; }

@@ -11,7 +11,7 @@ import { FIREBASE, ROOT, ADMINS, POLL_SECONDS } from './config.js';
 const ROLE = document.documentElement.dataset.role || 'public';
 export const LOCAL = new URLSearchParams(location.search).has('local') || !FIREBASE;
 const listeners = new Set(), authListeners = new Set();
-const raw = { meta: null, events: null, m: {}, calls: null, staff: null, notices: null, checkin: {}, parking: null };
+const raw = { meta: null, events: null, m: {}, pcalls: null, calls: null, staff: null, notices: null, checkin: {}, parking: null };
 let state = emptyState();
 let remote = null;
 export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, error: '', loaded: false };
@@ -62,7 +62,7 @@ function assemble() {
   const m = {};
   for (const id of Object.keys(raw.m || {})) m[id] = nodeToRec(raw.m[id]);
   state = { ...emptyState(), ...Object.fromEntries(META_KEYS.filter(k => meta[k] !== undefined).map(k => [k, meta[k]])),
-    events: parse(raw.events, []), m, calls: parse(raw.calls, []), staff: parse(raw.staff, []),
+    events: parse(raw.events, []), m, calls: parse(raw.calls, []), pcalls: parse(raw.pcalls, []), staff: parse(raw.staff, []),
     notices: parse(raw.notices, {}), parking: parse(raw.parking, {}), checkin: Object.fromEntries(Object.entries(raw.checkin || {}).map(([k, v]) => [k, parse(v, {})])) };
 }
 const metaOf = s => JSON.stringify(Object.fromEntries(META_KEYS.map(k => [k, s[k] ?? null])));
@@ -80,7 +80,7 @@ export function update(fn) {
   const up = {};
   if (JSON.stringify(next.events) !== JSON.stringify(before.events)) { next.rev = Date.now(); up['pub/events'] = JSON.stringify(next.events); }
   if (metaOf(next) !== metaOf(before)) up['pub/meta'] = metaOf(next);
-  if (JSON.stringify(next.calls || []) !== JSON.stringify(before.calls || [])) up['desk/calls'] = JSON.stringify(next.calls || []);
+  if (JSON.stringify(next.calls || []) !== JSON.stringify(before.calls || [])) { up['desk/calls'] = JSON.stringify(next.calls || []); up['pub/calls'] = pubCalls(next.calls); }
   if (JSON.stringify(next.staff || []) !== JSON.stringify(before.staff || [])) up['desk/staff'] = JSON.stringify(next.staff || []);
   if (JSON.stringify(next.notices || {}) !== JSON.stringify(before.notices || {})) up['desk/notices'] = JSON.stringify(next.notices || {});
   if (JSON.stringify(next.parking || {}) !== JSON.stringify(before.parking || {})) up.parking = JSON.stringify(next.parking || {});
@@ -106,7 +106,7 @@ export function replaceState(s) {
   state = next;
   emit(true);
   remote.write({ 'pub/meta': metaOf(next), 'pub/events': JSON.stringify(next.events || []), 'pub/m': Object.keys(tree).length ? tree : null,
-    'desk/calls': JSON.stringify(next.calls || []), 'desk/staff': JSON.stringify(next.staff || []),
+    'desk/calls': JSON.stringify(next.calls || []), 'pub/calls': pubCalls(next.calls), 'desk/staff': JSON.stringify(next.staff || []),
     'desk/notices': JSON.stringify(next.notices || {}), checkin: null, parking: JSON.stringify(next.parking || {}) })
     .catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
@@ -118,6 +118,8 @@ export function setCheckin(key, rec) {
   emit(true);
   remote.write({ [`checkin/${key}`]: JSON.stringify(rec) }).catch(err => { state = before; auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); emit(false); });
 }
+/** 即時賽程看得到的廣播：最近 20 則，只留時間、場次、桌次與廣播文字 */
+function pubCalls(calls) { return JSON.stringify((calls || []).slice(-20).map(c => ({ ts: c.ts, mid: c.mid, tables: c.tables, text: c.text }))); }
 function receive(part, value) {
   raw[part] = part === 'm' ? (value || {}) : value;
   auth.loaded = true;
@@ -130,7 +132,7 @@ function localRemote() {
   const KEY = 'jdb-live-tree';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
   const push = () => { const t = load(); const pub = t.pub || {}, desk = t.desk || {};
-    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.pcalls = pub.calls ?? null; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
     auth.loaded = true; assemble(); };
   window.addEventListener('storage', e => { if (e.key === KEY) { push(); emit(false); } });
   push();
@@ -200,7 +202,7 @@ function pollRemote() {
   const seen = node => { Object.values(node || {}).forEach(n => { if (n && typeof n.u === 'number' && n.u > maxU) maxU = n.u; }); };
   async function full() {
     const pub = (await get('.json')) || {};
-    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {};
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.pcalls = pub.calls ?? null;
     maxU = 0; seen(raw.m); rev = parse(raw.meta, {}).rev ?? null;
     auth.loaded = true; assemble(); emit(false);
   }
@@ -212,6 +214,7 @@ function pollRemote() {
       const meta = await get('/meta.json');
       if ((parse(meta, {}).rev ?? null) !== rev) { await full(); return; }
       if (meta !== raw.meta) { raw.meta = meta; assemble(); emit(false); }
+      try { const c = await get('/calls.json'); if (c !== raw.pcalls) { raw.pcalls = c; assemble(); emit(false); } } catch (e) { /* 廣播讀不到不影響其他資料 */ }
       let changed;
       try { changed = await get(`/m.json?orderBy=%22u%22&startAt=${maxU + 1}`); } catch (e) { await full(); return; }
       if (changed && Object.keys(changed).length) { Object.assign(raw.m, changed); seen(changed); assemble(); emit(false); }
