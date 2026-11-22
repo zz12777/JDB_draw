@@ -51,7 +51,7 @@ function viewCtrl(s) {
   const absent = all.filter(m => m.status === 'playing').flatMap(m => absences(m).map(ab => ({ m, ab })));
   const reported = all.filter(m => m.status === 'reported');
   const ready = all.filter(m => m.status === 'ready').sort((x, y) => EVENT_ORDER.indexOf(x.ev) - EVENT_ORDER.indexOf(y.ev) || stageOrder(x) - stageOrder(y) || x.num - y.num);
-  const calls = (s.calls || []).slice(-4).reverse();
+  const calls = (s.calls || []).slice(-5).reverse();
   return `<div class="desk"><div>
     <div class="panel">
       <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div></div>
@@ -72,7 +72,7 @@ function viewCtrl(s) {
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
-      <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 4, undo: true }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
+      <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 5, undo: true }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
     </div></div>`;
 }
 function viewTables(s) {
