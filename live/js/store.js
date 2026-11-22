@@ -122,6 +122,11 @@ export function setCheckin(key, rec) {
 function pubCalls(calls) { return JSON.stringify((calls || []).slice(-20).map(c => ({ ts: c.ts, mid: c.mid, tables: c.tables, text: c.text }))); }
 function receive(part, value) {
   raw[part] = part === 'm' ? (value || {}) : value;
+  // 大會台：即時賽程的廣播和大會台不一致時補寫一次（例如規則更新前的廣播）
+  if (ROLE === 'desk' && auth.isAdmin && (part === 'calls' || part === 'pcalls') && raw.calls != null && raw.pcalls != null) {
+    const want = pubCalls(parse(raw.calls, []));
+    if (want !== raw.pcalls) remote.write({ 'pub/calls': want }).catch(() => {});
+  }
   auth.loaded = true;
   assemble();
   emit(false);
@@ -181,7 +186,8 @@ async function sdkRemote() {
         try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); } catch (e) { auth.isAdmin = false; }
       }
       offs.forEach(f => f()); offs = [];
-      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail)];
+      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
+        db.onValue(at('pub/calls'), s => receive('pcalls', s.val() ?? ''), fail)];
       emitAuth();
     });
     auth.signIn = () => au.signInWithPopup(a, new au.GoogleAuthProvider()).catch(err => { auth.error = `登入失敗：${err.message}`; emitAuth(); });

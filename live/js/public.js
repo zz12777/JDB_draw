@@ -3,7 +3,7 @@ import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner,
 import { slotOf } from './timetable.js';
 import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth, loadHistory } from './store.js';
-import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables } from './ui.js';
+import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables, callList } from './ui.js';
 import { bracketSvg } from './tree.js';
 import { mergeHistory, entryFromState } from './history.js';
 
@@ -32,17 +32,10 @@ function render() {
   drawDetail();
 }
 
-/** 大會台的廣播：最新的在最上面，項目用顏色區分，桌次放大 */
+/** 大會台的廣播 */
 function viewCalls(s, key) {
-  const list = (s.pcalls || []).slice().reverse().map(c => ({ c, m: D.byId.get(c.mid) }))
-    .filter(({ c, m }) => !key || (m ? hit(m, key) : String(c.text).includes(key))).slice(0, 8);
-  if (!list.length) return '';
-  return `<div class="panel bc"><h2>廣播</h2>${list.map(({ c, m }, i) => {
-    const tb = (c.tables && c.tables.length ? c.tables : m ? m.tables : []) || [];
-    const body = m ? `<span class="bcm">${esc(m.no)}</span><span class="bcv"><span class="bcs">${esc(sideText(m.A, m.team))}</span><span class="vs">vs</span><span class="bcs">${esc(sideText(m.B, m.team))}</span></span>` : `<span class="bcv">${esc(c.text)}</span>`;
-    return `<div class="bci ${i ? '' : 'new'}"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span>` : ''}${body}
-      ${tb.length ? `<span class="bctb">第 <b>${tb.join('、')}</b> 桌</span>` : ''}</div>`;
-  }).join('')}</div>`;
+  const html = callList(s.pcalls, D, { filter: ({ c, m }) => !key || (m ? hit(m, key) : String(c.text).includes(key)) });
+  return html ? `<div class="panel bc"><h2>廣播</h2>${html}</div>` : '';
 }
 function viewLive(s, key) {
   return `${s.notice ? `<div class="call">${esc(s.notice)}</div>` : ''}${viewCalls(s, key)}${board(s, D, key ? { match: m => hit(m, key) } : {})}`;

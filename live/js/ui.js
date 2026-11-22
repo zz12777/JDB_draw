@@ -166,6 +166,21 @@ export function groupTables(e, shown, opt = {}) {
   }).join('');
 }
 
+/**
+ * 廣播列表（大會台與即時賽程共用）：最新的在最上面，項目用顏色標籤，桌次放大。
+ * calls：[{ ts, mid, tables, text }]；D：derive 的結果
+ */
+export function callList(calls, D, opt = {}) {
+  const list = (calls || []).slice().reverse().map(c => ({ c, m: D.byId.get(c.mid) }))
+    .filter(x => !opt.filter || opt.filter(x)).slice(0, opt.max || 8);
+  return list.map(({ c, m }, i) => {
+    const tb = (c.tables && c.tables.length ? c.tables : m ? m.tables : []) || [];
+    const body = m ? `<span class="bcm">${esc(m.no)}</span><span class="bcv"><span class="bcs">${esc(sideText(m.A, m.team))}</span><span class="vs">vs</span><span class="bcs">${esc(sideText(m.B, m.team))}</span></span>` : `<span class="bcv">${esc(c.text)}</span>`;
+    return `<div class="bci ${i ? '' : 'new'}"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span>` : ''}${body}
+      ${tb.length ? `<span class="bctb">第 <b>${tb.join('、')}</b> 桌</span>` : ''}</div>`;
+  }).join('');
+}
+
 /** 某場在某桌的裁判姓名 */
 export function refOf(m, t) {
   const r = m.rec;

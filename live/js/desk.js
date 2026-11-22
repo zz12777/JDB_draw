@@ -2,7 +2,7 @@
 import { derive, isTeam, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory } from './store.js';
 import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
-import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables } from './ui.js';
+import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
 import { buildNotices, noticesHtml, KIND_NAME } from './notices.js';
@@ -72,7 +72,7 @@ function viewCtrl(s) {
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
-      <div class="panel"><h2>廣播稿</h2>${calls.length ? calls.map((c, i) => `<div class="call ${i ? 'old' : ''}"><div class="tm">${fmtTime(c.ts)}</div>${esc(c.text)}</div>`).join('') : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
+      <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 4 }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
     </div></div>`;
 }
 function viewTables(s) {
@@ -105,7 +105,7 @@ function card(m) {
     <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
       ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : planned(m)}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
-    ${!m.tables.length && m.known && m.status !== 'done' ? (busy => (busy.length ? `<div class="busytag">${busy.map(b => `${esc(b.who)} 在第 ${b.o.tables.join('、')} 桌比賽中`).join('；')}</div>` : ''))(busyOf(m)) : ''}
+    ${!m.tables.length && m.known && m.status !== 'done' ? (busy => (busy.length ? `<div class="busytag">${busy.map(b => (b.roster ? `${esc(b.who)} 的隊伍在第 ${b.o.tables.join('、')} 桌比賽中` : `${esc(b.who)} 在第 ${b.o.tables.join('、')} 桌比賽中`)).join('；')}</div>` : ''))(busyOf(m)) : ''}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>
       ${m.team ? `<button class="btn ghost sm" data-lineup="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('list')}排點</button>` : ''}
@@ -127,9 +127,12 @@ function peopleOf(m) {
     const S = m[k]; if (!S || !S.name) return;
     if (m.team) {
       out.push({ key: `T|${m.ev}|${nm(S.name)}`, label: S.name, team: true });
-      const lu = ((m.rec.lineup || {})[i ? 'b' : 'a']) || [];
+      const lu = (((m.rec.lineup || {})[i ? 'b' : 'a']) || []).flat().filter(Boolean);
       const unit = nm(unitFromTeam(S.name));
-      lu.flat().filter(Boolean).forEach(p => out.push({ key: `P|${unit}|${nm(p)}`, label: `${S.name} ${p}` }));
+      // 已輸入點單：只看出賽選手；還沒輸入點單：看該隊報名名單上的所有選手
+      const se = (getState().events || []).find(x => x.name === m.ev);
+      const roster = lu.length ? lu : (((se && se.rosters) || {})[S.name] || []).flat().filter(Boolean);
+      roster.forEach(p => out.push({ key: `P|${unit}|${nm(p)}`, label: `${S.name} ${p}`, roster: !lu.length }));
     } else {
       const names = String(S.name).split(/[\/／]/), schools = String(S.school || '').split(/[\/／]/);
       names.forEach((p, j) => { const sc = nm(unitFromTeam(schools[schools.length === names.length ? j : 0] || '')); out.push({ key: `P|${sc}|${nm(p)}`, label: `${schools[schools.length === names.length ? j : 0] || ''} ${p}`.trim() }); });
@@ -143,7 +146,7 @@ function busyOf(m) {
   const out = [];
   D.byId.forEach(o => {
     if (o.id === m.id || o.status !== 'playing') return;
-    peopleOf(o).forEach(x => { const me = mine.get(x.key); if (me && !out.some(y => y.who === me.label && y.o === o)) out.push({ who: me.label, team: !!x.team, o }); });
+    peopleOf(o).forEach(x => { const me = mine.get(x.key); if (me && !out.some(y => y.who === me.label && y.o === o)) out.push({ who: me.label, team: !!x.team, roster: !!(x.roster || me.roster), o }); });
   });
   return out;
 }
@@ -300,7 +303,7 @@ function drawModal() {
     return;
   }
   if (modal.kind === 'busy') {
-    const rows = modal.busy.map(b => `<li><b>${esc(b.who)}</b> 正在第 ${b.o.tables.join('、')} 桌打 ${esc(shortEv(b.o))}</li>`).join('');
+    const rows = modal.busy.map(b => `<li><b>${esc(b.who)}</b> ${b.roster ? '在' : '正在'}第 ${b.o.tables.join('、')} 桌 ${esc(shortEv(b.o))}${b.roster ? ' 的隊伍名單中（尚未輸入點單，不確定是否出賽）' : ' 比賽'}</li>`).join('');
     const team = modal.busy.some(b => b.team);
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(480px,100%)"><h2>${team ? '隊伍還在別桌比賽' : '選手正在別桌比賽'}</h2>
       <ul style="margin:8px 0 0;padding-left:20px;line-height:1.8">${rows}</ul>
@@ -540,7 +543,6 @@ function viewDraw(s) {
   const finals = e.matches.filter(m => m.stage === 'F' && m.roundIdx === 0);
   return `<div class="panel"><div class="row"><div class="pills">${teams.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
       <span class="spacer"></span><button class="btn ghost sm" data-tierules>互咬規則</button><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
-    <p class="small muted">名次試算依互咬規則：先比勝場；同勝場只算這幾隊彼此的比賽，依序比點數、局數、分數勝率；只剩兩隊看兩隊對戰結果；全部相同由裁判長抽籤。</p>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
     <div style="overflow-x:auto"><table class="list drawt"><thead><tr><th rowspan="2">組別</th><th rowspan="2">預賽戰績</th><th colspan="3" class="gc first gtop">冠軍</th><th colspan="3" class="gr first gtop">亞軍</th></tr>
       <tr><th class="gc first">隊伍</th><th class="gc">點名</th><th class="gc">籤號</th><th class="gr first">隊伍</th><th class="gr">點名</th><th class="gr">籤號</th></tr></thead><tbody>
