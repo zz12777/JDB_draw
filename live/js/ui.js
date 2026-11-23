@@ -205,3 +205,12 @@ export function header(state, role, links = [], opt = {}) {
     <span class="spacer"></span><div class="top-actions">${opt.nav ? sysNav(opt.nav, '../') : ''}${group(links.map(l => `<a href="${l[1]}${location.search}">${l[0]}</a>`))}${group(opt.account ? [opt.account] : [])}</div>`;
 }
 export { EVENT_FULL };
+
+/** 裁判交接紀錄：第 5 桌 10:02 王小明 → 10:30 李大華 */
+export function refLogHtml(rec, fmt) {
+  const log = (rec && rec.reflog) || [];
+  if (!log.length) return '';
+  const by = new Map();
+  log.forEach(x => { if (!by.has(x.t)) by.set(x.t, []); by.get(x.t).push(x); });
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([t, l]) => `<div class="reflog">第 ${t} 桌裁判：${l.map(x => `<span>${fmt(x.ts)} ${esc(x.n)}</span>`).join(' → ')}</div>`).join('');
+}

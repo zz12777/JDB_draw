@@ -1,11 +1,11 @@
 // 裁判頁：輸入姓名、選球桌、記錄每局比分、回報未到
 import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner, fmtTime } from './model.js';
 import { getState, subscribe, updateMatch, onAuth } from './store.js';
-import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
+import { esc, $, $$, icon, toast, tableMap, header, lineName, refLogHtml } from './ui.js';
 
 const NAME_KEY = 'jdb-ref-name';
 let name = localStorage.getItem(NAME_KEY) || '';
-let table = null, point = null;
+let table = null, point = null, swapAsk = false;
 let D = null;
 
 function render() {
@@ -33,7 +33,7 @@ function viewMatch() {
   const an = sideText(m.A, m.team), bn = sideText(m.B, m.team);
   const head = `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div>
     <div class="small muted">${EVENT_FULL[m.ev]} ${esc(m.no)}</div>
-    <div class="duel"><div class="n r">${esc(an)}</div><div class="s" id="tot"></div><div class="n">${esc(bn)}</div></div></div>`;
+    <div class="duel"><div class="n r">${esc(an)}</div><div class="s" id="tot"></div><div class="n">${esc(bn)}</div></div>${refLogHtml(m.rec, fmtTime)}</div>`;
   // 未到回報：在選擇點的頁面回報整隊；進入某一點後回報該點的選手
   const absentPanel = pi => {
     const hold = pi == null ? m.rec : (((m.rec.pts || [])[pi]) || {});
@@ -44,13 +44,19 @@ function viewMatch() {
       ${ab.a || ab.b ? `<div class="alertbox">已回報：${esc([ab.a ? who('a') : '', ab.b ? who('b') : ''].filter(Boolean).join('、'))} 未到${ab.called ? `　<span class="small">（大會 ${fmtTime(ab.called)} 已廣播）</span>` : ''}</div><button class="btn ghost" data-absent="none|${key}">${icon('check')}已到場，取消回報</button>`
         : `<div class="row"><button class="btn ghost" data-absent="a|${key}">${esc(who('a'))} 未到</button><button class="btn ghost" data-absent="b|${key}">${esc(who('b'))} 未到</button><button class="btn ghost" data-absent="both|${key}">雙方未到</button></div>`}</div>`;
   };
+  // 請求其他裁判支援替換：有急事、去廁所、輪到自己比賽
+  const sw = (m.rec.swap || {})[table];
+  const swapPanel = `<div class="panel"><h2>請求其他裁判支援替換</h2>${sw && sw.by === name
+    ? `<div class="alertbox">${fmtTime(sw.ts)} 已請求替換（${esc(sw.why)}）${sw.sent ? `<br><b>大會台 ${fmtTime(sw.sent)} 已派出替換裁判</b>，請在原地等候交接。` : '<br>等待大會台派出替換裁判。'}</div><button class="btn ghost" data-swapcancel>${icon('close')}取消請求</button>`
+    : swapAsk ? `<p class="small muted">選擇原因，大會台會收到通知。</p><div class="row">${['有急事', '要去廁所', '輪到我比賽'].map(w => `<button class="btn ghost" data-swap="${w}">${w}</button>`).join('')}<button class="btn ghost sm" data-swapno>取消</button></div>`
+    : `<button class="btn ghost" data-swapask>請求其他裁判支援替換</button>`}</div>`;
   if (m.team && point == null) {
     const def = x.point;
     return `${head}<div class="panel"><h2>請選擇要記錄的點</h2>
       ${POINTS.map((p, i) => { const r = m.result.pts[i]; const pt = (m.rec.pts || [])[i] || {};
         return `<button class="tcell ptsel ${r.winner ? 'fin' : def === i ? 'busy' : ''}" style="margin-bottom:6px" data-point="${i}"><span class="t">${i + 1}</span>
           <span class="who">第${'一二三四五'[i]}點${pt.table ? ` <span class="tchip">第 ${pt.table} 桌</span>` : ''}<br>${esc(lineName(lu.a, i))} vs ${esc(lineName(lu.b, i))}</span>
-          <span class="mins"><span class="big">${r.a}:${r.b}</span></span></button>`; }).join('')}</div>${absentPanel(null)}`;
+          <span class="mins"><span class="big">${r.a}:${r.b}</span></span></button>`; }).join('')}</div>${absentPanel(null)}${swapPanel}`;
   }
   const games = m.team ? (((m.rec.pts || [])[point] || {}).g || []) : (m.rec.g || []);
   const pa = m.team ? lineName(lu.a, point) : an, pb = m.team ? lineName(lu.b, point) : bn;
@@ -61,7 +67,7 @@ function viewMatch() {
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${(games[gi] || [])[0] ?? ''}">
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${(games[gi] || [])[1] ?? ''}"><span data-ok="${gi}"></span></div>`).join('')}
     <p id="msg" class="small"></p>
-    <button class="btn yellow" data-done style="width:100%;justify-content:center;padding:10px">${icon('check')}${m.team ? '本點結束' : '本場結束'}</button></div>${absentPanel(m.team ? point : null)}`;
+    <button class="btn yellow" data-done style="width:100%;justify-content:center;padding:10px">${icon('check')}${m.team ? '本點結束' : '本場結束'}</button></div>${absentPanel(m.team ? point : null)}${swapPanel}`;
 }
 /** 只更新數字與提示，不重畫輸入框 */
 function refresh() {
@@ -89,7 +95,26 @@ document.addEventListener('click', ev => {
   if ('setname' in d) { const v = $('#rn').value.trim(); if (!v) { toast('請輸入姓名'); return; } name = v; localStorage.setItem(NAME_KEY, name); render(); }
   else if ('rename' in d) { name = ''; render(); }
   else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
-    if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => { r.refs = r.refs || {}; r.refs[table] = name; }); else render(); }
+    swapAsk = false;
+    if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => {
+      r.refs = r.refs || {}; r.refs[table] = name;
+      // 裁判交接：記下何時換成誰；新裁判接手後，原本的替換請求就結束
+      r.reflog = (r.reflog || []).concat({ t: table, n: name, ts: Date.now() }).slice(-40);
+      if (r.swap && r.swap[table] && r.swap[table].by !== name) { delete r.swap[table]; if (!Object.keys(r.swap).length) delete r.swap; }
+    }); else render(); }
+  else if ('swapask' in d) { swapAsk = true; render(); }
+  else if ('swapno' in d) { swapAsk = false; render(); }
+  else if (d.swap || 'swapcancel' in d) {
+    const x = D.tables.get(table); if (!x) return;
+    const why = d.swap;
+    updateMatch(x.m.id, r => {
+      r.swap = r.swap || {};
+      if (why) r.swap[table] = { by: name, why, ts: Date.now() };
+      else { delete r.swap[table]; }
+      if (!Object.keys(r.swap).length) delete r.swap;
+    });
+    swapAsk = false; render(); toast(why ? '已通知大會台' : '已取消請求');
+  }
   else if ('back' in d) { table = null; point = null; render(); }
   else if ('done' in d) {
     // 團體賽按「本點結束」回到這一桌的選點頁面，個人賽按「本場結束」回到球桌列表

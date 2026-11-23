@@ -47,6 +47,14 @@
               ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
               ".validate": "newData.isString() && newData.val().length < 200"
             },
+            "swap": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 1000"
+            },
+            "reflog": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 4000"
+            },
             "pts": {
               "$i": {
                 "g": {
