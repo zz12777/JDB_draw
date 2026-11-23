@@ -90,8 +90,8 @@ function matchCard(m, info) {
     <div class="luform">${POINTS.map((p, i) => `<div class="lurow"><span class="lul">第${'一二三四五'[i]}點<small>${p.dbl ? '雙打' : '單打'}</small></span>
       <span class="luin">${p.dbl ? sel(i, 0, (l[i] || [])[0]) + sel(i, 1, (l[i] || [])[1]) : sel(i, null, l[i])}</span></div>`).join('')}</div>
     <p class="small" id="lu-warn" style="color:var(--red);min-height:18px;margin:6px 0"></p>
-    <div class="row"><button class="btn ghost" data-save="${esc(m.id)}">暫存</button><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><button class="btn plain" data-cancel>取消</button></div>
-    <p class="small muted" style="margin:6px 0 0">暫存後同隊可以登入的人都看得到、可以繼續改；送出後就不能再修改。</p>
+    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><button class="btn plain" data-cancel>收起</button><span class="small muted" id="lu-saved">${sub && !sub.final ? `已自動暫存 ${fmtTime(sub.ts)}` : ''}</span></div>
+    <p class="small muted" style="margin:6px 0 0">每次選擇都會自動暫存，同隊可以登入的人都看得到最新內容、可以接著改；按「送出點單」後就不能再修改。</p>
     ${r.length ? '' : '<p class="small muted">大會尚未匯入此隊名單，請直接輸入姓名。</p>'}${logView(sub)}</div>`;
 }
 const lineupView = l => `<table class="list luview"><tbody>${POINTS.map((p, i) => `<tr><td class="muted small nowrap">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</td><td>${esc(lineName(l, i)) || '<span class="muted">未填</span>'}</td></tr>`).join('')}</tbody></table>`;
@@ -125,6 +125,17 @@ function check(l) {
 /** 暫存時只檢查重複，可以還沒填完 */
 function dupOnly(l) { const flat = l.flat().filter(Boolean); const dup = flat.filter((n, i) => flat.indexOf(n) !== i); return dup.length ? `${[...new Set(dup)].join('、')} 重複排點` : ''; }
 
+/** 寫入點單：自動暫存時，同一人連續的暫存合併成一筆紀錄（只留最新時間） */
+function saveLu(mid, l, final) {
+  const prev = olu[mid] || {}, now = Date.now(), log = (prev.log || []).slice();
+  const last = log[log.length - 1];
+  if (!final && last && last.by === me.email && last.a === '暫存') last.ts = now; else log.push({ by: me.email, ts: now, a: final ? '送出' : '暫存' });
+  const rec = { lu: l, by: me.email, ts: now, final, log: log.slice(-30) };
+  olu[mid] = rec;
+  return write({ [`olu/${mid}/${cur}`]: JSON.stringify(rec) });
+}
+let saveTimer = null;
+
 function listenTeam() {
   while (offs.length > 1) offs.pop()();
   acl = null; olu = {};
@@ -134,7 +145,7 @@ function listenTeam() {
   const D = derive(getState());
   const info = teamInfo(key);
   [...D.byId.values()].filter(m => m.team && m.ev === info.ev && ((m.A && m.A.name === info.team) || (m.B && m.B.name === info.team))).forEach(m => {
-    offs.push(watch(`olu/${m.id}/${key}`, v => { if (cur !== key) return; try { const x = v ? JSON.parse(v) : null; if (x) olu[m.id] = x; else delete olu[m.id]; } catch (e) { /* 格式錯誤略過 */ } render(); }));
+    offs.push(watch(`olu/${m.id}/${key}`, v => { if (cur !== key) return; try { const x = v ? JSON.parse(v) : null; if (x) olu[m.id] = x; else delete olu[m.id]; } catch (e) { /* 格式錯誤略過 */ } if (editing()) return; render(); }));
   });
 }
 
@@ -144,6 +155,7 @@ onMe(() => {
   if (me.email) offs.push(watch(`myteams/${myKey()}`, v => { teams = Object.keys(v || {}); render(); }));
   render();
 });
+const editing = () => { const a = document.activeElement; return !!(a && a.matches && a.matches('[data-lu], #ed-new')); };
 let lastSig = '';
 subscribe(() => {
   // 籤表更新（例如晉級決賽）時，重新讀這隊的場次
@@ -164,18 +176,14 @@ document.addEventListener('click', async ev => {
   else if ('out' in d) { ev.preventDefault(); signOut(); }
   else if (d.team) { cur = d.team; open = null; listenTeam(); render(); }
   else if (d.open) { open = d.open; render(); }
-  else if ('cancel' in d) { if (open) delete draft[open]; open = null; render(); }
-  else if (d.send || d.save) {
-    const mid = d.send || d.save, final = !!d.send;
-    const l = readForm(), w = final ? check(l) : dupOnly(l);
+  else if ('cancel' in d) { open = null; render(); }
+  else if (d.send) {
+    clearTimeout(saveTimer);
+    const mid = d.send, l = readForm(), w = check(l);
     $('#lu-warn').textContent = w;
     if (w) return;
-    const prev = olu[mid] || {};
-    const rec = { lu: l, by: me.email, ts: Date.now(), final, log: (prev.log || []).concat({ by: me.email, ts: Date.now(), a: final ? '送出' : '暫存' }).slice(-30) };
-    try {
-      await write({ [`olu/${mid}/${cur}`]: JSON.stringify(rec) });
-      delete draft[mid]; open = null; toast(final ? '點單已送出' : '已暫存'); render();
-    } catch (err) { toast(/permission|PERMISSION/i.test(String(err)) ? '這一場已送出、已鎖定或沒有權限，請洽大會台' : `儲存失敗：${err.message || err}`); }
+    try { await saveLu(mid, l, true); delete draft[mid]; open = null; toast('點單已送出'); render(); }
+    catch (err) { toast(/permission|PERMISSION/i.test(String(err)) ? '這一場已送出、已鎖定或沒有權限，請洽大會台' : `送出失敗：${err.message || err}`); }
   }
   else if ('added' in d) {
     const e = $('#ed-new').value.trim().toLowerCase();
@@ -190,12 +198,16 @@ document.addEventListener('click', async ev => {
     try { await write({ [`teamacl/${cur}/${k}`]: null, [`myteams/${k}/${cur}`]: null }); toast('已移除'); } catch (err) { toast(`移除失敗：${err.message || err}`); }
   }
 });
-// 填到一半的內容先記著，資料更新重畫時不會不見；重複的選手標紅
+// 每次選擇就自動暫存（停一下才寫，避免連續選擇時寫太多次）
 document.addEventListener('change', ev => {
   if (!ev.target.dataset.lu || !open) return;
-  draft[open] = readForm();
-  const els = $$('[data-lu]'), w = check(draft[open]);
-  const warn = $('#lu-warn'); if (warn) warn.textContent = draft[open].flat().some(x => !x) ? '' : w;
-  els.forEach(el => el.classList.remove('bad'));
+  const mid = open, l = readForm();
+  draft[mid] = l;
+  const w = dupOnly(l), warn = $('#lu-warn');
+  if (warn) warn.textContent = w;
+  if (w) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveLu(mid, l, false).then(() => { delete draft[mid]; const x = $('#lu-saved'); if (x) x.textContent = `已自動暫存 ${fmtTime(Date.now())}`; })
+    .catch(err => toast(/permission|PERMISSION/i.test(String(err)) ? '這一場已送出或已鎖定，無法再修改' : `暫存失敗：${err.message || err}`)), 600);
 });
 render();
