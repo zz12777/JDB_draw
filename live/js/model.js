@@ -155,7 +155,13 @@ export function derive(state) {
       });
       st.rounds.forEach((r, i) => out.rounds.push({ key: 'P' + i, label: `預賽第${i + 1}輪`, matches: out.matches.filter(m => m.stage === 'P' && m.roundIdx === i) }));
       // 各組名次
-      out.groups.forEach(g => { g.table = standings(g); g.rank = (e.rank && e.rank[g.letter]) || {}; });
+      out.groups.forEach(g => {
+        g.table = standings(g);
+        // 名次：大會台指定的優先；沒指定時，該組全部打完且不需抽籤就自動標冠亞
+        const set = (e.rank && e.rank[g.letter]) || {}, r = g.table.rows, auto = {};
+        if (g.table.all && r[0] && !r[0].lot) { auto.c = r[0].team; if (r[1] && !r[1].lot) auto.r = r[1].team; }
+        g.rank = { c: set.c || auto.c, r: set.r || auto.r };
+      });
       // 決賽
       if (ko) {
         const fp = e.finalPos || {};

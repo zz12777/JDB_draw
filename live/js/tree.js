@@ -10,8 +10,8 @@ export function bracketSvg(matches, team, opt = {}) {
   const byNum = new Map(matches.map(m => [m.num, m]));
   const refd = new Set(matches.flatMap(m => m.src.filter(s => s.ref != null).map(s => s.ref)));
   const root = matches.find(m => !refd.has(m.num));
-  // opt.pos：隊名前加籤號（團體決賽）；opt.noTables：不顯示桌次（紀錄組）
-  const leafText = s => { const t = sideText(s, team) || ''; return opt.pos && s.name && s.pos != null ? `${s.pos}　${t}` : t; };
+  // opt.pos：隊名後加籤號（團體決賽）；opt.noTables：不顯示桌次（紀錄組）
+  const leafText = s => { const t = sideText(s, team) || ''; return opt.pos && s.name && s.pos != null ? `${t}　${s.pos}` : t; };
   const maxLen = Math.max(4, ...matches.flatMap(m => [m.A, m.B].filter((_, i) => m.src[i].pos != null).map(s => leafText(s).length)));
   const NAME = Math.min(300, maxLen * 14 + 16);
   const X = m => NAME + (m.roundIdx + 1) * COL;

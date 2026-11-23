@@ -159,10 +159,10 @@ export function groupTables(e, shown, opt = {}) {
       return `<td class="lk sc${mk(m)}" data-mid="${esc(m.id)}">${m.score[mine ? 0 : 1]}:${m.score[mine ? 1 : 0]}</td>`;
     };
     const st = t => g.table.rows.find(r => r.team === t);
-    const tag = t => (g.rank.c === t ? ' <span class="chip ready">冠</span>' : g.rank.r === t ? ' <span class="chip reported">亞</span>' : '');
+    const tag = t => (g.rank.c === t ? '<span class="chip ready rk">冠</span>' : g.rank.r === t ? '<span class="chip reported rk">亞</span>' : '');
     const pad = n => '<td></td>'.repeat(n);
     return `<table class="grp"><thead><tr><th class="hd">${g.letter} 組</th>${Array.from({ length: N }, (_, i) => `<th>${g.teams[i] ? `${i + 1}<span class="tn"> ${esc(g.teams[i])}</span>` : ''}</th>`).join('')}<th class="wl">勝</th><th class="wl">敗</th></tr></thead><tbody>
-      ${g.teams.map((t, i) => `<tr><td class="nm"><span class="ix">${i + 1}</span>${esc(t)}${tag(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
+      ${g.teams.map((t, i) => `<tr><td class="nm"><span class="ix">${i + 1}</span>${tag(t)}${esc(t)}</td>${g.teams.map((u, j) => (i === j ? '<td class="diag"></td>' : cell(t, u, i, j))).join('')}${pad(N - g.teams.length)}<td>${st(t).w}</td><td>${st(t).l}</td></tr>`).join('')}</tbody></table>`;
   }).join('');
 }
 
