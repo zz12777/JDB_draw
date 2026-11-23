@@ -57,7 +57,7 @@ function render() {
       && (m.stage !== 'F' || (m.A && m.A.name && m.B && m.B.name)))
     .sort((a, b) => (a.stage === 'F') - (b.stage === 'F') || a.num - b.num);
   main.innerHTML = `${pills}<div class="panel"><div class="row"><h2 style="margin:0">${esc(info.team)}</h2><span class="chip">${esc(EVENT_FULL[info.ev] || info.ev)}</span></div>
-      <p class="small muted" style="margin:6px 0 0">預賽各場可以一次填好；決賽在對手確定後才會出現。可以先暫存、同隊一起修改，按「送出點單」後就不能再改。對手看不到你們的點單。也可以照常繳交紙本點單。</p></div>
+      <p class="small muted" style="margin:6px 0 0">預賽各場可以一次填好；決賽在對手確定後才會出現。填寫內容會自動暫存，同隊可以一起修改，按「送出點單」後就不能再改。對手看不到你們的點單。也可以照常繳交紙本點單。</p></div>
     ${ms.length ? ms.map(m => matchCard(m, info)).join('') : '<div class="panel"><p class="muted">目前沒有需要填寫點單的場次。</p></div>'}
     ${editorsPanel(owner)}`;
 }
