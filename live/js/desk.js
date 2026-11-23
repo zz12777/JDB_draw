@@ -20,7 +20,7 @@ let modal = null; // { kind: 'score' | 'lineup', mid }
 let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '大會提醒'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
 const busyOpen = new Set();
 let parkOpen = false;
 let refTab = 'avail', staffOpen = null, staffFixed = false;
@@ -477,7 +477,7 @@ function viewRec(s) {
       ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : ''}`;
 }
 
-// ---------------- 大會提醒 ----------------
+// ---------------- 場控提醒 ----------------
 // 由賽程時間表推算（notices.js），大會可以改時間、改文字、刪除或自己加；時間到在上方提醒。
 const NOW = () => { const q = new URLSearchParams(location.search).get('now'); const d = q ? new Date(q) : new Date(); return Number.isNaN(d.getTime()) ? new Date() : d; };
 const hm = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
@@ -512,7 +512,7 @@ function dueNotices(s) {
   const now = NOW().getTime(), done = (s.notices || {}).done || {};
   return noticeList(s).filter(x => { const t = dueAt(s, x); return t && now >= t && now < t + 30 * 60000 && !done[x.id]; });
 }
-/** 大會提醒分頁上方：時間到、還沒按已處理的提醒（其他分頁只在分頁名稱旁顯示數字） */
+/** 場控提醒分頁上方：時間到、還沒按已處理的提醒（其他分頁只在分頁名稱旁顯示數字） */
 function noticeBanner(s) {
   return dueNotices(s).map(x => `<div class="alertbox notice-due"><div class="row"><span class="tag-k ${x.kind}">${KIND_NAME[x.kind]}</span><b>${x.t}</b><span style="flex:1">${esc(x.text)}</span>
     <button class="btn sm" data-ndone="${esc(x.id)}">${icon('check')}已處理</button></div>${lineupMissing(s, x)}</div>`).join('');
@@ -714,9 +714,13 @@ function busyPeople(s) {
   };
   const active = new Set();
   D.events.forEach(e => { const st = e.matches.map(m => m.status); if (st.includes('playing') || (st.some(x => x === 'done' || x === 'reported') && st.some(x => x !== 'done'))) active.add(e.name); });
+  // 個人賽：只有接下來要叫的前 3 場才算即將出賽，同一輪後面的場次不算
+  const next3 = new Set();
+  D.events.filter(e => !e.team && active.has(e.name)).forEach(e => e.matches.filter(m => m.known && !m.rec.start && m.status !== 'done' && m.status !== 'reported')
+    .sort((a, b) => a.num - b.num).slice(0, 3).forEach(m => next3.add(m.id)));
   D.byId.forEach(m => {
     if (m.status === 'playing') people(m).forEach(n => now.set(nm(n), m));
-    else if (active.has(m.ev) && m.known && m.status !== 'done' && m.status !== 'reported') people(m).forEach(n => { const k = nm(n), o = soon.get(k); if (!o || (m.status === 'ready' && o.status !== 'ready')) soon.set(k, m); });
+    else if (!m.team ? next3.has(m.id) : (active.has(m.ev) && m.known && m.status !== 'done' && m.status !== 'reported')) people(m).forEach(n => { const k = nm(n), o = soon.get(k); if (!o || (m.status === 'ready' && o.status !== 'ready')) soon.set(k, m); });
   });
   const onDuty = new Map();
   D.tables.forEach((x, t) => { if (x.m.status === 'playing') { const n = (x.m.rec.refs || {})[t]; if (n) onDuty.set(nm(n), { t, m: x.m }); } });
@@ -799,14 +803,14 @@ function viewRefs(s) {
       ${names.length ? `<table class="list" style="max-width:480px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`);
   }
   const k = nm;
-  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
+  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${!soon.get(k(n)).team ? '前 3 場內會叫到' : soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
   const byCnt = (a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0);
   const pool = staff.filter(n => !notRef(s, n));
   // 體資：有缺才請他們支援，放在「人手不足時可支援」
   const backup = n => orgOf(s, n) === '體資';
   const free = pool.filter(n => !why(n) && !backup(n)).sort(byCnt);
   // 人手不足時：所屬項目進行中、但自己的場次還沒輪到的人也可以支援
-  const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && ((backup(n) && !soon.has(k(n))) || (soon.has(k(n)) && soon.get(k(n)).status !== 'ready'))).sort(byCnt);
+  const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && ((backup(n) && !soon.has(k(n))) || (soon.has(k(n)) && soon.get(k(n)).team && soon.get(k(n)).status !== 'ready'))).sort(byCnt);
   const rest = pool.filter(n => why(n) && !spare.includes(n));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
   const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
@@ -818,9 +822,9 @@ function viewRefs(s) {
   }).join('')}</div></div>`;
   return wrap(`${strip}${swapPanel()}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
-      <p class="small muted">正在比賽、正在擔任裁判，或所屬項目進行中還有比賽要打的人不列入；其他項目還沒開打、已經淘汰的人都可以擔任。依已擔任次數由少到多排列。</p>
+      <p class="small muted">正在比賽、正在擔任裁判、個人賽接下來 3 場內會叫到，或團體賽所屬項目進行中還有比賽要打的人不列入；其他項目還沒開打、已經淘汰的人都可以擔任。依已擔任次數由少到多排列。</p>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「編輯名單」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
-    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">體資，以及所屬項目進行中、但自己的場次還沒輪到的人。</p>${cols(spare)}</div>` : ''}
+    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">體資，以及團體賽所屬項目進行中、但自己的場次還沒輪到的人。</p>${cols(spare)}</div>` : ''}
     ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
     ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }

@@ -431,7 +431,7 @@ table.dgv td.w { font-weight: 700; color: var(--blue); }
   .ckm { grid-column: 1 / -1; }
 }
 
-/* 大會提醒 */
+/* 場控提醒 */
 .alertbox.notice-due { background: var(--yellow-soft); border-color: var(--yellow); margin: 0 0 10px; padding: 10px 12px; }
 .alertbox.notice-due .row { gap: 10px; }
 .tag-k { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; background: #fff; }
