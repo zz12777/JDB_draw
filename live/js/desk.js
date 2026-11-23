@@ -586,21 +586,59 @@ function refCounts() {
   return new Map([...cnt.entries()].map(([n, set]) => [n, set.size]));
 }
 /** 正在比賽與即將出賽的人 */
+/**
+ * 誰現在不能當裁判：
+ * 比賽中＝正在打；即將出賽＝「進行中的項目」裡還有比賽要打（項目已開打且還沒打完）；執裁中＝正在某桌當裁判。
+ * 其他項目還沒開打的人、已經淘汰的人都算可以當裁判。
+ */
 function busyPeople(s) {
-  const now = new Set(), soon = new Set();
+  const now = new Map(), soon = new Map();
   const people = m => {
     if (!m.team) return [m.A, m.B].flatMap(x => String((x && x.name) || '').split(/[\/／]/)).map(x => x.trim()).filter(Boolean);
     const e = s.events.find(x => x.name === m.ev);
-    return [m.A, m.B].flatMap(x => (e.rosters && e.rosters[x && x.name]) || []);
+    return [m.A, m.B].flatMap(x => ((e && e.rosters && e.rosters[x && x.name]) || []).flat());
   };
+  const active = new Set();
+  D.events.forEach(e => { const st = e.matches.map(m => m.status); if (st.includes('playing') || (st.some(x => x === 'done' || x === 'reported') && st.some(x => x !== 'done'))) active.add(e.name); });
   D.byId.forEach(m => {
-    if (m.status === 'playing') people(m).forEach(n => now.add(n));
-    else if (m.status === 'ready' || (m.status === 'wait' && m.known)) people(m).forEach(n => soon.add(n));
+    if (m.status === 'playing') people(m).forEach(n => now.set(n, m));
+    else if (active.has(m.ev) && m.known && m.status !== 'done' && m.status !== 'reported') people(m).forEach(n => { if (!soon.has(n)) soon.set(n, m); });
   });
-  const onDuty = new Set();
-  D.tables.forEach((x, t) => { if (x.m.status === 'playing') { const n = (x.m.rec.refs || {})[t]; if (n) onDuty.add(n); } });
+  const onDuty = new Map();
+  D.tables.forEach((x, t) => { if (x.m.status === 'playing') { const n = (x.m.rec.refs || {})[t]; if (n) onDuty.set(n, { t, m: x.m }); } });
   return { now, soon, onDuty };
 }
+const ORGS = ['交大', '陽明', '香山'];
+const orgOf = (s, n) => (s.staffOrg || {})[n] || '未分組';
+/** 裁判名單文字：【交大】這種標題下面接姓名，一行可以放好幾個名字（空白、頓號、斜線分隔） */
+function parseStaff(text) {
+  const names = [], org = {};
+  let g = '';
+  const add = (str, grp) => str.split(/[\s,，、\/／+＋]+/).map(x => x.replace(/[（(].*?[）)]/g, '').trim()).filter(x => x && !/^[【\[]/.test(x)).forEach(n => {
+    if (!names.includes(n)) names.push(n);
+    if (grp && !org[n]) org[n] = grp;
+  });
+  String(text).split('\n').forEach(line => {
+    let l = line.trim();
+    if (!l) return;
+    // 【交大】這種標題換校區；【男單】這種項目標題不算校區
+    const h = l.match(/^[【\[]\s*(.+?)\s*[】\]]\s*(.*)$/);
+    if (h) { g = [...ORGS, '未分組'].includes(h[1]) ? h[1] : ''; l = h[2]; if (!l) return; }
+    // 「交大： 名字 名字 陽明： 名字」同一行可以有好幾段；其他「隊名：」前綴只拿名字、不改校區
+    l.split(/([^\s：:]+)\s*[：:]/).forEach((part, i, arr) => {
+      if (i % 2 === 1) { if ([...ORGS, '未分組'].includes(part)) g = part; else if (!ORGS.includes(g)) g = ''; return; }
+      const label = i > 0 ? arr[i - 1] : null;
+      add(part, label && !ORGS.includes(label) && label !== '未分組' ? '' : g);
+    });
+  });
+  return { names, org };
+}
+function staffText(s) {
+  const staff = s.staff || [];
+  const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
+  return groups.map(g => { const list = staff.filter(n => orgOf(s, n) === g); return list.length ? `【${g}】\n${list.join('\n')}` : ''; }).filter(Boolean).join('\n\n');
+}
+const orgTag = (s, n) => { const g = orgOf(s, n); return `<span class="otag o-${esc(g)}">${esc(g)}</span>`; };
 function viewRefs(s) {
   const cnt = refCounts();
   const staff = s.staff || [];
@@ -609,16 +647,24 @@ function viewRefs(s) {
   if (refTab === 'count') {
     const names = [...new Set([...staff, ...cnt.keys()])].sort((a, b) => (cnt.get(b) || 0) - (cnt.get(a) || 0) || a.localeCompare(b, 'zh-Hant'));
     return `${sub}<div class="panel"><h2>擔任次數</h2><p class="small muted">個人賽一場計一次，團體賽一點計一次。</p>
-      ${names.length ? `<table class="list" style="max-width:420px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`;
+      ${names.length ? `<table class="list" style="max-width:480px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`;
   }
-  const state = n => (onDuty.has(n) ? '執裁中' : now.has(n) ? '比賽中' : soon.has(n) ? '即將出賽' : '');
+  const state = n => (onDuty.has(n) ? `第 ${onDuty.get(n).t} 桌執裁中` : now.has(n) ? `比賽中（${shortEv(now.get(n))}）` : soon.has(n) ? `即將出賽（${soon.get(n).ev}）` : '');
   const free = staff.filter(n => !state(n)).sort((a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0));
   const rest = staff.filter(n => state(n));
-  return `${sub}<div class="desk"><div class="panel"><h2>可擔任裁判（${free.length}）</h2>
-      ${staff.length ? `<table class="list"><thead><tr><th>姓名</th><th>已擔任次數</th></tr></thead><tbody>${free.map(n => `<tr><td>${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>
-        ${rest.length ? `<h3>暫不可擔任（${rest.length}）</h3><table class="list"><tbody>${rest.map(n => `<tr><td>${esc(n)}</td><td class="muted">${state(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted small">請先於右側輸入自己人裁判名單。</p>'}</div>
-    <div class="panel"><h2>自己人裁判名單</h2><p class="small muted">一行一位。</p>
-      <textarea data-staff rows="16" style="width:100%">${esc(staff.join('\n'))}</textarea></div></div>`;
+  const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
+  const freeBy = groups.map(g => [g, free.filter(n => orgOf(s, n) === g)]).filter(([g, l]) => l.length || g === '香山');
+  const duty = [...D.tables.entries()].filter(([, x]) => x.m.status === 'playing').sort((a, b) => a[0] - b[0]);
+  return `${sub}<div class="desk"><div>
+    <div class="panel"><h2>現在執裁（${duty.filter(([t, x]) => (x.m.rec.refs || {})[t]).length} / ${duty.length} 桌）</h2>
+      ${duty.length ? `<div class="dutyg">${duty.map(([t, x]) => { const n = (x.m.rec.refs || {})[t]; return `<div class="duty ${n ? '' : 'none'}"><b>${t}</b><span>${n ? `${staff.includes(n) ? orgTag(s, n) : ''}${esc(n)}` : '未登記'}</span><small>${esc(shortEv(x.m))}</small></div>`; }).join('')}</div>` : '<p class="small muted">目前沒有進行中的球桌。</p>'}</div>
+    <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
+      <p class="small muted">正在比賽、正在執裁，或所屬項目已開打且還有比賽要打的人不列入；其他項目還沒開打、已經淘汰的人都可以擔任。依已擔任次數由少到多排列。</p>
+      ${staff.length ? `<div class="orgcols">${freeBy.map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3>${l.length ? `<table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table>` : '<p class="small muted">尚無。</p>'}</div>`).join('')}</div>
+        ${rest.length ? `<h3 style="margin-top:14px">暫不可擔任（${rest.length}）</h3><table class="list"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${state(n)}</td><td class="small muted" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted small">請先於右側輸入自己人裁判名單。</p>'}</div></div>
+    <div><div class="panel"><h2>自己人裁判名單</h2><p class="small muted">用【交大】【陽明】【香山】當標題，標題下面接姓名，一行一位或用空白分隔。</p>
+      <textarea data-staff rows="18" style="width:100%">${esc(staffText(s))}</textarea></div>
+    <div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div></div></div>`;
 }
 
 // ---------------- 成績公告 ----------------
@@ -873,6 +919,12 @@ document.addEventListener('click', async ev => {
   if ('tierules' in d) { modal = { kind: 'tierules' }; drawModal(); return; }
   if ('busyok' in d && modal && modal.kind === 'busy') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, x.force, true); return; }
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
+  if ('addxs' in d) {
+    const names = $('#xs-name').value.split(/[\s,，、]+/).map(x => x.trim()).filter(Boolean);
+    if (!names.length) { toast('請輸入姓名'); return; }
+    update(st => { st.staff = [...new Set([...(st.staff || []), ...names])]; st.staffOrg = { ...(st.staffOrg || {}) }; names.forEach(n => { st.staffOrg[n] = '香山'; }); });
+    toast(`已新增 ${names.length} 位香山裁判`); return;
+  }
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
@@ -961,7 +1013,7 @@ document.addEventListener('change', async ev => {
   });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
-  else if ('staff' in d) update(s => { s.staff = [...new Set(t.value.split(/[\n,，、\s]+/).map(x => x.trim()).filter(Boolean))]; });
+  else if ('staff' in d) { const p = parseStaff(t.value); update(s => { s.staff = p.names; s.staffOrg = p.org; }); }
   else if ('sched' in d) {
     if (t.files[0]) try { const slots = parseTimetable(await readWorkbookValues(await t.files[0].arrayBuffer())); const file = t.files[0].name; update(s => { s.sched = { file, slots }; }); toast(`賽程時間表已匯入：${slots.length} 個時段`); } catch (err) { toast(`匯入失敗：${err.message}`); }
   }
