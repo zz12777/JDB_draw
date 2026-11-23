@@ -136,9 +136,13 @@ function onlineLu(s, m, k) {
 function draftLu(s, m, k) { const S = k === 'a' ? m.A : m.B; if (!m.team || !S || !S.name) return null; const o = ((s.olu || {})[m.id] || {})[teamKey(m.ev, S.name)]; return o && !o.final ? o : null; }
 /** 大會台畫面用：線上點單先當作已收點單顯示，派桌時才寫進正式紀錄（避免對手提早在即時賽程看到） */
 function withOnline(s) {
-  if (!s.olu || !Object.keys(s.olu).length) return s;
+  const dl = s.dlu || {};
+  if ((!s.olu || !Object.keys(s.olu).length) && !Object.keys(dl).length) return s;
   const m = { ...s.m };
-  const ids = new Set(Object.keys(s.olu));
+  // 大會台輸入、還沒派桌的紙本點單（只存在大會台讀得到的地方）
+  Object.entries(dl).forEach(([id, x]) => { if (!x) return; const rec = m[id] || {}; m[id] = { ...rec, lineup: { ...(rec.lineup || {}), ...x } }; });
+  s = { ...s, m };
+  const ids = new Set(Object.keys(s.olu || {}));
   const D0 = derive(s);
   ids.forEach(id => {
     const x = D0.byId.get(id); if (!x || !x.team) return;
@@ -277,7 +281,15 @@ function setTables(mid, text, force = false, busyOk = false) {
     const rec = st.m[mid] = st.m[mid] || {};
     rec.tables = tables;
     // 派桌＝點單鎖定：線上送出、大會台還沒登錄的點單在這時寫進正式排點
-    if (added.length && m.team) ['a', 'b'].forEach(k => { const o = onlineLu(st, m, k); if (o && !(rec.lineup && rec.lineup[k])) { rec.lineup = rec.lineup || {}; rec.lineup[k] = o.lu; } });
+    if (added.length && m.team) {
+      const dl = (st.dlu || {})[mid] || {};
+      ['a', 'b'].forEach(k => {
+        if (rec.lineup && rec.lineup[k]) return;
+        const v = dl[k] || (onlineLu(st, m, k) || {}).lu;
+        if (v) { rec.lineup = rec.lineup || {}; rec.lineup[k] = v; }
+      });
+      if (st.dlu && st.dlu[mid]) delete st.dlu[mid];
+    }
     if (tables.length && !rec.start) rec.start = Date.now();
     if (!tables.length && !(rec.g || rec.pts)) {
       delete rec.start;
@@ -1232,11 +1244,21 @@ document.addEventListener('click', async ev => {
     const l = readLineup(d.luSave);
     const w = lineupWarn(l);
     if (w) { markLineup(d.luSave); toast('有選手重複排點，無法儲存'); return; }
-    updateMatch(modal.mid, r => { r.lineup = r.lineup || {}; r.lineup[d.luSave] = l; });
+    // 還沒派桌：先存在大會台專用的地方，派桌時才寫進正式紀錄（公開資料）；已派桌就直接寫
+    const started = !!(getState().m[modal.mid] || {}).start;
+    if (started) updateMatch(modal.mid, r => { r.lineup = r.lineup || {}; r.lineup[d.luSave] = l; });
+    else update(st => { st.dlu = st.dlu || {}; st.dlu[modal.mid] = { ...(st.dlu[modal.mid] || {}), [d.luSave]: l }; });
     drawModal();
     $(`[data-lu-warn="${d.luSave}"]`).textContent = w;
     toast('排點已儲存');
-  } else if (d.luClear) { delete draft[d.luClear]; updateMatch(modal.mid, r => { if (r.lineup) delete r.lineup[d.luClear]; }); drawModal(); }
+  } else if (d.luClear) {
+    delete draft[d.luClear];
+    update(st => {
+      const r = st.m[modal.mid]; if (r && r.lineup) { delete r.lineup[d.luClear]; if (!Object.keys(r.lineup).length) delete r.lineup; }
+      const x = (st.dlu || {})[modal.mid]; if (x) { delete x[d.luClear]; if (!Object.keys(x).length) delete st.dlu[modal.mid]; }
+    });
+    drawModal();
+  }
   else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) r.wo = d.wo; else delete r.wo; }); drawModal(); }
   else if ('confirm' in d) { updateMatch(modal.mid, r => { r.confirmed = true; r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); modal = null; drawModal(); toast('成績已確認並鎖定'); }
   else if ('unconfirm' in d) { updateMatch(modal.mid, r => { r.confirmed = false; }); drawModal(); }
