@@ -651,7 +651,7 @@ function swapPanel() {
       ${sw.sent ? '' : `<button class="btn ghost sm" data-swapsent="${esc(m.id)}|${t}">${icon('check')}已派出替換裁判</button>`}
       <button class="btn ghost sm" data-swapclear="${esc(m.id)}|${t}" title="移除這則請求">${icon('close')}</button></div></div>`).join('')}</div>`;
 }
-const ORGS = ['交大', '陽明', '香山', '大會'];
+const ORGS = ['交大', '陽明', '香山', '體資', '大會'];
 /** 不列入可擔任裁判：大會人員；陽明不當裁判時也排除陽明 */
 const notRef = (s, n) => { const g = orgOf(s, n); return g === '大會' || (g === '陽明' && (s.refOpt || {}).ym === 'off'); };
 const orgOf = (s, n) => (s.staffOrg || {})[n] || '未分組';
@@ -687,7 +687,7 @@ const orgTag = (s, n) => { const g = orgOf(s, n); return `<span class="otag o-${
 /** 裁判名單編輯：裁判分頁與資料設定共用 */
 function staffEditor(s) {
   const ym = (s.refOpt || {}).ym === 'off' ? 'off' : 'on';
-  return `<p class="small muted">用【交大】【陽明】【香山】【大會】當標題，標題下面接姓名，一行一位或用空白分隔。【大會】是大會工作人員，不會出現在可擔任裁判名單。也可以直接貼上報名名單，有寫「交大：」「陽明：」的會自動分組。</p>
+  return `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位或用空白分隔。【體資】列在人手不足時可支援；【大會】是大會工作人員，不會出現在裁判名單。也可以直接貼上報名名單，有寫「交大：」「陽明：」的會自動分組。</p>
     <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
     <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>`;
 }
@@ -716,9 +716,11 @@ function viewRefs(s) {
   const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
   const byCnt = (a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0);
   const pool = staff.filter(n => !notRef(s, n));
-  const free = pool.filter(n => !why(n)).sort(byCnt);
+  // 體資：有缺才請他們支援，放在「人手不足時可支援」
+  const backup = n => orgOf(s, n) === '體資';
+  const free = pool.filter(n => !why(n) && !backup(n)).sort(byCnt);
   // 人手不足時：所屬項目進行中、但自己的場次還沒輪到的人也可以支援
-  const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && soon.has(k(n)) && soon.get(k(n)).status !== 'ready').sort(byCnt);
+  const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && ((backup(n) && !soon.has(k(n))) || (soon.has(k(n)) && soon.get(k(n)).status !== 'ready'))).sort(byCnt);
   const rest = pool.filter(n => why(n) && !spare.includes(n));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
   const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
@@ -732,7 +734,7 @@ function viewRefs(s) {
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       <p class="small muted">正在比賽、正在擔任裁判，或所屬項目進行中還有比賽要打的人不列入；其他項目還沒開打、已經淘汰的人都可以擔任。依已擔任次數由少到多排列。</p>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「編輯名單」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
-    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">所屬項目進行中，但自己的場次還沒輪到。</p>${cols(spare)}</div>` : ''}
+    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">體資，以及所屬項目進行中、但自己的場次還沒輪到的人。</p>${cols(spare)}</div>` : ''}
     ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
     ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }
