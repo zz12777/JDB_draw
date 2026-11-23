@@ -1,6 +1,6 @@
-// 簽到處：不用登入。有團體賽的隊伍勾「已簽到且領點單」，只報個人賽的勾「已簽到」，備註寫給大會看。
+// 簽到處：管理員登入後使用。有團體賽的隊伍勾「已簽到且領點單」，只報個人賽的勾「已簽到」，備註寫給大會看。
 import { fmtTime } from './model.js';
-import { getState, subscribe, onAuth, auth, setCheckin } from './store.js';
+import { getState, subscribe, onAuth, auth, setCheckin, writePaths, teamKey, mailKey } from './store.js';
 import { esc, $, icon, header, toast } from './ui.js';
 import { checkinSections, signinWord, signinTitle } from './units.js';
 
@@ -8,7 +8,14 @@ let q = '', onlyTodo = false, pending = false;
 
 function render() {
   const s = getState();
-  $('#top').innerHTML = header(s, '簽到處', []);
+  $('#top').innerHTML = header(s, '簽到處', [], { account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
+  if (auth.cloud && !auth.isAdmin) {
+    $('#main').innerHTML = !auth.ready ? `<div class="panel"><p class="muted">${auth.error ? esc(auth.error) : '連線中。'}</p></div>`
+      : `<div class="panel" style="max-width:480px;margin:40px auto;text-align:center"><h2>簽到處登入</h2>
+        ${auth.user ? `<p class="small" style="color:var(--red)">${esc(auth.user)} 沒有權限。</p><button class="btn ghost" data-signout>改用其他帳號</button>` : '<button class="btn" data-signin>以 Google 帳號登入</button>'}
+        ${auth.error ? `<p class="small" style="color:var(--red)">${esc(auth.error)}</p>` : ''}</div>`;
+    return;
+  }
   const secs = checkinSections(s);
   const ci = s.checkin || {};
   const all = secs.flatMap(x => x.rows);
@@ -28,7 +35,7 @@ function render() {
         const word = sec.team ? '已簽到且領點單' : '已簽到';
         return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}${r.park ? `<span class="ckp" title="停車證張數">停車證 ${r.park} 張</span>` : ''}</div>
           <button class="ckb" data-ck="${esc(r.key)}" aria-pressed="${x.ok ? 'true' : 'false'}"><span class="box">${x.ok ? icon('check') : ''}</span>${word}${x.ok && x.t ? `<span class="ckt">${fmtTime(x.t)}</span>` : ''}</button>
-          <input type="text" class="ckm" data-note="${esc(r.key)}" value="${esc(x.note || '')}" placeholder="備註"></div>`;
+          <input type="text" class="ckm" data-note="${esc(r.key)}" value="${esc(x.note || '')}" placeholder="備註">${sec.team ? mailRow(sec.code, r) : ''}</div>`;
       }).join('')}</div></div>`;
   }).join('');
   $('#main').innerHTML = `<div class="panel"><div class="row"><label class="sbox" style="flex:1;min-width:200px">${icon('search')}<input id="q" class="search" type="search" placeholder="學校或隊名" value="${esc(q)}"></label>
@@ -39,15 +46,36 @@ function render() {
     ${body || '<div class="panel"><p class="small muted" style="text-align:center">沒有符合的名單。</p></div>'}`;
 }
 
+/** 線上點單：隊伍要加入的信箱，加入後成為該隊共同編輯 */
+function mailRow(ev, r) {
+  const acl = getState().teamacl || {};
+  const names = r.names || [r.label];
+  const cnt = names.map(n => Object.keys(acl[teamKey(ev, n)] || {}).length);
+  return `<div class="ckmail"><span class="small muted">線上點單信箱 ${names.map((n, i) => `${names.length > 1 ? esc(n) + ' ' : ''}${cnt[i]} 個`).join('、')}</span>
+    ${names.length > 1 ? `<select data-mteam="${esc(r.key)}">${names.map(n => `<option value="${esc(teamKey(ev, n))}">${esc(n)}</option>`).join('')}</select>` : ''}
+    <input type="email" class="ckm" data-mail="${esc(r.key)}" data-tk="${esc(teamKey(ev, names[0]))}" placeholder="加入可填點單的信箱"><button class="btn ghost sm" data-addmail="${esc(r.key)}">${icon('plus')}加入</button></div>`;
+}
+
 // 有人在打備註時先不重畫，離開輸入框後再更新
-const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('input.ckm, #q'); };
+const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('input.ckm, #q, select[data-mteam]'); };
 function refresh() { if (typing()) { pending = true; return; } pending = false; render(); }
 subscribe(refresh);
 onAuth(refresh);
 
 document.addEventListener('click', ev => {
-  const b = ev.target.closest('[data-ck],[data-todo],[data-dlsign]');
+  const b = ev.target.closest('[data-ck],[data-todo],[data-dlsign],[data-signin],[data-signout],[data-addmail]');
   if (!b) return;
+  if (b.dataset.signin !== undefined) { auth.signIn && auth.signIn(); return; }
+  if (b.dataset.signout !== undefined) { ev.preventDefault(); auth.signOut && auth.signOut(); return; }
+  if (b.dataset.addmail) {
+    const inp = $(`[data-mail="${b.dataset.addmail}"]`), sel = $(`[data-mteam="${b.dataset.addmail}"]`);
+    const tk = sel ? sel.value : inp.dataset.tk, e = inp.value.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { toast('請輸入正確的信箱'); return; }
+    const k = mailKey(e), cur = ((getState().teamacl || {})[tk] || {})[k];
+    if (cur) { toast('這個信箱已經可以填寫'); return; }
+    writePaths({ [`teamacl/${tk}/${k}`]: 'editor', [`myteams/${k}/${tk}`]: true }).then(() => { inp.value = ''; toast('已加入，對方用這個信箱登入就能填點單'); refresh(); }).catch(err => toast(`加入失敗：${err.message || err}`));
+    return;
+  }
   if (b.dataset.dlsign !== undefined) { downloadSignin(); return; }
   if (b.dataset.todo) { onlyTodo = b.dataset.todo === '1'; render(); return; }
   const k = b.dataset.ck, x = (getState().checkin || {})[k] || {};

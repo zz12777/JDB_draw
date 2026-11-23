@@ -172,7 +172,7 @@ export const adminKey = email => String(email || '').toLowerCase().replace(/\./g
 // ---------------- 雲端：即時連線（大會台、裁判頁） ----------------
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 async function sdkRemote() {
-  const [{ initializeApp }, db, au] = await Promise.all([import(`${SDK}firebase-app.js`), import(`${SDK}firebase-database.js`), ROLE === 'desk' ? import(`${SDK}firebase-auth.js`) : Promise.resolve(null)]);
+  const [{ initializeApp }, db, au] = await Promise.all([import(`${SDK}firebase-app.js`), import(`${SDK}firebase-database.js`), (ROLE === 'desk' || ROLE === 'checkin') ? import(`${SDK}firebase-auth.js`) : Promise.resolve(null)]);
   const app = initializeApp(FIREBASE);
   const database = db.getDatabase(app);
   const at = p => db.ref(database, `${ROOT}/${p}`);
@@ -180,10 +180,7 @@ async function sdkRemote() {
   db.onValue(at('pub/meta'), s => receive('meta', s.val()), fail);
   db.onValue(at('pub/events'), s => receive('events', s.val()), fail);
   db.onValue(at('pub/m'), s => receive('m', s.val()), fail);
-  if (ROLE === 'desk' || ROLE === 'checkin') {
-    db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail);
-    db.onValue(at('parking'), s => receive('parking', s.val()), fail);
-  }
+  if (ROLE === 'desk' || ROLE === 'checkin') db.onValue(at('parking'), s => receive('parking', s.val()), fail);
   if (au) {
     const a = au.getAuth(app);
     let offs = [];
@@ -195,7 +192,7 @@ async function sdkRemote() {
         try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); } catch (e) { auth.isAdmin = false; }
       }
       offs.forEach(f => f()); offs = [];
-      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('olu'), s => receive('olu', s.val()), fail), db.onValue(at('teamacl'), s => receive('teamacl', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
+      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('olu'), s => receive('olu', s.val()), fail), db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail), db.onValue(at('teamacl'), s => receive('teamacl', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
         db.onValue(at('pub/calls'), s => receive('pcalls', s.val() ?? ''), fail)];
       emitAuth();
     });

@@ -129,8 +129,11 @@ function planned(m) {
 function onlineLu(s, m, k) {
   const S = k === 'a' ? m.A : m.B;
   if (!m.team || !S || !S.name) return null;
-  return ((s.olu || {})[m.id] || {})[teamKey(m.ev, S.name)] || null;
+  const o = ((s.olu || {})[m.id] || {})[teamKey(m.ev, S.name)] || null;
+  // 只有按了「送出」的才算；暫存中的不帶入
+  return o && o.final ? o : null;
 }
+function draftLu(s, m, k) { const S = k === 'a' ? m.A : m.B; if (!m.team || !S || !S.name) return null; const o = ((s.olu || {})[m.id] || {})[teamKey(m.ev, S.name)]; return o && !o.final ? o : null; }
 /** 大會台畫面用：線上點單先當作已收點單顯示，派桌時才寫進正式紀錄（避免對手提早在即時賽程看到） */
 function withOnline(s) {
   if (!s.olu || !Object.keys(s.olu).length) return s;
@@ -297,7 +300,8 @@ function lineupModal(m) {
     const inp = (i, j, v) => (roster.length
       ? `<select data-lu="${k}|${i}|${j}" style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
       : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" style="width:${j == null ? 100 : 48}%">`);
-    return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.rec.olSrc && m.rec.olSrc[k] ? `<span class="chip playing">線上點單 ${fmtTime(m.rec.olSrc[k].ts)}</span>` : m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : '<span class="chip">尚未輸入</span>'}</h3>
+    return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.rec.olSrc && m.rec.olSrc[k] ? `<span class="chip playing">線上點單 ${fmtTime(m.rec.olSrc[k].ts)} 送出</span>` : m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : draftLu(getState(), m, k) ? `<span class="chip warn">線上暫存中</span>` : '<span class="chip">尚未輸入</span>'}</h3>
+      ${m.rec.olSrc && m.rec.olSrc[k] && !m.rec.start ? `<div class="small muted" style="margin:-4px 0 6px">${esc(m.rec.olSrc[k].by || '')} 送出　<button class="btn plain sm" data-lureturn="${esc(m.id)}|${k}">退回讓隊伍修改</button></div>` : ''}
       ${POINTS.map((p, i) => `<div class="row" style="margin-bottom:6px;flex-wrap:nowrap"><span class="nowrap small muted" style="width:76px">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</span>
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
@@ -972,7 +976,7 @@ function teamList(s) {
 function aclPanel(s) {
   const list = teamList(s), acl = s.teamacl || {};
   const own = k => Object.entries(acl[k] || {}).filter(([, v]) => v === 'owner').map(([e]) => e.replace(/,/g, '.'));
-  const eds = k => Object.entries(acl[k] || {}).filter(([, v]) => v === 'editor').length;
+  const edList = k => Object.entries(acl[k] || {}).filter(([, v]) => v === 'editor').map(([e]) => e.replace(/,/g, '.'));
   const done = list.filter(t => own(t.key).length).length;
   const sent = Object.values(s.olu || {}).reduce((a, x) => a + Object.keys(x || {}).length, 0);
   const head = `<div class="row"><h2 style="margin:0">線上點單權限</h2><span class="spacer"></span><span class="small muted">${done} / ${list.length} 隊已設定聯絡人，已收 ${sent} 份線上點單</span><button class="btn ghost sm" data-aclopen>${icon('list')}${aclOpen ? '收合' : '展開'}</button></div>`;
@@ -982,9 +986,17 @@ function aclPanel(s) {
     <div class="row"><label class="btn ghost sm">${icon('upload')}匯入報名表單回應<input type="file" accept=".xlsx,.csv" multiple hidden data-aclimp></label>
       <button class="btn ghost sm danger" data-aclwipe>清除全部權限與線上點單</button></div>
     ${aclMiss.length ? `<p class="small" style="color:var(--red)">報名表中有這些隊名在籤表找不到，請手動填寫：${esc(aclMiss.join('、'))}</p>` : ''}
-    <table class="list" style="margin-top:8px"><thead><tr><th>項目</th><th>隊伍</th><th>聯絡人信箱</th><th>共同編輯</th></tr></thead><tbody>
-    ${list.map(t => `<tr><td class="nowrap">${esc(t.ev)}</td><td>${esc(t.team)}</td><td><input type="email" data-aclown="${esc(t.key)}" value="${esc(own(t.key).join(', '))}" placeholder="未設定" style="width:100%;min-width:200px"></td><td class="small muted">${eds(t.key) || ''}</td></tr>`).join('')}
+    <table class="list" style="margin-top:8px"><thead><tr><th>項目</th><th>隊伍</th><th>聯絡人信箱</th><th>共同編輯（聯絡人可自行增減，最多 3 個；大會台不限）</th></tr></thead><tbody>
+    ${list.map(t => `<tr><td class="nowrap">${esc(t.ev)}</td><td>${esc(t.team)}</td><td><input type="email" data-aclown="${esc(t.key)}" value="${esc(own(t.key).join(', '))}" placeholder="未設定" style="width:100%;min-width:200px"></td><td><input type="text" data-acled="${esc(t.key)}" value="${esc(edList(t.key).join(', '))}" placeholder="以逗號分隔" style="width:100%;min-width:220px"></td></tr>`).join('')}
     </tbody></table></div>`;
+}
+/** 設定某隊的共同編輯（整份取代） */
+function setEditors(s, key, text) {
+  const up = {}, cur = (s.teamacl || {})[key] || {};
+  const want = new Set(String(text || '').split(/[\s,，;；]+/).map(x => x.trim().toLowerCase()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).map(mailKey));
+  Object.entries(cur).forEach(([k, v]) => { if (v === 'editor' && !want.has(k)) { up[`teamacl/${key}/${k}`] = null; up[`myteams/${k}/${key}`] = null; } });
+  want.forEach(k => { if (!cur[k]) { up[`teamacl/${key}/${k}`] = 'editor'; up[`myteams/${k}/${key}`] = true; } });
+  return up;
 }
 /** 設定某隊的聯絡人信箱（取代原本的聯絡人，保留共同編輯） */
 function setOwner(s, key, email) {
@@ -1149,6 +1161,14 @@ document.addEventListener('click', async ev => {
   if ('busyok' in d && modal && modal.kind === 'busy') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, x.force, true); return; }
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
   if (d.busyopen) { busyOpen.has(d.busyopen) ? busyOpen.delete(d.busyopen) : busyOpen.add(d.busyopen); render(); return; }
+  if (d.lureturn) {
+    const i = d.lureturn.lastIndexOf('|'), mid = d.lureturn.slice(0, i), k = d.lureturn.slice(i + 1);
+    const st = getState(), m = D.byId.get(mid), S = k === 'a' ? m.A : m.B, tk = teamKey(m.ev, S.name), o = ((st.olu || {})[mid] || {})[tk];
+    if (!o) return;
+    const rec = { ...o, final: false, log: (o.log || []).concat({ by: '大會台', ts: Date.now(), a: '退回修改' }) };
+    writePaths({ [`olu/${mid}/${tk}`]: JSON.stringify(rec) }).then(() => { toast('已退回，隊伍可以重新修改送出'); drawModal(); }).catch(err => toast(`退回失敗：${err.message || err}`));
+    return;
+  }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
   if ('aclopen' in d) { aclOpen = !aclOpen; render(); return; }
   if ('aclwipe' in d) {
@@ -1263,6 +1283,7 @@ document.addEventListener('change', async ev => {
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
   else if ('mailmin' in d) { mailMin = Math.max(1, Math.min(60, Number(t.value) || 10)); render(); }
   else if ('aclimp' in d) { if (t.files.length) { try { await importAcl([...t.files]); } catch (err) { toast(`匯入失敗：${err.message || err}`); } t.value = ''; } }
+  else if (d.acled !== undefined) { const up = setEditors(getState(), d.acled, t.value); if (Object.keys(up).length) writePaths(up).then(() => toast('已更新共同編輯')).catch(err => toast(`更新失敗：${err.message || err}`)); }
   else if (d.aclown !== undefined) { const up = setOwner(getState(), d.aclown, t.value); writePaths(up).then(() => toast('已更新聯絡人信箱')).catch(err => toast(`更新失敗：${err.message || err}`)); }
   else if ('staff' in d) { const p = parseStaff(t.value); update(s => { s.staff = p.names; s.staffOrg = p.org; }); }
   else if ('sched' in d) {

@@ -84,10 +84,9 @@
         ".validate": "!newData.exists() || (newData.isString() && newData.val().length < 20000)"
       },
       "checkin": {
-        ".read": true,
+        ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
         ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
         "$key": {
-          ".write": true,
           ".validate": "newData.isString() && newData.val().length < 600"
         }
       },
@@ -121,7 +120,7 @@
         "$mid": {
           "$team": {
             ".read": "auth != null && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).exists()",
-            ".write": "auth != null && auth.token.email_verified == true && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).exists() && !(root.child('t13').child('pub').child('m').child($mid).child('start').exists())",
+            ".write": "auth != null && auth.token.email_verified == true && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).exists() && !(root.child('t13').child('pub').child('m').child($mid).child('start').exists()) && !(data.exists() && data.val().contains('\"final\":true'))",
             ".validate": "newData.isString() && newData.val().length < 3000"
           }
         }

@@ -27,9 +27,9 @@ function teamRows(list) {
     m.get(unit).push(name);
   });
   return [...m.entries()].map(([unit, names]) => {
-    if (names.length === 1) return { unit, label: names[0] };
+    if (names.length === 1) return { unit, label: names[0], names };
     const suffix = names.map(n => (n.startsWith(unit) ? n.slice(unit.length).trim().replace(/^[(（](.*)[)）]$/, '$1') : ''));
-    return { unit, label: suffix.every(Boolean) ? `${unit} ${suffix.join('、')}` : names.join('、') };
+    return { unit, label: suffix.every(Boolean) ? `${unit} ${suffix.join('、')}` : names.join('、'), names };
   });
 }
 
