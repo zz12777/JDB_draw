@@ -20,7 +20,7 @@ let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }
 let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '大會提醒'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
-let refTab = 'avail', staffOpen = null;
+let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
 
 function render() {
@@ -640,7 +640,7 @@ const orgOf = (s, n) => (s.staffOrg || {})[n] || '未分組';
 function parseStaff(text) {
   const names = [], org = {};
   let g = '';
-  const add = (str, grp) => str.split(/[\s,，、\/／+＋]+/).map(x => x.replace(/[（(].*?[）)]/g, '').trim()).filter(x => x && !/^[【\[]/.test(x)).forEach(n => {
+  const add = (str, grp) => str.split(/[\s,，、\/／+＋]+/).map(x => x.replace(/[（(].*?[）)]/g, '').replace(/[：:]+$/, '').trim()).filter(x => x && !/^[【\[]/.test(x) && !/^[\p{P}\p{S}]+$/u.test(x)).forEach(n => {
     if (!names.includes(n)) names.push(n);
     if (grp && !org[n]) org[n] = grp;
   });
@@ -669,7 +669,11 @@ function viewRefs(s) {
   const cnt = refCounts();
   const staff = s.staff || [];
   // 舊版名單整份貼上時沒有拆開，這裡自動重新整理一次
-  if (staff.some(n => /[【】：:\/／+＋]/.test(n))) { const p = parseStaff(staff.join('\n')); setTimeout(() => update(st => { st.staff = p.names; st.staffOrg = { ...(st.staffOrg || {}), ...p.org }; })); }
+  if (!staffFixed && staff.some(n => /[【】：:\/／+＋]/.test(n))) {
+    staffFixed = true;
+    const p = parseStaff(staff.join('\n').replace(/\n([：:])/g, '$1'));
+    setTimeout(() => update(st => { st.staff = p.names; st.staffOrg = { ...(st.staffOrg || {}), ...p.org }; }));
+  }
   if (staffOpen == null) staffOpen = !staff.length;
   const { now, soon, onDuty } = busyPeople(s);
   const sub = `<div class="row" style="margin-bottom:12px"><div class="pills">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div><span class="spacer"></span>
@@ -701,10 +705,10 @@ function viewRefs(s) {
   return wrap(`${strip}${swapPanel()}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       <p class="small muted">正在比賽、正在擔任裁判，或所屬項目進行中還有比賽要打的人不列入；其他項目還沒開打、已經淘汰的人都可以擔任。依已擔任次數由少到多排列。</p>
-      ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「編輯名單」輸入自己人裁判名單。</p>'}</div>
+      ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「編輯名單」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
     ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">所屬項目進行中，但自己的場次還沒輪到。</p>${cols(spare)}</div>` : ''}
     ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
-    <div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>`);
+    ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }
 
 // ---------------- 成績公告 ----------------
