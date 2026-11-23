@@ -24,7 +24,7 @@ export function checkinSections(state) {
   const secs = withParking(signinSections(ev), state.parking).sections;
   return secs.map(sec => ({ ...sec, rows: sec.rows.map(r => ({ ...r, key: checkinKey(`${sec.code}|${r.label}`) })) }));
 }
-/** 有團體賽但還沒勾「已簽到且領點單」的列 */
+/** 有團體賽但還沒勾「已簽到」的列 */
 export function missingLineup(state, code) {
   const ci = state.checkin || {};
   return checkinSections(state).filter(x => x.team && (!code || x.code === code)).flatMap(x => x.rows.filter(r => !(ci[r.key] && ci[r.key].ok)).map(r => ({ ...r, note: (ci[r.key] || {}).note || '' })));

@@ -26,7 +26,10 @@ function teamRows(list) {
     if (!m.has(unit)) m.set(unit, []);
     m.get(unit).push(name);
   });
-  return [...m.entries()].map(([unit, names]) => {
+  return [...m.entries()].map(([unit, list]) => {
+    // 隊名後綴是 A、B、C 這類英文字母時依字母排；顏色等其他後綴照報名順序
+    const suf = n => (n.startsWith(unit) ? n.slice(unit.length).trim().replace(/^[(（](.*)[)）]$/, '$1') : '');
+    const names = list.every(n => /^[A-Za-z]$/.test(suf(n))) ? list.slice().sort((a, b) => suf(a).localeCompare(suf(b))) : list;
     if (names.length === 1) return { unit, label: names[0], names };
     const suffix = names.map(n => (n.startsWith(unit) ? n.slice(unit.length).trim().replace(/^[(（](.*)[)）]$/, '$1') : ''));
     return { unit, label: suffix.every(Boolean) ? `${unit} ${suffix.join('、')}` : names.join('、'), names };

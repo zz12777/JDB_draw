@@ -51,3 +51,4 @@
 .vis-prev .onblue { background: var(--blue); padding: 6px; border-radius: 8px; display: inline-flex; }
 .vis-prev canvas#p2 { width: 44px; height: 44px; }
 .vis-prev canvas#p3 { width: 16px; height: 16px; }
+.sys .links .lgrp { font-size: 12px; font-weight: 700; color: var(--muted, #64748b); margin-top: 4px; }

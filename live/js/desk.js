@@ -497,7 +497,7 @@ function noticeList(s) {
 }
 const dueAt = (s, x) => { const d = (s.dates || [])[x.d - 1]; if (!d) return null; const t = new Date(`${d}T${x.t}:00`).getTime(); return Number.isNaN(t) ? null : t; };
 const EV_IN_TEXT = [['大專男團', '男團'], ['大專女團', '女團'], ['社會組', '社團']];
-/** 催交點單時，列出有團賽但還沒勾「已簽到且領點單」的隊伍 */
+/** 催交點單時，列出有團賽但還沒勾「已簽到」的隊伍 */
 function lineupMissing(s, x) {
   if (x.kind !== 'lineup' || !/催交|領決賽點單/.test(x.text)) return '';
   if (/決賽/.test(x.text)) return '';

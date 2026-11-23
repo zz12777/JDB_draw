@@ -14,6 +14,7 @@ const URLS = {
   ref: `${base}live/ref.html`,
   checkin: `${base}live/checkin.html`,
   pub: `${base}live/`,
+  lineup: `${base}live/lineup.html`,
 };
 const st = { ready: false, user: null, base: false, admin: false, until: null, list: {}, error: '' };
 
@@ -81,10 +82,12 @@ function render() {
           <li>大會核對後確認成績與排名</li>
           <li>包含球桌情形、決賽抽籤、可擔任裁判名單與次數</li>
           <li>成績公告</li>
-          <li>即時賽程：賽程、時間表、成績公告、即時桌況</li>
+          <li>即時賽程：賽程、時間表、即時桌況/廣播、成績公告</li>
+          <li>線上點單：各隊聯絡人登入填寫，派桌時帶入排點</li>
         </ul>
-        <p class="small muted">資料存在雲端資料庫，多台電腦與手機即時同步。大會台需以管理員帳號登入。</p>
-        <div class="links">${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('簽到處', URLS.checkin)}${link('即時賽程（給參賽者）', URLS.pub, true)}</div></div>
+        <p class="small muted">資料存在雲端資料庫，多台電腦與手機即時同步。大會台與簽到處需以管理員帳號登入；線上點單由各隊聯絡人信箱登入。</p>
+        <div class="links"><div class="lgrp">工作人員</div>${link('大會台', URLS.desk)}${link('裁判紀錄區', URLS.ref)}${link('簽到處', URLS.checkin)}
+          <div class="lgrp">給參賽者</div>${link('即時賽程', URLS.pub, true)}${link('線上點單', URLS.lineup, true)}</div></div>
     </div>
 
     <div class="panel"><h2>流程</h2><div class="flow">
