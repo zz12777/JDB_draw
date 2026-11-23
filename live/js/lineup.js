@@ -50,7 +50,7 @@ function render() {
   if (!cur || !teams.includes(cur)) { cur = teams[0]; listenTeam(); }
   const info = teamInfo(cur);
   const owner = acl && acl[myKey()] === 'owner';
-  const pills = teams.length > 1 ? `<div class="pills" style="margin-bottom:12px">${teams.map(k => { const x = teamInfo(k); return `<button class="${k === cur ? 'on' : ''}" data-team="${esc(k)}">${esc(x.team)}<span class="small"> ${esc(x.ev)}</span></button>`; }).join('')}</div>` : '';
+  const pills = teams.length > 1 ? `<div class="pills" style="margin-bottom:12px">${teams.map(k => { const x = teamInfo(k); return `<button class="${k === cur ? 'on' : ''}" data-team="${esc(k)}"><span class="small">${esc(x.ev)}</span> ${esc(x.team)}</button>`; }).join('')}</div>` : '';
   const D = derive(s);
   const ms = [...D.byId.values()].filter(m => m.team && m.ev === info.ev && ((m.A && m.A.name === info.team) || (m.B && m.B.name === info.team)) && m.status !== 'done' && m.status !== 'reported'
       // 預賽各場一開始就能一起填；決賽要等對手確定才開放
