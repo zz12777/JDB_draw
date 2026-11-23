@@ -1,12 +1,14 @@
 // 裁判頁：輸入姓名、選球桌、記錄每局比分、回報未到
 import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner, fmtTime } from './model.js';
 import { getState, subscribe, updateMatch, onAuth } from './store.js';
-import { esc, $, $$, icon, toast, tableMap, header, lineName, refLogHtml } from './ui.js';
+import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
 
 const NAME_KEY = 'jdb-ref-name';
 let name = localStorage.getItem(NAME_KEY) || '';
 let table = null, point = null, swapAsk = false;
 let D = null;
+// 學校和選手姓名分兩行（雙打名字比較長）
+const two = t => { const x = String(t || '').trim(), i = x.indexOf(' '); return i > 0 ? `${esc(x.slice(0, i))}<br>${esc(x.slice(i + 1))}` : esc(x); };
 
 function render() {
   const s = getState();
@@ -33,7 +35,7 @@ function viewMatch() {
   const an = sideText(m.A, m.team), bn = sideText(m.B, m.team);
   const head = `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div>
     <div class="small muted">${EVENT_FULL[m.ev]} ${esc(m.no)}</div>
-    <div class="duel"><div class="n r">${esc(an)}</div><div class="s" id="tot"></div><div class="n">${esc(bn)}</div></div>${refLogHtml(m.rec, fmtTime)}</div>`;
+    <div class="duel"><div class="n r">${two(an)}</div><div class="s" id="tot"></div><div class="n">${two(bn)}</div></div></div>`;
   // 未到回報：在選擇點的頁面回報整隊；進入某一點後回報該點的選手
   const absentPanel = pi => {
     const hold = pi == null ? m.rec : (((m.rec.pts || [])[pi]) || {});
@@ -46,10 +48,10 @@ function viewMatch() {
   };
   // 請求其他裁判支援替換：有急事、去廁所、輪到自己比賽
   const sw = (m.rec.swap || {})[table];
-  const swapPanel = `<div class="panel"><h2>請求其他裁判支援替換</h2>${sw && sw.by === name
-    ? `<div class="alertbox">${fmtTime(sw.ts)} 已請求替換（${esc(sw.why)}）${sw.sent ? `<br><b>大會台 ${fmtTime(sw.sent)} 已派出替換裁判</b>，請在原地等候交接。` : '<br>等待大會台派出替換裁判。'}</div><button class="btn ghost" data-swapcancel>${icon('close')}取消請求</button>`
-    : swapAsk ? `<p class="small muted">選擇原因，大會台會收到通知。</p><div class="row">${['有急事', '要去廁所', '輪到我比賽'].map(w => `<button class="btn ghost" data-swap="${w}">${w}</button>`).join('')}<button class="btn ghost sm" data-swapno>取消</button></div>`
-    : `<button class="btn ghost" data-swapask>請求其他裁判支援替換</button>`}</div>`;
+  const swapPanel = `<div class="panel"><h2>請求支援</h2>${sw && sw.by === name
+    ? `<div class="alertbox">${fmtTime(sw.ts)} 已請求其他裁判支援替換（${esc(sw.why)}）${sw.sent ? `<br><b>大會台 ${fmtTime(sw.sent)} 已派出替換裁判</b>，請在原地等候交接。` : '<br>等待大會台派出替換裁判。'}</div><button class="btn plain" data-swapcancel>取消請求</button>`
+    : swapAsk ? `<p class="small muted">選擇原因，大會台會派其他裁判來替換。</p><div class="swapbtns">${['要去廁所', '輪到我比賽', '有急事'].map(w => `<button class="btn ghost" data-swap="${w}">${w}</button>`).join('')}</div><button class="btn plain" data-swapno style="margin-top:8px">取消</button>`
+    : `<button class="btn ghost" data-swapask>請求支援</button>`}</div>`;
   if (m.team && point == null) {
     const def = x.point;
     return `${head}<div class="panel"><h2>請選擇要記錄的點</h2>
@@ -62,7 +64,7 @@ function viewMatch() {
   const pa = m.team ? lineName(lu.a, point) : an, pb = m.team ? lineName(lu.b, point) : bn;
   return `${head}<div class="panel">
     <div class="row"><h2 style="margin:0">${m.team ? `第${'一二三四五'[point]}點` : '各局比分'}</h2><span class="spacer"></span>${m.team ? '<button class="btn ghost sm" data-points>選擇其他點</button>' : ''}</div>
-    <div class="gamerow small muted" style="margin-top:8px"><span></span><span style="text-align:center">${esc(pa)}</span><span style="text-align:center">${esc(pb)}</span><span></span></div>
+    <div class="gamerow small muted" style="margin-top:8px"><span></span><span style="text-align:center">${two(pa)}</span><span style="text-align:center">${two(pb)}</span><span></span></div>
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gamerow"><span class="small">第${'一二三四五'[gi]}局</span>
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${(games[gi] || [])[0] ?? ''}">
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${(games[gi] || [])[1] ?? ''}"><span data-ok="${gi}"></span></div>`).join('')}
