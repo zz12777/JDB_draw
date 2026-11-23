@@ -11,7 +11,7 @@ import { FIREBASE, ROOT, ADMINS, POLL_SECONDS } from './config.js';
 const ROLE = document.documentElement.dataset.role || 'public';
 export const LOCAL = new URLSearchParams(location.search).has('local') || !FIREBASE;
 const listeners = new Set(), authListeners = new Set();
-const raw = { meta: null, events: null, m: {}, pcalls: null, calls: null, staff: null, staffOrg: null, refOpt: null, notices: null, checkin: {}, parking: null };
+const raw = { meta: null, events: null, m: {}, pcalls: null, calls: null, staff: null, staffOrg: null, refOpt: null, olu: null, teamacl: null, notices: null, checkin: {}, parking: null };
 let state = emptyState();
 let remote = null;
 export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, error: '', loaded: false };
@@ -63,6 +63,7 @@ function assemble() {
   for (const id of Object.keys(raw.m || {})) m[id] = nodeToRec(raw.m[id]);
   state = { ...emptyState(), ...Object.fromEntries(META_KEYS.filter(k => meta[k] !== undefined).map(k => [k, meta[k]])),
     events: parse(raw.events, []), m, calls: parse(raw.calls, []), pcalls: parse(raw.pcalls, []), staff: parse(raw.staff, []), staffOrg: parse(raw.staffOrg, {}), refOpt: parse(raw.refOpt, {}),
+    olu: Object.fromEntries(Object.entries(raw.olu || {}).map(([mid, t]) => [mid, Object.fromEntries(Object.entries(t || {}).map(([k, v]) => [k, parse(v, null)]).filter(([, v]) => v))])), teamacl: raw.teamacl || {},
     notices: parse(raw.notices, {}), parking: parse(raw.parking, {}), checkin: Object.fromEntries(Object.entries(raw.checkin || {}).map(([k, v]) => [k, parse(v, {})])) };
 }
 const metaOf = s => JSON.stringify(Object.fromEntries(META_KEYS.map(k => [k, s[k] ?? null])));
@@ -112,6 +113,11 @@ export function replaceState(s) {
     'desk/notices': JSON.stringify(next.notices || {}), checkin: null, parking: JSON.stringify(next.parking || {}) })
     .catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
+/** 直接寫入資料庫的幾個位置（線上點單權限等不屬於畫面狀態的資料） */
+export function writePaths(up) { return remote.write(up); }
+/** 線上點單與權限用的隊伍代號：項目|隊名，去掉資料庫不允許的字元 */
+export const teamKey = (ev, team) => `${ev}|${team}`.replace(/[.#$\[\]\/]/g, '_');
+export const mailKey = email => String(email || '').trim().toLowerCase().replace(/\./g, ',');
 /** 簽到處：一列一格，各台裝置同時勾不同列不會互相蓋掉 */
 export const checkinKey = label => String(label || '').replace(/[.#$\[\]\/]/g, '_');
 export function setCheckin(key, rec) {
@@ -139,7 +145,7 @@ function localRemote() {
   const KEY = 'jdb-live-tree';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
   const push = () => { const t = load(); const pub = t.pub || {}, desk = t.desk || {};
-    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.pcalls = pub.calls ?? null; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.staffOrg = desk.staffOrg ?? null; raw.refOpt = desk.refOpt ?? null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.pcalls = pub.calls ?? null; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.staffOrg = desk.staffOrg ?? null; raw.refOpt = desk.refOpt ?? null; raw.olu = t.olu || null; raw.teamacl = t.teamacl || null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
     auth.loaded = true; assemble(); };
   window.addEventListener('storage', e => { if (e.key === KEY) { push(); emit(false); } });
   push();
@@ -153,6 +159,7 @@ function localRemote() {
         if (v === null) delete o[parts[parts.length - 1]]; else o[parts[parts.length - 1]] = v;
       }
       localStorage.setItem(KEY, JSON.stringify(t));
+      if (Object.keys(up).some(k => /^(olu|teamacl)/.test(k))) { push(); emit(false); }
     },
     async setHistory(key, v) { const h = this.history(); if (v == null) delete h[key]; else h[key] = v; localStorage.setItem('jdb-live-history', JSON.stringify(h)); },
     history() { try { return JSON.parse(localStorage.getItem('jdb-live-history') || '{}'); } catch (e) { return {}; } },
@@ -188,7 +195,7 @@ async function sdkRemote() {
         try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); } catch (e) { auth.isAdmin = false; }
       }
       offs.forEach(f => f()); offs = [];
-      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
+      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('olu'), s => receive('olu', s.val()), fail), db.onValue(at('teamacl'), s => receive('teamacl', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
         db.onValue(at('pub/calls'), s => receive('pcalls', s.val() ?? ''), fail)];
       emitAuth();
     });
@@ -252,5 +259,5 @@ export async function loadHistory() {
 // 連線建立前先放一個暫存的，避免畫面一開始就呼叫 update 時出錯
 remote = { stamp: () => Date.now(), write: async () => { throw new Error('尚未連線'); } };
 if (LOCAL) remote = localRemote.cache = localRemote();
-else if (ROLE === 'public') remote = pollRemote();
+else if (ROLE === 'public' || ROLE === 'team') remote = pollRemote();
 else sdkRemote().then(r => { remote = r; }).catch(err => { auth.error = `無法連線資料庫：${err.message}`; emitAuth(); });

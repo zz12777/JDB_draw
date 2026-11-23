@@ -94,6 +94,37 @@
       "desk": {
         ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
         ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)"
+      },
+      "teamacl": {
+        ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        "$team": {
+          ".read": "auth != null && data.child(auth.token.email.toLowerCase().replace('.', ',')).exists()",
+          "$em": {
+            ".write": "auth != null && auth.token.email_verified == true && data.parent().child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' && $em != auth.token.email.toLowerCase().replace('.', ',') && ((newData.exists() && newData.val() == 'editor') || (!newData.exists() && data.val() == 'editor'))"
+          }
+        }
+      },
+      "myteams": {
+        ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        "$em": {
+          ".read": "auth != null && auth.token.email.toLowerCase().replace('.', ',') == $em",
+          "$team": {
+            ".write": "auth != null && auth.token.email_verified == true && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).val() == 'owner' && $em != auth.token.email.toLowerCase().replace('.', ',')",
+            ".validate": "newData.val() == true"
+          }
+        }
+      },
+      "olu": {
+        ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        "$mid": {
+          "$team": {
+            ".read": "auth != null && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).exists()",
+            ".write": "auth != null && auth.token.email_verified == true && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).exists() && !(root.child('t13').child('pub').child('m').child($mid).child('start').exists())",
+            ".validate": "newData.isString() && newData.val().length < 3000"
+          }
+        }
       }
     },
     "history": {
