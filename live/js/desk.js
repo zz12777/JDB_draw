@@ -21,6 +21,7 @@ let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '大會提醒'], ['tables', '球桌'], ['draw', '決賽抽籤'], ['refs', '裁判'], ['ann', '成績公告'], ['setup', '資料設定']];
 const busyOpen = new Set();
+let parkOpen = false;
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
 
@@ -650,7 +651,9 @@ function swapPanel() {
       ${sw.sent ? '' : `<button class="btn ghost sm" data-swapsent="${esc(m.id)}|${t}">${icon('check')}已派出替換裁判</button>`}
       <button class="btn ghost sm" data-swapclear="${esc(m.id)}|${t}" title="移除這則請求">${icon('close')}</button></div></div>`).join('')}</div>`;
 }
-const ORGS = ['交大', '陽明', '香山'];
+const ORGS = ['交大', '陽明', '香山', '大會'];
+/** 不列入可擔任裁判：大會人員；陽明不當裁判時也排除陽明 */
+const notRef = (s, n) => { const g = orgOf(s, n); return g === '大會' || (g === '陽明' && (s.refOpt || {}).ym === 'off'); };
 const orgOf = (s, n) => (s.staffOrg || {})[n] || '未分組';
 /** 裁判名單文字：【交大】這種標題下面接姓名，一行可以放好幾個名字（空白、頓號、斜線分隔） */
 function parseStaff(text) {
@@ -681,6 +684,13 @@ function staffText(s) {
   return groups.map(g => { const list = staff.filter(n => orgOf(s, n) === g); return list.length ? `【${g}】\n${list.join('\n')}` : ''; }).filter(Boolean).join('\n\n');
 }
 const orgTag = (s, n) => { const g = orgOf(s, n); return `<span class="otag o-${esc(g)}">${esc(g)}</span>`; };
+/** 裁判名單編輯：裁判分頁與資料設定共用 */
+function staffEditor(s) {
+  const ym = (s.refOpt || {}).ym === 'off' ? 'off' : 'on';
+  return `<p class="small muted">用【交大】【陽明】【香山】【大會】當標題，標題下面接姓名，一行一位或用空白分隔。【大會】是大會工作人員，不會出現在可擔任裁判名單。也可以直接貼上報名名單，有寫「交大：」「陽明：」的會自動分組。</p>
+    <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
+    <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>`;
+}
 function viewRefs(s) {
   const cnt = refCounts();
   const staff = s.staff || [];
@@ -695,8 +705,7 @@ function viewRefs(s) {
   const sub = `<div class="row" style="margin-bottom:12px"><div class="pills">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div><span class="spacer"></span>
     <button class="btn ghost sm" data-staffopen>${icon('list')}${staffOpen ? '收合名單' : '編輯名單'}</button></div>`;
   const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">自己人裁判名單</h2><span class="spacer"></span><button class="btn ghost sm" data-staffopen title="收合">${icon('close')}</button></div>
-      <p class="small muted">用【交大】【陽明】【香山】當標題，標題下面接姓名。也可以直接貼上報名名單，有寫「交大：」「陽明：」的會自動分組。</p>
-      <textarea data-staff rows="18" style="width:100%">${esc(staffText(s))}</textarea></div></div>`;
+      ${staffEditor(s)}</div></div>`;
   const wrap = body => `${sub}<div class="${staffOpen ? 'desk' : ''}"><div>${body}</div>${staffOpen ? editor : ''}</div>`;
   if (refTab === 'count') {
     const names = [...new Set([...staff, ...cnt.keys()])].sort((a, b) => (cnt.get(b) || 0) - (cnt.get(a) || 0) || a.localeCompare(b, 'zh-Hant'));
@@ -706,10 +715,11 @@ function viewRefs(s) {
   const k = nm;
   const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
   const byCnt = (a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0);
-  const free = staff.filter(n => !why(n)).sort(byCnt);
+  const pool = staff.filter(n => !notRef(s, n));
+  const free = pool.filter(n => !why(n)).sort(byCnt);
   // 人手不足時：所屬項目進行中、但自己的場次還沒輪到的人也可以支援
-  const spare = staff.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && soon.has(k(n)) && soon.get(k(n)).status !== 'ready').sort(byCnt);
-  const rest = staff.filter(n => why(n) && !spare.includes(n));
+  const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && soon.has(k(n)) && soon.get(k(n)).status !== 'ready').sort(byCnt);
+  const rest = pool.filter(n => why(n) && !spare.includes(n));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
   const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
   // 球桌橫向排列，可以左右滑：每桌顯示裁判姓名與校區
@@ -850,6 +860,7 @@ function viewSetup(s) {
     <div class="panel"><h2>匯入賽程時間表（Excel 檔）</h2>
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇賽程時間表<input type="file" accept=".xlsx" hidden data-sched></label>
       <span class="small muted">${s.sched ? esc(s.sched.file || '') : ''}</span></div></div>
+    <div class="panel"><div class="row"><h2 style="margin:0">裁判名單</h2><span class="spacer"></span><span class="small muted">${refSummary(s)}</span></div>${staffEditor(s)}</div>
     ${parkPanel(s)}
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
@@ -860,10 +871,16 @@ function viewSetup(s) {
 
 // ---------------- 停車證 ----------------
 // 抽籤系統從繳費表單整理後同步過來；之後追加申請的，在這裡直接改。簽到處的名單和簽到表會跟著更新。
+function refSummary(s) {
+  const staff = s.staff || [];
+  return [...ORGS, '未分組'].map(g => [g, staff.filter(n => orgOf(s, n) === g).length]).filter(([, n]) => n).map(([g, n]) => `${g} ${n}`).join('、') || '尚未輸入';
+}
 function parkPanel(s) {
   const rows = Object.entries(s.parking || {});
   const total = rows.reduce((a, [, n]) => a + (Number(n) || 0), 0);
-  return `<div class="panel"><div class="row"><h2 style="margin:0">停車證</h2><span class="spacer"></span><span class="small muted">共 ${rows.length} 個單位、${total} 張</span></div>
+  const head = `<div class="row"><h2 style="margin:0">停車證</h2><span class="spacer"></span><span class="small muted">共 ${rows.length} 個單位、${total} 張</span><button class="btn ghost sm" data-parkopen aria-expanded="${parkOpen}">${icon('list')}${parkOpen ? '收合' : '展開'}</button></div>`;
+  if (!parkOpen) return `<div class="panel">${head}</div>`;
+  return `<div class="panel">${head}
     <p class="small muted">由抽籤系統步驟 8 從繳費表單同步過來，追加申請可以直接在這裡修改。簽到處的名單與簽到表會依校名自動帶入張數。</p>
     <table class="list"><thead><tr><th>單位</th><th style="width:110px">張數</th><th style="width:60px"></th></tr></thead><tbody>
     ${rows.map(([u, n]) => `<tr><td>${esc(u)}</td><td><input type="number" min="0" style="width:80px" data-parkn="${esc(u)}" value="${Number(n) || 0}"></td><td><button class="btn ghost sm" data-parkdel="${esc(u)}" title="刪除">${icon('close')}</button></td></tr>`).join('')}
@@ -980,6 +997,8 @@ document.addEventListener('click', async ev => {
   if ('busyok' in d && modal && modal.kind === 'busy') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, x.force, true); return; }
   if ('reclaim' in d && modal && modal.kind === 'reclaim') { const x = modal; modal = null; drawModal(); setTables(x.mid, x.text, true); return; }
   if (d.busyopen) { busyOpen.has(d.busyopen) ? busyOpen.delete(d.busyopen) : busyOpen.add(d.busyopen); render(); return; }
+  if (d.ymopt) { update(st => { st.refOpt = { ...(st.refOpt || {}), ym: d.ymopt }; }); return; }
+  if (d.parkopen !== undefined) { parkOpen = !parkOpen; render(); return; }
   if ('staffopen' in d) { staffOpen = !staffOpen; render(); return; }
   if (d.swapsent || d.swapclear) {
     const v = d.swapsent || d.swapclear, i = v.lastIndexOf('|'), mid = v.slice(0, i), t = v.slice(i + 1);
