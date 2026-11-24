@@ -1,10 +1,11 @@
 // 簽到處：管理員登入後使用。各隊勾「已簽到」，有團體賽的隊伍同時領點單；備註寫給大會看。
 import { fmtTime } from './model.js';
-import { getState, subscribe, onAuth, auth, setCheckin, writePaths, teamKey, mailKey } from './store.js';
+import { getState, subscribe, onAuth, auth, setCheckin, writePaths, teamKey, mailKey, parseMails, ownerUpdates, editorUpdates } from './store.js';
 import { esc, $, icon, header, toast } from './ui.js';
 import { checkinSections, signinWord, signinTitle } from './units.js';
 
 let q = '', onlyTodo = false, pending = false;
+let dlg = null; // 彈出視窗：{ kind: 'lu' | 'note', key, ev, names, team }
 
 function render() {
   const s = getState();
@@ -32,10 +33,12 @@ function render() {
     return `<div class="panel"><div class="row"><h2 style="margin:0">${esc(sec.title)}</h2><span class="spacer"></span><span class="small muted">${n} / ${sec.rows.length}</span></div>
       <div class="ckl">${rows.map(r => {
         const x = ci[r.key] || {};
-        const word = '已簽到';
-        return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}${r.park ? `<span class="ckp" title="停車證張數">停車證 ${r.park} 張</span>` : ''}</div>
-          <button class="ckb" data-ck="${esc(r.key)}" aria-pressed="${x.ok ? 'true' : 'false'}"><span class="box">${x.ok ? icon('check') : ''}</span>${word}${x.ok && x.t ? `<span class="ckt">${fmtTime(x.t)}</span>` : ''}</button>
-          <input type="text" class="ckm" data-note="${esc(r.key)}" value="${esc(x.note || '')}" placeholder="備註">${sec.team ? mailRow(sec.code, r) : ''}</div>`;
+        const paper = Object.keys(x.paper || {}).filter(n => x.paper[n]);
+        return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}${r.park ? `<span class="ckp" title="停車證張數">停車證 ${r.park} 張</span>` : ''}${paper.length ? `<span class="ckpaper" title="使用紙本點單">紙本 ${paper.length > 1 || (r.names || []).length > 1 ? esc(paper.join('、')) : ''}</span>` : ''}
+            ${x.note ? `<div class="cknote">${esc(x.note)}</div>` : ''}</div>
+          <div class="ckact"><button class="ckb" data-ck="${esc(r.key)}" aria-pressed="${x.ok ? 'true' : 'false'}"><span class="box">${x.ok ? icon('check') : ''}</span>已簽到${x.ok && x.t ? `<span class="ckt">${fmtTime(x.t)}</span>` : ''}</button>
+            ${sec.team ? `<button class="btn ghost sm" data-luopen="${esc(r.key)}" data-ev="${esc(sec.code)}">${icon('list')}點單權限</button>` : ''}
+            <button class="btn ghost sm ${x.note ? 'on' : ''}" data-noteopen="${esc(r.key)}" title="備註" aria-label="備註">${icon('edit')}</button></div></div>`;
       }).join('')}</div></div>`;
   }).join('');
   $('#main').innerHTML = `<div class="panel"><div class="row"><label class="sbox" style="flex:1;min-width:200px">${icon('search')}<input id="q" class="search" type="search" placeholder="學校或隊名" value="${esc(q)}"></label>
@@ -46,37 +49,72 @@ function render() {
     ${body || '<div class="panel"><p class="small muted" style="text-align:center">沒有符合的名單。</p></div>'}`;
 }
 
-/** 線上點單：隊伍要加入的信箱，加入後成為該隊共同編輯 */
-function mailRow(ev, r) {
-  const acl = getState().teamacl || {};
-  const names = r.names || [r.label];
-  const n = t => Object.keys(acl[teamKey(ev, t)] || {}).length;
-  const all = names.map(t => teamKey(ev, t)).join(' ');
-  return `<div class="ckmail"><span class="small muted nowrap">${icon('list')}填點單信箱</span>
-    ${names.length > 1 ? `<select data-mteam="${esc(r.key)}"><option value="${esc(all)}">全部 ${names.length} 隊</option>${names.map(t => `<option value="${esc(teamKey(ev, t))}">${esc(t)}（${n(t)}）</option>`).join('')}</select>` : `<span class="small muted">${n(names[0])} 個</span>`}
-    <input type="email" class="ckm" data-mail="${esc(r.key)}" data-tk="${esc(teamKey(ev, names[0]))}" placeholder="加入可填點單的信箱"><button class="btn ghost sm" data-addmail="${esc(r.key)}">${icon('plus')}加入</button></div>`;
+// ---------------- 彈出視窗 ----------------
+function drawDlg() {
+  let host = $('#dlg');
+  if (!host) { host = document.createElement('div'); host.id = 'dlg'; document.body.append(host); }
+  if (!dlg) { host.innerHTML = ''; return; }
+  const s = getState(), ci = (s.checkin || {})[dlg.key] || {};
+  if (dlg.kind === 'note') {
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(460px,100%)"><div class="row"><h2 style="margin:0">備註</h2><span class="spacer"></span><button class="btn ghost sm" data-dclose aria-label="關閉">${icon('close')}</button></div>
+      <p class="small muted">${esc(dlg.label)}。寫給大會看，大會台即時看得到。</p>
+      <textarea id="dnote" rows="4" style="width:100%">${esc(ci.note || '')}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-dnote>${icon('check')}儲存</button></div></div></div>`;
+    setTimeout(() => { const t = $('#dnote'); if (t) t.focus(); });
+    return;
+  }
+  const acl = s.teamacl || {}, key = teamKey(dlg.ev, dlg.team);
+  const list = role => Object.entries(acl[key] || {}).filter(([, v]) => v === role).map(([k]) => k.replace(/,/g, '.'));
+  const own = list('owner'), eds = list('editor'), paper = !!(ci.paper || {})[dlg.team];
+  const many = dlg.names.length > 1;
+  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(520px,100%)"><div class="row"><h2 style="margin:0">點單權限</h2><span class="spacer"></span><button class="btn ghost sm" data-dclose aria-label="關閉">${icon('close')}</button></div>
+    ${many ? `<div class="pills" style="margin:8px 0">${dlg.names.map(n => `<button class="${n === dlg.team ? 'on' : ''}" data-dteam="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : `<p style="margin:6px 0"><b>${esc(dlg.team)}</b></p>`}
+    <table class="list"><tbody>
+      <tr><td class="nowrap muted small">聯絡人</td><td>${own.length ? own.map(esc).join('<br>') : '<span class="muted">未設定</span>'}</td></tr>
+      <tr><td class="nowrap muted small">共同編輯</td><td>${eds.length ? eds.map(esc).join('<br>') : '<span class="muted">無</span>'}</td></tr></tbody></table>
+    <p style="margin:12px 0 6px"><b>聯絡人今天會在場負責填點單嗎？</b></p>
+    <p class="small muted" style="margin:0 0 8px">會的話不用更改。不會的話，把現場負責的人設成新的聯絡人；只是多一個人幫忙，就加入共同編輯。</p>
+    <div class="dform"><label class="small" for="downer">更新聯絡人（取代原本的聯絡人，可以再新增其他信箱）</label>
+      <div class="row"><input type="email" id="downer" placeholder="現場負責人的 Google 帳號信箱" style="flex:1;min-width:200px"><button class="btn sm" data-downer>取代聯絡人</button></div></div>
+    <div class="dform"><label class="small" for="deditor">加入共同編輯（可以填點單，不能新增其他信箱）</label>
+      <div class="row"><input type="email" id="deditor" placeholder="Google 帳號信箱" style="flex:1;min-width:200px"><button class="btn ghost sm" data-deditor>${icon('plus')}加入</button></div></div>
+    ${many ? `<label class="small" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="dall">套用到同校全部 ${dlg.names.length} 隊</label>` : ''}
+    <div class="dpaper"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dpaper" ${paper ? 'checked' : ''}><span><b>這隊使用紙本點單</b><br><span class="small muted">大會台賽程控制會標示「紙」，並提醒發點單</span></span></label></div>
+  </div></div>`;
+}
+const dlgTeams = () => (($('#dall') || {}).checked ? dlg.names : [dlg.team]);
+function aclWrite(kind) {
+  const inp = $(kind === 'owner' ? '#downer' : '#deditor'), mails = parseMails(inp.value);
+  if (!mails.length) { toast('請輸入正確的信箱'); return; }
+  const acl = getState().teamacl || {}, up = {};
+  dlgTeams().forEach(n => Object.assign(up, (kind === 'owner' ? ownerUpdates : editorUpdates)(acl, teamKey(dlg.ev, n), kind === 'owner' ? mails : mails)));
+  if (!Object.keys(up).length) { toast('這個信箱已經可以填寫'); return; }
+  writePaths(up).then(() => { inp.value = ''; toast(kind === 'owner' ? '已更新聯絡人' : '已加入共同編輯'); drawDlg(); }).catch(err => toast(`更新失敗：${err.message || err}`));
 }
 
 // 有人在打備註時先不重畫，離開輸入框後再更新
-const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('input.ckm, #q, select[data-mteam]'); };
-function refresh() { if (typing()) { pending = true; return; } pending = false; render(); }
+const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('#q, #dlg input, #dlg textarea'); };
+function refresh() { if (typing()) { pending = true; return; } pending = false; render(); if (dlg) drawDlg(); }
 subscribe(refresh);
 onAuth(refresh);
 
 document.addEventListener('click', ev => {
-  const b = ev.target.closest('[data-ck],[data-todo],[data-dlsign],[data-signin],[data-signout],[data-addmail]');
+  if (ev.target.classList && ev.target.classList.contains('modal-bg')) { dlg = null; drawDlg(); return; }
+  const b = ev.target.closest('[data-ck],[data-todo],[data-dlsign],[data-signin],[data-signout],[data-luopen],[data-noteopen],[data-dclose],[data-dnote],[data-dteam],[data-downer],[data-deditor]');
   if (!b) return;
-  if (b.dataset.signin !== undefined) { auth.signIn && auth.signIn(); return; }
-  if (b.dataset.signout !== undefined) { ev.preventDefault(); auth.signOut && auth.signOut(); return; }
-  if (b.dataset.addmail) {
-    const inp = $(`[data-mail="${b.dataset.addmail}"]`), sel = $(`[data-mteam="${b.dataset.addmail}"]`);
-    const tks = (sel ? sel.value : inp.dataset.tk).split(' ').filter(Boolean), e = inp.value.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { toast('請輸入正確的信箱'); return; }
-    const k = mailKey(e), acl = getState().teamacl || {}, up = {};
-    tks.filter(tk => !(acl[tk] || {})[k]).forEach(tk => { up[`teamacl/${tk}/${k}`] = 'editor'; up[`myteams/${k}/${tk}`] = true; });
-    if (!Object.keys(up).length) { toast('這個信箱已經可以填寫'); return; }
-    writePaths(up).then(() => { inp.value = ''; toast(tks.length > 1 ? `已加入 ${tks.length} 隊，對方用這個信箱登入就能填點單` : '已加入，對方用這個信箱登入就能填點單'); refresh(); }).catch(err => toast(`加入失敗：${err.message || err}`));
-    return;
+  const d = b.dataset;
+  if (d.signin !== undefined) { auth.signIn && auth.signIn(); return; }
+  if (d.signout !== undefined) { ev.preventDefault(); auth.signOut && auth.signOut(); return; }
+  const rowOf = key => checkinSections(getState()).flatMap(x => x.rows.map(r => ({ ...r, ev: x.code }))).find(r => r.key === key);
+  if (d.luopen) { const r = rowOf(d.luopen); const names = r.names || [r.label]; dlg = { kind: 'lu', key: r.key, ev: r.ev, names, team: names[0], label: r.label }; drawDlg(); return; }
+  if (d.noteopen) { const r = rowOf(d.noteopen); dlg = { kind: 'note', key: r.key, label: r.label }; drawDlg(); return; }
+  if (d.dclose !== undefined) { dlg = null; drawDlg(); refresh(); return; }
+  if (d.dteam) { dlg.team = d.dteam; drawDlg(); return; }
+  if (d.downer !== undefined) { aclWrite('owner'); return; }
+  if (d.deditor !== undefined) { aclWrite('editor'); return; }
+  if (d.dnote !== undefined) {
+    const x = (getState().checkin || {})[dlg.key] || {}, v = $('#dnote').value.trim().slice(0, 200);
+    setCheckin(dlg.key, { ...x, note: v }); dlg = null; drawDlg(); render(); toast('備註已儲存'); return;
   }
   if (b.dataset.dlsign !== undefined) { downloadSignin(); return; }
   if (b.dataset.todo) { onlyTodo = b.dataset.todo === '1'; render(); return; }
@@ -94,10 +132,11 @@ async function downloadSignin() {
   } catch (err) { toast(`簽到表產生失敗：${err.message || err}`); }
 }
 document.addEventListener('change', ev => {
-  const t = ev.target;
-  if (t.dataset.note === undefined) return;
-  const k = t.dataset.note, x = (getState().checkin || {})[k] || {};
-  if ((x.note || '') !== t.value.trim()) setCheckin(k, { ...x, note: t.value.trim().slice(0, 200) });
+  if (ev.target.id !== 'dpaper' || !dlg) return;
+  const x = (getState().checkin || {})[dlg.key] || {}, paper = { ...(x.paper || {}) };
+  dlgTeams().forEach(n => { if (ev.target.checked) paper[n] = true; else delete paper[n]; });
+  setCheckin(dlg.key, { ...x, paper });
+  toast(ev.target.checked ? '已註記使用紙本點單' : '已取消紙本點單');
 });
 document.addEventListener('input', ev => {
   if (ev.target.id !== 'q') return;

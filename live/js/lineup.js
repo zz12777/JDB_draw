@@ -72,13 +72,14 @@ function matchCard(m, info) {
   const sub = olu[m.id];
   const locked = !!m.rec.start;
   const official = m.rec.lineup && m.rec.lineup[side];
-  const head = `<div class="row"><b>${esc(m.no)}</b>${m.group ? `<span class="muted small">${esc(m.group)} 組</span>` : ''}<span class="spacer"></span>${open === m.id && !m.rec.start && !(sub && sub.final) ? `<button class="btn ghost sm" data-cancel title="收起" aria-label="收起">${icon('close')}</button>` : ''}</div>
-    <div style="margin:4px 0">對手：${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</div>`;
+  const me0 = side === 'a' ? m.A : m.B;
+  const head = `<div class="row mhead"><b class="mno">${esc(m.no)}</b><span class="chip">${m.stage === 'F' ? '決賽' : `預賽 ${esc(m.group || '')} 組`}</span><span class="spacer"></span>${open === m.id && !m.rec.start && !(sub && sub.final) ? `<button class="btn ghost sm" data-cancel title="收起" aria-label="收起">${icon('close')}</button>` : ''}</div>
+    <div class="mvs"><b>${esc(sideText(me0, true))}</b><span class="muted">vs</span><span>${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</span></div>`;
   const fin = sub && sub.final;
-  const status = locked ? `<span class="chip">${icon('lock')}已鎖定</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? `<span class="chip warn">暫存 ${fmtTime(sub.ts)}，尚未送出</span>` : '<span class="chip">尚未填寫</span>';
+  const status = locked ? `<span class="chip">${icon('lock')}已鎖定</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
   if (locked || fin) {
     const l = official || (sub && sub.lu);
-    return `<div class="panel">${head}<div class="row">${status}<span class="small muted">${locked ? '大會已派桌，點單以大會登錄為準。' : '已送出，不能再修改。需要更改請洽大會台。'}</span></div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
+    return `<div class="panel">${head}<div class="row">${status}${locked ? '<span class="small muted">大會已派桌，點單以大會登錄為準。</span>' : ''}</div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
   }
   if (open !== m.id) {
     return `<div class="panel">${head}<div class="row">${status}<span class="spacer"></span><button class="btn ${sub ? 'ghost' : ''} sm" data-open="${esc(m.id)}">${icon('edit')}${sub ? '繼續編輯' : '填寫點單'}</button></div>
@@ -93,12 +94,12 @@ function matchCard(m, info) {
     <div class="luform">${POINTS.map((p, i) => `<div class="lurow"><span class="lul">第${'一二三四五'[i]}點<small>${p.dbl ? '雙打' : '單打'}</small></span>
       <span class="luin">${p.dbl ? sel(i, 0, (l[i] || [])[0]) + sel(i, 1, (l[i] || [])[1]) : sel(i, null, l[i])}</span></div>`).join('')}</div>
     <p class="small" id="lu-warn" style="color:var(--red);min-height:18px;margin:6px 0"></p>
-    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><span class="small muted" id="lu-saved">${sub && !sub.final ? `已自動暫存 ${fmtTime(sub.ts)}` : ''}</span></div>
+    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><span class="small muted" id="lu-saved">${sub && !sub.final ? `已自動儲存 ${fmtTime(sub.ts)}` : ''}</span></div>
     ${r.length ? '' : '<p class="small muted">大會尚未匯入此隊名單，請直接輸入姓名。</p>'}${logView(sub)}</div>`;
 }
 const lineupView = l => `<table class="list luview"><tbody>${POINTS.map((p, i) => `<tr><td class="muted small nowrap">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</td><td>${esc(lineName(l, i)) || '<span class="muted">未填</span>'}</td></tr>`).join('')}</tbody></table>`;
 /** 更新紀錄：誰在幾點幾分暫存或送出 */
-const logView = sub => (sub && (sub.log || []).length ? `<div class="lulog">${sub.log.slice().reverse().map(x => `<div>${fmtTime(x.ts)}　${esc(x.by)}　${esc(x.a)}</div>`).join('')}</div>` : '');
+const logView = sub => (sub && (sub.log || []).length ? `<div class="lulog">${sub.log.slice().reverse().map(x => `<div>${fmtTime(x.ts)}　${esc(x.by)}　${esc(x.a === '暫存' ? '編輯' : x.a)}</div>`).join('')}</div>` : '');
 
 function editorsPanel(owner) {
   const list = Object.entries(acl || {});
@@ -130,7 +131,7 @@ function dupOnly(l) { const flat = l.flat().filter(Boolean); const dup = flat.fi
 function saveLu(mid, l, final) {
   const prev = olu[mid] || {}, now = Date.now(), log = (prev.log || []).slice();
   const last = log[log.length - 1];
-  if (!final && last && last.by === me.email && last.a === '暫存') last.ts = now; else log.push({ by: me.email, ts: now, a: final ? '送出' : '暫存' });
+  if (!final && last && last.by === me.email && (last.a === '暫存' || last.a === '編輯')) last.ts = now; else log.push({ by: me.email, ts: now, a: final ? '送出' : '編輯' });
   const rec = { lu: l, by: me.email, ts: now, final, log: log.slice(-30) };
   olu[mid] = rec;
   return write({ [`olu/${mid}/${cur}`]: JSON.stringify(rec) });
@@ -208,7 +209,7 @@ document.addEventListener('change', ev => {
   if (warn) warn.textContent = w;
   if (w) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveLu(mid, l, false).then(() => { delete draft[mid]; const x = $('#lu-saved'); if (x) x.textContent = `已自動暫存 ${fmtTime(Date.now())}`; })
-    .catch(err => toast(/permission|PERMISSION/i.test(String(err)) ? '這一場已送出或已鎖定，無法再修改' : `暫存失敗：${err.message || err}`)), 600);
+  saveTimer = setTimeout(() => saveLu(mid, l, false).then(() => { delete draft[mid]; const x = $('#lu-saved'); if (x) x.textContent = `已自動儲存 ${fmtTime(Date.now())}`; })
+    .catch(err => toast(/permission|PERMISSION/i.test(String(err)) ? '這一場已送出或已鎖定，無法再修改' : `儲存失敗：${err.message || err}`)), 600);
 });
 render();

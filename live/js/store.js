@@ -119,6 +119,21 @@ export function writePaths(up) { return remote.write(up); }
 /** 線上點單與權限用的隊伍代號：項目|隊名，去掉資料庫不允許的字元 */
 export const teamKey = (ev, team) => `${ev}|${team}`.replace(/[.#$\[\]\/]/g, '_');
 export const mailKey = email => String(email || '').trim().toLowerCase().replace(/\./g, ',');
+const MAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+export const parseMails = text => [...new Set(String(text || '').split(/[\s,，;；\/]+/).map(x => x.trim().toLowerCase()).filter(x => MAIL_RE.test(x)))];
+/** 取代某隊的聯絡人（聯絡人可以再增減共同編輯）；回傳要寫入的路徑 */
+export function ownerUpdates(acl, key, emails) {
+  const up = {}, cur = (acl || {})[key] || {};
+  Object.entries(cur).forEach(([k, v]) => { if (v === 'owner') { up[`teamacl/${key}/${k}`] = null; up[`myteams/${k}/${key}`] = null; } });
+  emails.forEach(e => { const k = mailKey(e); up[`teamacl/${key}/${k}`] = 'owner'; up[`myteams/${k}/${key}`] = true; });
+  return up;
+}
+/** 加入共同編輯（不能再增減其他信箱）；已經在名單上的略過 */
+export function editorUpdates(acl, key, emails) {
+  const up = {}, cur = (acl || {})[key] || {};
+  emails.forEach(e => { const k = mailKey(e); if (!cur[k]) { up[`teamacl/${key}/${k}`] = 'editor'; up[`myteams/${k}/${key}`] = true; } });
+  return up;
+}
 /** 簽到處：一列一格，各台裝置同時勾不同列不會互相蓋掉 */
 export const checkinKey = label => String(label || '').replace(/[.#$\[\]\/]/g, '_');
 export function setCheckin(key, rec) {

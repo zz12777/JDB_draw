@@ -1,6 +1,6 @@
 // 大會台
 import { derive, isTeam, matchTitle, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
-import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory, writePaths, teamKey, mailKey } from './store.js';
+import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory, writePaths, teamKey, mailKey, parseMails, ownerUpdates } from './store.js';
 import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
@@ -22,6 +22,7 @@ let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
 const busyOpen = new Set();
+let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
@@ -29,6 +30,7 @@ let rosterMiss = [], rosterGuess = [];
 function render() {
   const s = getState();
   D = derive(withOnline(s));
+  paperSet = paperTeams(s);
   $('#top').innerHTML = header(s, '大會台', [['即時賽程', './'], ['裁判紀錄區', 'ref.html'], ['簽到處', 'checkin.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
   const swN = swapList().filter(x => !x.sw.sent).length;
@@ -61,7 +63,7 @@ function viewCtrl(s) {
       <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div></div>
       <div class="legend">
         <span><span class="dot on"></span>前一輪已完賽</span>
-        ${e.team ? `<span><input type="checkbox" checked disabled>已發點單</span><span>${icon('list')}已收點單</span>` : ''}
+        ${e.team ? '<span><span class="ltag ok">已送出</span>線上點單</span><span><span class="ltag got">已收</span>紙本已輸入</span><span><span class="ltag paper">紙</span>使用紙本，勾選＝已發點單</span>' : ''}
         
       </div>
       <div class="rounds">${e.rounds.map(r => `<div class="round"><h3><span>${esc(r.label)}${roundTime(s, r)}</span><span class="muted small">${r.matches.filter(m => m.status === 'done').length}/${r.matches.length}</span></h3>
@@ -99,11 +101,16 @@ function card(m) {
   const sideRow = (k, S) => {
     const win = m.winner === k;
     const slip = m.rec.slip && m.rec.slip[k];
+    const paper = m.team && S && S.name && paperSet.has(`${m.ev}|${S.name}`);
+    const on = m.rec.olSrc && m.rec.olSrc[k];
+    // 點單狀態：線上已送出（綠）、大會台已收紙本（藍）、線上編輯中（黃）；要用紙本的隊伍標「紙」並勾已發點單
+    const st = !m.team ? '' : on ? `<span class="ltag ok" title="線上點單 ${fmtTime(on.ts)} 送出">已送出</span>`
+      : m.lineupOk[k] ? '<span class="ltag got" title="大會台已輸入點單">已收</span>'
+      : draftLu(getState(), m, k) ? '<span class="ltag edit" title="線上點單編輯中，尚未送出">編輯中</span>' : '';
     return `<div class="sd ${win ? 'win' : ''}">
       <span class="dot ${m.prevDone[k] ? 'on' : ''}" title="前一輪${m.prevDone[k] ? '已' : '尚未'}完賽"></span>
-      ${m.team ? `<label class="slip" title="已發點單"><input type="checkbox" data-slip="${esc(m.id)}|${k}" ${slip ? 'checked' : ''}></label>
-        <span title="${m.rec.olSrc && m.rec.olSrc[k] ? `線上點單 ${fmtTime(m.rec.olSrc[k].ts)} 送出` : m.lineupOk[k] ? '已收點單' : '尚未收點單'}" style="color:${m.lineupOk[k] ? 'var(--blue)' : 'var(--line)'}">${icon('list')}</span>` : ''}
-      <span class="nm">${esc(sideText(S, m.team)) || '<span class="muted">待定</span>'}</span>
+      ${paper ? `<label class="slip" title="使用紙本點單，勾選表示已發點單"><span class="ltag paper">紙</span><input type="checkbox" data-slip="${esc(m.id)}|${k}" ${slip ? 'checked' : ''}></label>` : ''}
+      <span class="nm">${esc(sideText(S, m.team)) || '<span class="muted">待定</span>'}</span>${st}
       <span class="sc">${m.score[0] + m.score[1] > 0 || m.winner ? m.score[k === 'a' ? 0 : 1] : ''}</span></div>`;
   };
   const locked = m.status === 'done';
@@ -125,6 +132,12 @@ function planned(m) {
 }
 
 // ---------------- 線上點單 ----------------
+/** 簽到處註記要用紙本點單的隊伍：「項目|隊名」 */
+function paperTeams(s) {
+  const out = new Set(), ci = s.checkin || {};
+  checkinSections(s).filter(x => x.team).forEach(sec => sec.rows.forEach(r => { const p = (ci[r.key] || {}).paper || {}; Object.keys(p).forEach(n => { if (p[n]) out.add(`${sec.code}|${n}`); }); }));
+  return out;
+}
 /** 這場某一邊隊伍線上送出的點單（大會台還沒登錄時才用） */
 function onlineLu(s, m, k) {
   const S = k === 'a' ? m.A : m.B;
@@ -312,7 +325,7 @@ function lineupModal(m) {
     const inp = (i, j, v) => (roster.length
       ? `<select data-lu="${k}|${i}|${j}" style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
       : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" style="width:${j == null ? 100 : 48}%">`);
-    return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.rec.olSrc && m.rec.olSrc[k] ? `<span class="chip playing">線上點單 ${fmtTime(m.rec.olSrc[k].ts)} 送出</span>` : m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : draftLu(getState(), m, k) ? `<span class="chip warn">線上暫存中</span>` : '<span class="chip">尚未輸入</span>'}</h3>
+    return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.rec.olSrc && m.rec.olSrc[k] ? `<span class="chip playing">線上點單 ${fmtTime(m.rec.olSrc[k].ts)} 送出</span>` : m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : draftLu(getState(), m, k) ? `<span class="chip warn">線上編輯中</span>` : '<span class="chip">尚未輸入</span>'}</h3>
       ${m.rec.olSrc && m.rec.olSrc[k] && !m.rec.start ? `<div class="small muted" style="margin:-4px 0 6px">${esc(m.rec.olSrc[k].by || '')} 送出　<button class="btn plain sm" data-lureturn="${esc(m.id)}|${k}">退回讓隊伍修改</button></div>` : ''}
       ${POINTS.map((p, i) => `<div class="row" style="margin-bottom:6px;flex-wrap:nowrap"><span class="nowrap small muted" style="width:76px">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</span>
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
@@ -1015,14 +1028,7 @@ function setEditors(s, key, text) {
   return up;
 }
 /** 設定某隊的聯絡人信箱（取代原本的聯絡人，保留共同編輯） */
-function setOwner(s, key, email) {
-  const up = {}, cur = (s.teamacl || {})[key] || {};
-  Object.entries(cur).forEach(([k, v]) => { if (v === 'owner') { up[`teamacl/${key}/${k}`] = null; up[`myteams/${k}/${key}`] = null; } });
-  String(email || '').split(/[\s,，;；]+/).map(x => x.trim().toLowerCase()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).forEach(e => {
-    const k = mailKey(e); up[`teamacl/${key}/${k}`] = 'owner'; up[`myteams/${k}/${key}`] = true;
-  });
-  return up;
-}
+function setOwner(s, key, email) { return ownerUpdates(s.teamacl, key, parseMails(email)); }
 async function importAcl(files) {
   const s = getState();
   const list = teamList(s);
