@@ -80,6 +80,10 @@
               ".validate": "newData.isString() && newData.val().length < 20"
             }
           }
+        },
+        "v": {
+          ".write": true,
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
         }
       },
       "parking": {

@@ -60,8 +60,8 @@ function render() {
       // 預賽各場一開始就能一起填；決賽要等對手確定才開放
       && (m.stage !== 'F' || (m.A && m.A.name && m.B && m.B.name)))
     .sort((a, b) => (a.stage === 'F') - (b.stage === 'F') || a.num - b.num);
-  main.innerHTML = `${pills}<div class="panel"><div class="row"><h2 style="margin:0">${esc(info.team)}</h2><span class="chip">${esc(EVENT_FULL[info.ev] || info.ev)}</span></div>
-      <p class="small muted" style="margin:6px 0 0">「送出點單」後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
+  main.innerHTML = `${pills}<div class="luhead"><h1>${esc(info.team)} <span>${esc(EVENT_FULL[info.ev] || info.ev)}</span></h1>
+      <p class="small muted">「送出點單」後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
     ${ms.length ? ms.map(m => matchCard(m, info)).join('') : '<div class="panel"><p class="muted">目前沒有需要填寫點單的場次。</p></div>'}
     ${editorsPanel(owner)}`;
 }

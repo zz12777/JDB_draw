@@ -129,7 +129,7 @@ function card(m) {
   const locked = m.status === 'done';
   return `<div class="mc ${m.status}" data-mid="${esc(m.id)}">
     <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
-      ${m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : planned(m)}</div>
+      ${m.status === 'done' || m.status === 'reported' ? '' : m.status === 'playing' && m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : planned(m)}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
     ${!m.tables.length && m.known && m.status !== 'done' ? (busy => (busy.length ? `<div class="busytag"><button class="busybtn" data-busyopen="${esc(m.id)}" aria-expanded="${busyOpen.has(m.id)}">${icon('alert')}提醒 ${busy.length}</button>${busyOpen.has(m.id) ? `<ul>${busy.map(b => `<li>${esc(b.text)}</li>`).join('')}</ul>` : ''}</div>` : ''))(busyOf(m)) : ''}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">

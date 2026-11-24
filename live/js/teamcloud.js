@@ -1,5 +1,5 @@
 // 線上點單：參賽隊伍登入與讀寫自己隊伍的資料。
-// 公開的籤表與比賽資料由 store.js 定時抓；這裡只處理登入、權限（teamacl / myteams）與線上點單（olu）。
+// 公開的籤表與比賽資料由 store.js 定時抓；這裡只處理登入、權限（teamacl / myteams）與線上點單（olu），也是定時抓、不佔即時連線。
 // 網址加 ?local 時改用這台電腦的瀏覽器資料，並用 ?as=信箱 假裝登入，示範與測試用。
 import { FIREBASE, ROOT } from './config.js';
 import { LOCAL, mailKey } from './store.js';
@@ -37,15 +37,29 @@ function localApi() {
   };
 }
 
+// 雲端：只用 Firebase 登入；讀寫資料改用 REST（定時抓），不佔資料庫的即時連線名額（免費方案同時最多 100 個）
 async function cloudApi() {
-  const [{ initializeApp }, db, au] = await Promise.all([import(`${SDK}firebase-app.js`), import(`${SDK}firebase-database.js`), import(`${SDK}firebase-auth.js`)]);
+  const [{ initializeApp }, au] = await Promise.all([import(`${SDK}firebase-app.js`), import(`${SDK}firebase-auth.js`)]);
   const app = initializeApp(FIREBASE, 'team');
-  const database = db.getDatabase(app);
   const a = au.getAuth(app);
-  au.onAuthStateChanged(a, user => { me.ready = true; me.email = user ? String(user.email || '').toLowerCase() : ''; me.error = ''; emitMe(); });
+  au.onAuthStateChanged(a, user => { me.ready = true; me.email = user ? String(user.email || '').toLowerCase() : ''; me.error = ''; emitMe(); pollAll(); });
+  const url = async path => `${FIREBASE.databaseURL}/${ROOT}${path ? '/' + path.split('/').map(encodeURIComponent).join('/') : ''}.json?auth=${await a.currentUser.getIdToken()}`;
+  const watchers = new Set();
+  async function pollOne(w) {
+    if (!a.currentUser) return;
+    try { const r = await fetch(await url(w.path)); if (!r.ok) throw new Error(`HTTP ${r.status}`); const v = await r.json(); const k = JSON.stringify(v); if (k !== w.last) { w.last = k; w.cb(v); } }
+    catch (err) { if (w.last !== 'err') { w.last = 'err'; w.cb(null); } }
+  }
+  const pollAll = () => { if (!document.hidden) watchers.forEach(pollOne); };
+  setInterval(pollAll, 10000);
+  document.addEventListener('visibilitychange', pollAll);
   return {
-    watch(path, cb) { return db.onValue(db.ref(database, `${ROOT}/${path}`), s => cb(s.val()), err => { me.error = `讀取失敗：${err.message}`; emitMe(); cb(null); }); },
-    write: up => db.update(db.ref(database, ROOT), up),
+    watch(path, cb) { const w = { path, cb, last: undefined }; watchers.add(w); pollOne(w); return () => watchers.delete(w); },
+    async write(up) {
+      const r = await fetch(await url(''), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(up) });
+      if (!r.ok) { const t = await r.text(); throw new Error(/denied|permission/i.test(t) ? 'PERMISSION_DENIED' : `HTTP ${r.status}`); }
+      setTimeout(pollAll, 200);
+    },
     signIn: () => au.signInWithPopup(a, new au.GoogleAuthProvider()).catch(err => { me.error = `登入失敗：${err.message}`; emitMe(); }),
     signOut: () => au.signOut(a),
   };

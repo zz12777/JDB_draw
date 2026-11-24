@@ -114,13 +114,13 @@ function adminPanel() {
   const def = new Date(Date.now() + 30 * 864e5);
   const iso = `${def.getFullYear()}-${String(def.getMonth() + 1).padStart(2, '0')}-${String(def.getDate()).padStart(2, '0')}`;
   return `<div class="panel adm"><h2>管理員</h2>
-    <p class="small muted">nctugtt@gmail.com 與 nctuttc@gmail.com 為常設管理員，可加入其他 Google 帳號並設定到期日。加入的管理員可以登入本頁與大會台，到期後自動失效。</p>
-    <div class="row" style="margin-bottom:12px"><input type="email" id="ne" placeholder="Google 帳號信箱"><label class="small">到期日 <input type="date" id="nd" value="${iso}"></label><button class="btn" data-add>加入</button></div>
+    <p class="small muted">管理員可以登入本頁、大會台、簽到處頁面。</p>
+    <div class="row" style="margin-bottom:12px"><input type="email" id="ne" placeholder="Google 帳號信箱"><input type="text" id="nn" placeholder="暱稱（選填）" style="width:140px"><label class="small">到期日 <input type="date" id="nd" value="${iso}"></label><button class="btn" data-add>加入</button></div>
     ${st.error ? `<p class="small" style="color:var(--red)">${esc(st.error)}</p>` : ''}
-    <table class="list"><thead><tr><th>信箱</th><th>到期日</th><th>加入者</th><th></th></tr></thead><tbody>
-      ${ADMINS.map(e => `<tr><td>${esc(e)}</td><td class="exp">常設</td><td></td><td></td></tr>`).join('')}
+    <table class="list"><thead><tr><th>信箱</th><th>暱稱</th><th>到期日</th><th>加入者</th><th></th></tr></thead><tbody>
+      ${ADMINS.map(e => `<tr><td>${esc(e)}</td><td class="small muted">${e === 'nctugtt@gmail.com' ? '女桌' : e === 'nctuttc@gmail.com' ? '交大盃' : ''}</td><td class="exp">常設</td><td></td><td></td></tr>`).join('')}
       ${rows.map(([k, v]) => { const over = v.until <= Date.now();
-        return `<tr><td>${esc(v.email)}</td><td class="exp ${over ? 'over' : ''}">${fmtDate(v.until)}${over ? '（已到期）' : ''}</td><td class="small muted">${esc(v.by || '')}</td>
+        return `<tr><td>${esc(v.email)}</td><td><input type="text" data-nick="${esc(k)}" value="${esc(v.name || '')}" placeholder="暱稱" style="width:110px"></td><td class="exp ${over ? 'over' : ''}">${fmtDate(v.until)}${over ? '（已到期）' : ''}</td><td class="small muted">${esc(v.by || '')}</td>
           <td class="nowrap" style="text-align:right"><button class="btn ghost sm" data-extend="${esc(k)}">延長 30 天</button> <button class="btn ghost sm danger" data-remove="${esc(k)}">移除</button></td></tr>`; }).join('')}
     </tbody></table></div>`;
 }
@@ -189,7 +189,11 @@ document.addEventListener('input', ev => {
   if (ev.target.id === 'vz') { cr.zoom = Number(ev.target.value); clamp(); paint(); }
   if (ev.target.id === 'vb') { cr.bg = ev.target.value; paint(); }
 });
-document.addEventListener('change', ev => {
+document.addEventListener('change', async ev => {
+  if (ev.target.dataset && ev.target.dataset.nick) {
+    try { await db.update(db.ref(database, `admins/${ev.target.dataset.nick}`), { name: ev.target.value.trim().slice(0, 30) }); toast('已更新暱稱'); } catch (err) { toast(`更新失敗：${err.message}`); }
+    return;
+  }
   if (ev.target.id !== 'vf' || !ev.target.files[0]) return;
   const img = new Image();
   const file = ev.target.files[0];
@@ -238,13 +242,13 @@ document.addEventListener('click', async ev => {
   else if ('signout' in d) { ev.preventDefault(); au.signOut(auth); }
   else if (d.copy) { try { await navigator.clipboard.writeText(d.copy); toast('已複製網址'); } catch (e) { toast('無法複製，請手動選取'); } }
   else if ('add' in d) {
-    const email = $('#ne').value.trim().toLowerCase(), date = $('#nd').value;
+    const email = $('#ne').value.trim().toLowerCase(), date = $('#nd').value, name = ($('#nn') || {}).value ? $('#nn').value.trim().slice(0, 30) : '';
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('請輸入正確的信箱'); return; }
     if (ADMINS.includes(email)) { toast('這個帳號已經是常設管理員'); return; }
     if (!date) { toast('請選擇到期日'); return; }
     const until = new Date(`${date}T23:59:59`).getTime();
     if (until <= Date.now()) { toast('到期日要在今天之後'); return; }
-    try { await db.set(db.ref(database, `admins/${key(email)}`), { email, until, by: st.user, at: Date.now() }); toast(`已加入 ${email}，到期日 ${fmtDate(until)}`); }
+    try { await db.set(db.ref(database, `admins/${key(email)}`), { email, until, by: st.user, at: Date.now(), ...(name ? { name } : {}) }); toast(`已加入 ${email}，到期日 ${fmtDate(until)}`); }
     catch (err) { toast(/permission/i.test(err.message) ? '加入失敗：資料庫規則尚未更新，請先發布新版規則' : `加入失敗：${err.message}`); }
   } else if (d.extend) {
     const v = st.list[d.extend]; const until = Math.max(v.until, Date.now()) + 30 * 864e5;

@@ -74,6 +74,7 @@ export function onAuth(fn) { authListeners.add(fn); return () => authListeners.d
 function emit(local) { listeners.forEach(fn => fn(state, local)); }
 function emitAuth() { authListeners.forEach(fn => fn(auth)); }
 
+const bumpV = () => { try { remote.write({ 'pub/v': remote.stamp() }).catch(() => {}); } catch (e) { /* 公開頁不寫 */ } };
 /** 修改資料：fn 直接改傳入的 state；只把有變動的部分寫回去 */
 export function update(fn) {
   const before = state, next = clone(state);
@@ -98,7 +99,9 @@ export function update(fn) {
   });
   state = next;
   emit(true);
-  if (Object.keys(up).length) remote.write(up).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
+  // 公開資料有變動時，另外更新「變動標記」：即時賽程只要問這個小標記，有變才下載內容（分開寫，規則還沒更新也不影響主要資料）
+  const pubChanged = Object.keys(up).some(k => k.startsWith('pub/'));
+  if (Object.keys(up).length) remote.write(up).then(() => { if (pubChanged) bumpV(); }).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
 export function updateMatch(id, fn) {
   update(s => { s.m[id] = s.m[id] || {}; fn(s.m[id], s); });
@@ -113,7 +116,7 @@ export function replaceState(s) {
   remote.write({ 'pub/meta': metaOf(next), 'pub/events': JSON.stringify(next.events || []), 'pub/m': Object.keys(tree).length ? tree : null,
     'desk/calls': JSON.stringify(next.calls || []), 'pub/calls': pubCalls(next.calls), 'desk/staff': JSON.stringify(next.staff || []), 'desk/staffOrg': JSON.stringify(next.staffOrg || {}), 'desk/refOpt': JSON.stringify(next.refOpt || {}), 'desk/lu': JSON.stringify(next.dlu || {}), 'desk/receipt': JSON.stringify(next.receipt || {}),
     'desk/notices': JSON.stringify(next.notices || {}), checkin: null, parking: JSON.stringify(next.parking || {}) })
-    .catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
+    .then(bumpV).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
 /** 直接寫入資料庫的幾個位置（線上點單權限等不屬於畫面狀態的資料） */
 export function writePaths(up) { return remote.write(up); }
@@ -150,7 +153,7 @@ function receive(part, value) {
   // 大會台：即時賽程的廣播和大會台不一致時補寫一次（例如規則更新前的廣播）
   if (ROLE === 'desk' && auth.isAdmin && (part === 'calls' || part === 'pcalls') && raw.calls != null && raw.pcalls != null) {
     const want = pubCalls(parse(raw.calls, []));
-    if (want !== raw.pcalls) remote.write({ 'pub/calls': want }).catch(() => {});
+    if (want !== raw.pcalls) remote.write({ 'pub/calls': want }).then(bumpV).catch(() => {});
   }
   auth.loaded = true;
   assemble();
@@ -235,11 +238,17 @@ function pollRemote() {
     maxU = 0; seen(raw.m); rev = parse(raw.meta, {}).rev ?? null;
     auth.loaded = true; assemble(); emit(false);
   }
+  let lastV, sinceFull = 0;
   async function tick() {
     if (busy || document.hidden) return;
     busy = true;
     try {
-      if (!auth.loaded) { await full(); return; }
+      if (!auth.loaded) { lastV = await get('/v.json').catch(() => null); await full(); return; }
+      // 先問變動標記（只有幾個位元組）；沒變就不用下載其他資料。每 10 分鐘仍完整檢查一次，避免漏掉
+      const v = await get('/v.json').catch(() => null);
+      sinceFull++;
+      if (v != null && v === lastV && sinceFull < 40) { auth.error = ''; return; }
+      lastV = v; sinceFull = 0;
       const meta = await get('/meta.json');
       if ((parse(meta, {}).rev ?? null) !== rev) { await full(); return; }
       if (meta !== raw.meta) { raw.meta = meta; assemble(); emit(false); }

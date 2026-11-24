@@ -563,3 +563,7 @@ table.restt td:last-child { white-space: nowrap; }
 @media (min-width: 1101px) { .side { max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; } }
 .lgtoggle { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; margin: 4px 0; display: inline-flex; gap: 4px; align-items: center; }
 .lgtoggle .tri { font-size: 11px; width: 12px; }
+.luhead { margin: 4px 2px 14px; }
+.luhead h1 { font-size: 24px; color: var(--blue); margin: 0 0 4px; }
+.luhead h1 span { font-size: 17px; color: var(--ink); font-weight: 600; margin-left: 4px; }
+.luhead p { margin: 0; }
