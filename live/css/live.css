@@ -540,3 +540,10 @@ table.grp td.nm .rk { margin-right: 4px; vertical-align: 1px; }
 .dform { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
 .dpaper { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .ckr { grid-template-columns: 1fr; } .ckact { justify-content: flex-start; } }
+/* 大會台分頁圖示 */
+#tabs:not(.ptabs) button .icon { display: inline-block; width: 15px; height: 15px; margin-right: 5px; vertical-align: -2px; }
+table.restt td:first-child { white-space: nowrap; }
+@media (max-width: 640px) {
+  table.restt td:first-child .otag { display: block; width: fit-content; margin: 0 0 2px; }
+}
+table.restt td:last-child { white-space: nowrap; }

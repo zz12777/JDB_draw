@@ -24,6 +24,7 @@ const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '場控
 const busyOpen = new Set();
 let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
+const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', notice: 'bell', tables: 'tables', refs: 'whistle', draw: 'shuffle', ann: 'trophy', setup: 'gear' };
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
 
@@ -36,7 +37,7 @@ function render() {
   const swN = swapList().filter(x => !x.sw.sent).length;
   const due = dueNotices(s).length, rep = [...D.byId.values()].filter(m => m.status === 'reported').length;
   const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'rec' && rep ? `<span class="badge" title="${rep} 場待確認">${rep}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求">${swN}</span>` : '');
-  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${t}${badge(k)}</button>`).join('');
+  $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
   $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
@@ -828,7 +829,7 @@ function viewRefs(s) {
       ${names.length ? `<table class="list" style="max-width:480px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`);
   }
   const k = nm;
-  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${!soon.get(k(n)).team ? '前 3 場內會叫到' : soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
+  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${!soon.get(k(n)).team ? '3 場內會叫到' : soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
   const byCnt = (a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0);
   const pool = staff.filter(n => !notRef(s, n));
   // 體資：有缺才請他們支援，放在「人手不足時可支援」
@@ -838,7 +839,7 @@ function viewRefs(s) {
   const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && ((backup(n) && !soon.has(k(n))) || (soon.has(k(n)) && soon.get(k(n)).team && soon.get(k(n)).status !== 'ready'))).sort(byCnt);
   const rest = pool.filter(n => why(n) && !spare.includes(n));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
-  const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
+  const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
   // 球桌橫向排列，可以左右滑：每桌顯示裁判姓名與校區
   const swaps = new Map(swapList().map(x => [x.t, x.sw]));
   const strip = `<div class="panel"><h2>各桌裁判</h2><div class="refstrip">${Array.from({ length: s.tables || 24 }, (_, i) => i + 1).map(t => {
@@ -847,10 +848,9 @@ function viewRefs(s) {
   }).join('')}</div></div>`;
   return wrap(`${strip}${swapPanel()}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
-      <p class="small muted">正在比賽、正在擔任裁判、個人賽接下來 3 場內會叫到，或團體賽所屬項目進行中還有比賽要打的人不列入；其他項目還沒開打、已經淘汰的人都可以擔任。依已擔任次數由少到多排列。</p>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「編輯名單」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
-    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">體資，以及團體賽所屬項目進行中、但自己的場次還沒輪到的人。</p>${cols(spare)}</div>` : ''}
-    ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">已擔任 ${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。</p>${cols(spare)}</div>` : ''}
+    ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list restt"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
     ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }
 
