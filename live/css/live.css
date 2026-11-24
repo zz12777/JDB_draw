@@ -553,3 +553,9 @@ table.restt td:last-child { white-space: nowrap; }
 .rcell .xst { font-size: 11px; font-weight: 700; color: #15803d; margin-left: 4px; vertical-align: 3px; }
 .round.folded { flex: 0 0 160px; }
 .round.folded h3 { flex-wrap: wrap; }
+.rare td { font-size: 13px; vertical-align: top; }
+.rare .rk2 { color: var(--red); }
+/* 已完賽的場次明顯變灰 */
+.mc.done { background: #e7e9ee !important; border-color: #cfd4dc !important; }
+.mc.done .nm, .mc.done .no, .mc.done .sc { color: #6b7280; }
+.mc.done .sd.win .nm, .mc.done .sd.win .sc { color: #374151; }

@@ -91,6 +91,7 @@ function viewCtrl(s) {
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
       <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 5, undo: true }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
+      ${rarePanel()}
     </div></div>`;
 }
 function viewTables(s) {
@@ -139,6 +140,30 @@ function card(m) {
 function planned(m) {
   const x = slotOf(getState().sched, m);
   return x ? `<span class="muted">表定 ${x.s}</span>` : '';
+}
+
+// ---------------- 生僻字讀音 ----------------
+// 只存「字 → 同音字」，名單從目前的籤表即時找出來（不把姓名寫進程式碼）
+const RARE = { 貽: '宜', 亘: '宣', 晟: '成', 恂: '旬', 璿: '旋', 驊: '華', 潁: '影', 粘: '黏', 閎: '宏', 榞: '元', 宬: '成', 琮: '從', 岦: '立', 崴: '威', 昜: '陽', 旻: '民', 䧮: '憲', 浤: '宏', 丰: '風', 浡: '勃', 巽: '訊',
+  伃: '于', 雰: '芬', 彣: '文', 苡: '以', 霈: '配', 歆: '欣', 錞: '純', 楹: '迎', 媗: '宣', 緁: '捷', 玗: '于', 倢: '捷', 珈: '家', 熏: '勳', 媞: '提', 淯: '育', 堻: '堅', 紓: '書', 芓: '子', 姸: '研', 扈: '戶', 蒨: '欠', 琬: '晚', 玠: '介', 葳: '威', 崨: '捷', 瀞: '靜' };
+let rareOpen = false;
+function rareList() {
+  const out = [], seen = new Set();
+  byPill(D.events).forEach(e => e.matches.slice().sort((a, b) => (a.stage === 'F') - (b.stage === 'F') || a.num - b.num).forEach(m => [m.A, m.B].forEach(S => {
+    if (!S || !S.name) return;
+    const full = sideText(S, m.team), key = `${e.name}|${full}`;
+    if (seen.has(key)) return;
+    const chars = [...new Set([...String(S.name)].filter(c => RARE[c]))];
+    if (!chars.length) return;
+    seen.add(key); out.push({ ev: e.name, no: m.no, full, chars });
+  })));
+  return out;
+}
+function rarePanel() {
+  const l = rareList();
+  if (!l.length) return '';
+  return `<div class="panel"><div class="row"><h2 style="margin:0">生僻字讀音（${l.length}）</h2><span class="spacer"></span><button class="btn ghost sm" data-rareopen>${icon('list')}${rareOpen ? '收合' : '展開'}</button></div>
+    ${rareOpen ? `<table class="list rare" style="margin-top:8px"><thead><tr><th>項目</th><th>場次</th><th>全稱</th><th>讀音</th></tr></thead><tbody>${l.map(x => `<tr><td class="nowrap">${esc(x.ev)}</td><td class="nowrap">${esc(x.no)}</td><td>${esc(x.full).replace(new RegExp(`[${x.chars.join('')}]`, 'gu'), c => `<b class="rk2">${c}</b>`)}</td><td class="nowrap">${x.chars.map(c => `<b>${c}</b>讀「${RARE[c]}」`).join('<br>')}</td></tr>`).join('')}</tbody></table>` : ''}</div>`;
 }
 
 // ---------------- 線上點單 ----------------
@@ -698,7 +723,7 @@ function viewDraw(s) {
   const allDone = e.groups.every(g => g.table.all);
   const finals = e.matches.filter(m => m.stage === 'F' && m.roundIdx === 0);
   return `<div class="panel"><div class="row"><div class="pills">${teams.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
-      <span class="spacer"></span><button class="btn ghost sm" data-tierules>互咬規則</button><button class="btn ghost sm" data-fill-rank ${allDone ? '' : ''}>${icon('check')}帶入名次試算</button></div>
+      <span class="spacer"></span><button class="btn ghost sm" data-tierules>互咬規則</button></div>
     <ul class="small" style="margin:6px 0 10px;padding-left:20px"><li>冠軍籤位：${marks.filter(x => x[1] === '冠').map(x => x[0]).join('、')}</li><li>亞軍籤位：${marks.filter(x => x[1] === '亞').map(x => x[0]).join('、')}</li><li>上半區：1 - ${half}、下半區：${half + 1} - ${e.final.size}</li></ul>
     <div style="overflow-x:auto"><table class="list drawt"><thead><tr><th rowspan="2">組別</th><th rowspan="2">預賽戰績</th><th colspan="3" class="gc first gtop">冠軍</th><th colspan="3" class="gr first gtop">亞軍</th></tr>
       <tr><th class="gc first">隊伍</th><th class="gc">點名</th><th class="gc">籤號</th><th class="gr first">隊伍</th><th class="gr">點名</th><th class="gr">籤號</th></tr></thead><tbody>
@@ -1265,6 +1290,7 @@ document.addEventListener('click', async ev => {
     writePaths({ [`olu/${mid}/${tk}`]: JSON.stringify(rec) }).then(() => { toast('已退回，隊伍可以重新修改送出'); drawModal(); }).catch(err => toast(`退回失敗：${err.message || err}`));
     return;
   }
+  if ('rareopen' in d) { rareOpen = !rareOpen; render(); return; }
   if (d.round) { roundOpen.has(d.round) ? roundOpen.delete(d.round) : roundOpen.add(d.round); render(); return; }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
   if ('aclopen' in d) { aclOpen = !aclOpen; render(); return; }

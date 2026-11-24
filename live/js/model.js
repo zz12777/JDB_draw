@@ -181,7 +181,7 @@ export function derive(state) {
         fm.forEach(add);
         const finals = out.matches.slice(before);
         resolveKO(finals, p => { const x = teamAt.get(p); return { name: x ? x.name : '', pos: p, hint: `${mark.get(p) || ''} ${p}`, seed: x ? x.seed : '' }; }, new Map());
-        ko.rounds.forEach((r, i) => out.rounds.push({ key: 'F' + i, label: `決賽 ${roundName(r)}`, matches: finals.filter(m => m.roundIdx === i) }));
+        ko.rounds.forEach((r, i) => out.rounds.push({ key: 'F' + i, label: `決賽 ${r.depth === 0 ? '冠亞' : roundName(r)}`, matches: finals.filter(m => m.roundIdx === i) }));
         out.final = { size: ko.positions, mark, teamAt, fp };
       }
     }
