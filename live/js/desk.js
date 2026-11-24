@@ -162,7 +162,7 @@ function rareList() {
 function rarePanel() {
   const l = rareList();
   if (!l.length) return '';
-  return `<div class="panel"><div class="row"><h2 style="margin:0">生僻字讀音（${l.length}）</h2><span class="spacer"></span><button class="btn ghost sm" data-rareopen>${icon('list')}${rareOpen ? '收合' : '展開'}</button></div>
+  return `<div class="panel"><div class="row"><h2 style="margin:0">生僻字讀音</h2><span class="spacer"></span><button class="btn ghost sm" data-rareopen>${icon('list')}${rareOpen ? '收合' : '展開'}</button></div>
     ${rareOpen ? `<table class="list rare" style="margin-top:8px"><thead><tr><th>項目</th><th>場次</th><th>全稱</th><th>讀音</th></tr></thead><tbody>${l.map(x => `<tr><td class="nowrap">${esc(x.ev)}</td><td class="nowrap">${esc(x.no)}</td><td>${esc(x.full).replace(new RegExp(`[${x.chars.join('')}]`, 'gu'), c => `<b class="rk2">${c}</b>`)}</td><td class="nowrap">${x.chars.map(c => `<b>${c}</b>讀「${RARE[c]}」`).join('<br>')}</td></tr>`).join('')}</tbody></table>` : ''}</div>`;
 }
 
@@ -204,7 +204,7 @@ function withOnline(s) {
 
 /** 這隊可以登入填點單的信箱 */
 function teamMails(s, ev, team) { return Object.keys((s.teamacl || {})[teamKey(ev, team)] || {}).map(k => k.replace(/,/g, '.')); }
-let mailMin = 10, mailAll = false;
+let mailAll = false;
 /** 該填線上點單還沒填的隊伍：這隊的下一場（有時間表時為表定 30 分鐘內）、還沒派桌、這隊有設定信箱、大會台與線上都沒有點單 */
 function pendingOnline(s) {
   const now = NOW().getTime(), out = [];
@@ -228,14 +228,14 @@ function pendingOnline(s) {
 }
 /** 催交線上點單的信：收件人是這隊所有可登入的信箱 */
 function lineupMail(s, x) {
-  const title = `${EVENT_FULL[x.m.ev]} ${matchTitle(x.m)}`;
-  const subject = `【${s.title || '交大盃'}】${x.team} ${title} 請於 ${mailMin} 分鐘內填寫線上點單`;
+  const t = s.title || '交大盃';
+  const subject = `【${t}_請盡快送出點單】${x.team} ${EVENT_FULL[x.m.ev]} ${x.m.no} 請盡快送出線上點單`;
   const body = [`${x.team} 您好：`, '',
-    `${title}（對手：${x.opp}${x.slot ? `，表定 ${x.slot.s}` : ''}）尚未收到貴隊的線上點單，請於 ${mailMin} 分鐘內填寫完畢。`, '',
+    `${EVENT_FULL[x.m.ev]} ${matchTitle(x.m)}（對手：${x.opp}）尚未收到貴隊的線上點單，請盡快填寫完畢並送出。`, '',
     '填寫網址：https://nctu-ttc.tw/live/lineup.html', '',
-    '只有以下信箱可以登入填寫點單：', ...x.mails.map(e => `・${e}`), '',
-    '請用上列信箱的 Google 帳號登入。若無法線上填寫，請盡快將紙本點單交到大會台。', '',
-    `${s.edition || ''}${s.title || '交大盃'}大會`].join('\n');
+    '只有以下帳號可以登入填寫點單：', ...x.mails.map(e => `・${e}`), '',
+    '請用上列的 Google 帳號登入。若無法線上填寫，請盡快至大會。', '',
+    `${s.edition || ''}${t}大會`].join('\n');
   // 用 Gmail 網頁版開好草稿（大會台登入的 Google 帳號寄出）
   return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(x.mails.join(','))}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
@@ -244,7 +244,6 @@ function onlinePanel(s) {
   if (!l.length) return '';
   const sent = (s.notices || {}).mail || {};
   return `<div class="panel"><h2>線上點單未填（${l.length}）</h2>
-    <div class="row small" style="margin-bottom:6px">信中請隊伍於 <input type="number" min="1" max="60" value="${mailMin}" data-mailmin style="width:56px"> 分鐘內填寫</div>
     ${(mailAll ? l : l.slice(0, 5)).map(x => { const id = `${x.m.id}|${x.k}`; return `<div class="alertbox"><div class="small ameta">${esc(x.m.ev)} ${esc(x.m.no)}${x.slot ? `　表定 ${esc(x.slot.s)}` : ''}${sent[id] ? `　${fmtTime(sent[id])} 已擬信` : ''}</div>
       <div><b>${esc(x.team)}</b> 尚未填寫線上點單</div>
       <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}用 Gmail 擬信催交</a></div></div>`; }).join('')}
@@ -535,7 +534,7 @@ function viewRec(s) {
   const ko = e ? (e.team ? e.matches.filter(m => m.stage === 'F') : e.matches) : [];
   const t = e ? bracketSvg(ko, e.team, { pos: e.team, noTables: true }) : { svg: '' };
   return e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${byPill(D.events).map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
-      <div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span><span class="muted">點場次或比數可以看紀錄、修改成績</span></div>
+      ${e.team ? '<div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span></div>' : ''}
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
       ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
 }
@@ -1424,7 +1423,6 @@ document.addEventListener('change', async ev => {
   });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
-  else if ('mailmin' in d) { mailMin = Math.max(1, Math.min(60, Number(t.value) || 10)); render(); }
   else if ('aclimp' in d) { if (t.files.length) { try { await importAcl([...t.files]); } catch (err) { toast(`匯入失敗：${err.message || err}`); } t.value = ''; } }
   else if (d.acled !== undefined) { const up = setEditors(getState(), d.acled, t.value); if (Object.keys(up).length) writePaths(up).then(() => toast('已更新共同編輯')).catch(err => toast(`更新失敗：${err.message || err}`)); }
   else if (d.aclown !== undefined) { const up = setOwner(getState(), d.aclown, t.value); writePaths(up).then(() => toast('已更新聯絡人信箱')).catch(err => toast(`更新失敗：${err.message || err}`)); }

@@ -559,3 +559,5 @@ table.restt td:last-child { white-space: nowrap; }
 .mc.done { background: #e7e9ee !important; border-color: #cfd4dc !important; }
 .mc.done .nm, .mc.done .no, .mc.done .sc { color: #6b7280; }
 .mc.done .sd.win .nm, .mc.done .sd.win .sc { color: #374151; }
+/* 賽程控制右側欄：內容比畫面高時，在右側欄裡自己捲動 */
+@media (min-width: 1101px) { .side { max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; } }
