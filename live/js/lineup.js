@@ -1,13 +1,14 @@
 // 線上點單：各隊聯絡人用報名表上的信箱登入，替自己的隊伍填每一場的點單。
 // 只能選隊伍名單上的人。可以先暫存、大家一起改，按「送出」後就不能再改（大會台會依送出的點單排點叫場）。
 // 聯絡人可以再加最多 3 個信箱一起填。對手看不到；大會台派桌時才帶入正式排點。
-import { derive, EVENT_FULL, POINTS, fmtTime, sideText, matchTitle } from './model.js';
+import { derive as derive0, EVENT_FULL, POINTS, fmtTime, sideText } from './model.js';
 import { getState, subscribe, onAuth, auth, teamKey, mailKey } from './store.js';
 import { esc, $, $$, icon, toast, header, lineName } from './ui.js';
-import { slotOf } from './timetable.js';
 import { me, onMe, signIn, signOut, watch, write, myKey } from './teamcloud.js';
 
 const MAX_EDITORS = 3;
+// 決賽籤號要等大會台按「確定並公開」才算數（和即時賽程相同）
+const derive = s => derive0({ ...s, events: (s.events || []).map(e => (e.finalPub ? e : { ...e, finalPos: {} })) });
 let teams = null;          // 我可以填的隊伍代號
 let cur = null;            // 目前選的隊伍代號
 let acl = null;            // 目前隊伍的權限表 {信箱代號: owner|editor}
@@ -37,7 +38,7 @@ function render() {
       <ul>
         <li>請用<b>報名表上填寫的聯絡人信箱</b>登入。</li>
         <li>聯絡人登入後，可以再加入最多 3 個信箱一起填寫。</li>
-        <li>登入上有問題，請洽大會。</li>
+        <li>若有任何問題，請洽大會。</li>
       </ul>
       <div style="text-align:center"><button class="btn" data-in>以 Google 帳號登入</button></div>
       ${me.error ? `<p class="small" style="color:var(--red);text-align:center">${esc(me.error)}</p>` : ''}</div>`;
@@ -60,7 +61,7 @@ function render() {
       && (m.stage !== 'F' || (m.A && m.A.name && m.B && m.B.name)))
     .sort((a, b) => (a.stage === 'F') - (b.stage === 'F') || a.num - b.num);
   main.innerHTML = `${pills}<div class="panel"><div class="row"><h2 style="margin:0">${esc(info.team)}</h2><span class="chip">${esc(EVENT_FULL[info.ev] || info.ev)}</span></div>
-      <p class="small muted" style="margin:6px 0 0">預賽各場可以一次填好；決賽在對手確定後才會出現。填寫內容會自動暫存，同隊可以一起修改，按「送出點單」後就不能再改。對手看不到你們的點單。也可以照常繳交紙本點單。</p></div>
+      <p class="small muted" style="margin:6px 0 0">「送出點單」後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
     ${ms.length ? ms.map(m => matchCard(m, info)).join('') : '<div class="panel"><p class="muted">目前沒有需要填寫點單的場次。</p></div>'}
     ${editorsPanel(owner)}`;
 }
@@ -70,9 +71,8 @@ function matchCard(m, info) {
   const opp = side === 'a' ? m.B : m.A;
   const sub = olu[m.id];
   const locked = !!m.rec.start;
-  const slot = slotOf(getState().sched, m);
   const official = m.rec.lineup && m.rec.lineup[side];
-  const head = `<div class="row"><b>${esc(matchTitle(m))}</b>${m.group ? `<span class="muted small">${esc(m.group)} 組</span>` : ''}<span class="spacer"></span>${slot ? `<span class="small muted">表定 ${esc(slot.s)}</span>` : ''}</div>
+  const head = `<div class="row"><b>${esc(m.no)}</b>${m.group ? `<span class="muted small">${esc(m.group)} 組</span>` : ''}<span class="spacer"></span>${open === m.id && !m.rec.start && !(sub && sub.final) ? `<button class="btn ghost sm" data-cancel title="收起" aria-label="收起">${icon('close')}</button>` : ''}</div>
     <div style="margin:4px 0">對手：${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</div>`;
   const fin = sub && sub.final;
   const status = locked ? `<span class="chip">${icon('lock')}已鎖定</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? `<span class="chip warn">暫存 ${fmtTime(sub.ts)}，尚未送出</span>` : '<span class="chip">尚未填寫</span>';
@@ -93,8 +93,7 @@ function matchCard(m, info) {
     <div class="luform">${POINTS.map((p, i) => `<div class="lurow"><span class="lul">第${'一二三四五'[i]}點<small>${p.dbl ? '雙打' : '單打'}</small></span>
       <span class="luin">${p.dbl ? sel(i, 0, (l[i] || [])[0]) + sel(i, 1, (l[i] || [])[1]) : sel(i, null, l[i])}</span></div>`).join('')}</div>
     <p class="small" id="lu-warn" style="color:var(--red);min-height:18px;margin:6px 0"></p>
-    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><button class="btn plain" data-cancel>收起</button><span class="small muted" id="lu-saved">${sub && !sub.final ? `已自動暫存 ${fmtTime(sub.ts)}` : ''}</span></div>
-    <p class="small muted" style="margin:6px 0 0">每次選擇都會自動暫存，同隊可以登入的人都看得到最新內容、可以接著改；按「送出點單」後就不能再修改。</p>
+    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><span class="small muted" id="lu-saved">${sub && !sub.final ? `已自動暫存 ${fmtTime(sub.ts)}` : ''}</span></div>
     ${r.length ? '' : '<p class="small muted">大會尚未匯入此隊名單，請直接輸入姓名。</p>'}${logView(sub)}</div>`;
 }
 const lineupView = l => `<table class="list luview"><tbody>${POINTS.map((p, i) => `<tr><td class="muted small nowrap">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</td><td>${esc(lineName(l, i)) || '<span class="muted">未填</span>'}</td></tr>`).join('')}</tbody></table>`;
@@ -105,12 +104,11 @@ function editorsPanel(owner) {
   const list = Object.entries(acl || {});
   const ed = list.filter(([, v]) => v === 'editor').map(([k]) => k.replace(/,/g, '.'));
   const own = list.filter(([, v]) => v === 'owner').map(([k]) => k.replace(/,/g, '.'));
-  return `<div class="panel"><h2>可以填寫點單的信箱</h2>
-    <p class="small muted">以下信箱都可以登入填寫、暫存與送出點單。聯絡人可以加入或移除共同編輯。</p>
+  return `<div class="panel"><h2>新增點單填寫權限</h2>
     <table class="list"><tbody>${own.map(e => `<tr><td>${esc(e)}</td><td class="small muted">聯絡人</td><td></td></tr>`).join('')}
     ${ed.map(e => `<tr><td>${esc(e)}</td><td class="small muted">共同編輯</td><td style="text-align:right">${owner ? `<button class="btn plain sm" data-rmed="${esc(e)}">移除</button>` : ''}</td></tr>`).join('')}</tbody></table>
     ${owner ? (ed.length < MAX_EDITORS ? `<div class="row" style="margin-top:8px"><input type="email" id="ed-new" placeholder="輸入 Google 帳號信箱" style="flex:1;min-width:200px"><button class="btn ghost sm" data-added>${icon('plus')}加入共同編輯</button></div>
-      <p class="small muted">最多 ${MAX_EDITORS} 個，加入後對方用該信箱登入就能一起填寫。</p>` : `<p class="small muted">已達 ${MAX_EDITORS} 個上限。</p>`) : ''}</div>`;
+      <p class="small muted">最多新增 ${MAX_EDITORS} 個帳號一起編輯點單。</p>` : `<p class="small muted">已達 ${MAX_EDITORS} 個上限。</p>`) : ''}</div>`;
 }
 
 function readForm() {
