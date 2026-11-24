@@ -87,7 +87,7 @@ function viewCtrl(s) {
 function viewTables(s) {
   const alerts = new Set();
   D.byId.forEach(m => { if (m.status === 'playing') absences(m).forEach(ab => String(ab.table || m.tables.join(',')).split(/[^0-9]+/).filter(Boolean).forEach(t => alerts.add(Number(t)))); });
-  return `<div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg busy"></span>進行中</span><span><span class="lg rep"></span>已打完，待大會確認</span><span><span class="lg alert"></span>有未到回報</span><span><span class="lg"></span>空桌</span></div>${deskBoard(s, D, { alerts })}</div>`;
+  return `<div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg busy"></span>進行中</span><span><span class="lg rep"></span>已打完，裁判尚未按結束</span><span><span class="lg alert"></span>有未到回報</span><span><span class="lg"></span>空桌</span></div>${deskBoard(s, D, { alerts })}</div>`;
 }
 /** 這一輪在時間表上的時段 */
 function roundTime(s, r) {
@@ -490,8 +490,8 @@ function syncHistory() {
   saveHistory(histKey(s.edition), entryFromState(s)).catch(err => toast(`歷屆名次未存到：${err.message || err}`));
 }
 
-// ---------------- 紀錄組 ----------------
-// 只看成績：待確認的場次、各項目籤表（和即時賽程同步），點場次叫出紀錄核對並鎖定。不顯示桌次與排點。
+// ---------------- 籤表 ----------------
+// 各項目籤表（和即時賽程同步），點場次可以看、改比分。不顯示桌次與排點。
 let recEv = null;
 function viewRec(s) {
   if (!recEv || !D.events.some(e => e.name === recEv)) recEv = D.events[0] && D.events[0].name;

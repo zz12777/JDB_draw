@@ -113,7 +113,7 @@ export function board(state, d, opt = {}) {
     } else {
       line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${g[0]}:${g[1]}`).join('　');
     }
-    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '已打完' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
+    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '已打完' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">已打完</span>' : '');
     return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${opt.match && !opt.match(m, x.point) ? 'dim' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
       <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>
