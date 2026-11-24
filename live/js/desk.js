@@ -983,8 +983,9 @@ function teamList(s) {
   const out = [];
   D.events.filter(e => e.team).forEach(e => {
     const names = new Set();
-    e.matches.forEach(m => [m.A, m.B].forEach(S => { if (S && S.name) names.add(S.name); }));
-    Object.keys(((s.events || []).find(x => x.name === e.name) || {}).rosters || {}).forEach(n => names.add(n));
+    // 以籤表上的隊名為準（參賽名單的寫法可能不同，不另外算一隊）
+    (e.groups || []).forEach(g => (g.teams || []).forEach(n => { if (n) names.add(n); }));
+    if (!names.size) e.matches.forEach(m => [m.A, m.B].forEach(S => { if (S && S.name) names.add(S.name); }));
     [...names].sort((a, b) => a.localeCompare(b, 'zh-Hant')).forEach(n => out.push({ ev: e.name, team: n, key: teamKey(e.name, n) }));
   });
   return out;
@@ -994,8 +995,7 @@ function aclPanel(s) {
   const own = k => Object.entries(acl[k] || {}).filter(([, v]) => v === 'owner').map(([e]) => e.replace(/,/g, '.'));
   const edList = k => Object.entries(acl[k] || {}).filter(([, v]) => v === 'editor').map(([e]) => e.replace(/,/g, '.'));
   const done = list.filter(t => own(t.key).length).length;
-  const sent = Object.values(s.olu || {}).reduce((a, x) => a + Object.keys(x || {}).length, 0);
-  const head = `<div class="row"><h2 style="margin:0">線上點單權限</h2><span class="spacer"></span><span class="small muted">${done} / ${list.length} 隊已設定聯絡人，已收 ${sent} 份線上點單</span><button class="btn ghost sm" data-aclopen>${icon('list')}${aclOpen ? '收合' : '展開'}</button></div>`;
+  const head = `<div class="row"><h2 style="margin:0">線上點單權限</h2><span class="spacer"></span><span class="small muted">${done} / ${list.length} 隊已設定聯絡人</span><button class="btn ghost sm" data-aclopen>${icon('list')}${aclOpen ? '收合' : '展開'}</button></div>`;
   if (!aclOpen) return `<div class="panel">${head}</div>`;
   return `<div class="panel">${head}
     <p class="small muted">匯入報名表單回應（男子組、女子組、社會組可一次選多個檔案），依隊名帶入「聯絡人 email」欄的信箱，沒填的隊伍留空。信箱只存在資料庫，只有大會台與本人看得到。參賽隊伍登入 <b>nctu-ttc.tw/live/lineup.html</b> 填寫。</p>
