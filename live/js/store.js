@@ -197,6 +197,14 @@ async function sdkRemote() {
   const database = db.getDatabase(app);
   const at = p => db.ref(database, `${ROOT}/${p}`);
   const fail = err => { auth.error = `讀取失敗：${err.message}`; emitAuth(); };
+  // 裁判紀錄區、簽到處：分頁切到背景超過 1 分鐘就先斷線，回到畫面再自動連上（不佔連線名額、不耗下載量）
+  if (ROLE === 'ref' || ROLE === 'checkin') {
+    let t = null;
+    document.addEventListener('visibilitychange', () => {
+      clearTimeout(t);
+      if (document.hidden) t = setTimeout(() => db.goOffline(database), 60000); else db.goOnline(database);
+    });
+  }
   db.onValue(at('pub/meta'), s => receive('meta', s.val()), fail);
   db.onValue(at('pub/events'), s => receive('events', s.val()), fail);
   db.onValue(at('pub/m'), s => receive('m', s.val()), fail);
