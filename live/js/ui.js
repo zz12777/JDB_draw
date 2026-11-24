@@ -43,7 +43,7 @@ export function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
 }
 
-export const STATUS_TEXT = { wait: '等待中', ready: '可開賽', playing: '進行中', reported: '待確認', done: '已確認' };
+export const STATUS_TEXT = { wait: '等待中', ready: '可開賽', playing: '進行中', reported: '已打完', done: '已完賽' };
 export const chip = m => `<span class="chip ${m.status}">${STATUS_TEXT[m.status]}</span>`;
 export const mins = ts => (ts ? Math.max(0, Math.round((Date.now() - ts) / 60000)) : 0);
 export const names = m => `${esc(sideText(m.A, m.team))} <span class="vs">vs</span> ${esc(sideText(m.B, m.team))}`;
@@ -87,7 +87,7 @@ export function tableMap(state, d, opt = {}) {
     return `<${tag} class="tcell busy ${al ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <span class="t">${t}</span>
       <span class="who"><span class="ev">${esc(shortEv(m))}</span>${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}<br>${names(m)}${opt.refs ? `<br><span class="muted">裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : ''}</span>
-      <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><br>${m.status === 'reported' ? '待確認' : fmtTime(m.rec.start)}</span></${tag}>`;
+      <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><br>${m.status === 'reported' ? '已打完' : fmtTime(m.rec.start)}</span></${tag}>`;
   };
   const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
   return `<div class="map ${opt.refs ? 'tall' : ''}">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
@@ -113,7 +113,7 @@ export function board(state, d, opt = {}) {
     } else {
       line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${g[0]}:${g[1]}`).join('　');
     }
-    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '待確認' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
+    const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '已打完' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">待確認</span>' : '');
     return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${opt.match && !opt.match(m, x.point) ? 'dim' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
       <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>
@@ -142,7 +142,7 @@ export function deskBoard(state, d, opt = {}) {
     return `<button class="wcell busy ${opt.alerts && opt.alerts.has(t) ? 'alert' : ''} ${m.status === 'reported' ? 'rep' : ''} ${x.idle ? 'idle' : ''}" ${pos} data-table="${t}" data-mid="${esc(m.id)}">
       <span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${x.point != null ? `<span class="bpt">第${'一二三四五'[x.point]}點</span>` : ''}
       ${side(m.A)}${side(m.B)}<span class="wsc">${m.score[0]} : ${m.score[1]}</span>
-      <span class="wx">${m.status === 'reported' ? '待確認' : x.idle ? '這桌的點已打完，可派其他場' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
+      <span class="wx">${m.status === 'reported' ? '已打完' : x.idle ? '這桌的點已打完，可派其他場' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
   };
   return `<div class="wboard" style="--half:${half}"><div class="wdesk">大會台</div>${Array.from({ length: n }, (_, i) => cell(i + 1)).join('')}</div>`;
 }

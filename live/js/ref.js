@@ -123,8 +123,11 @@ document.addEventListener('click', ev => {
     // 團體賽按「本點結束」回到這一桌的選點頁面，個人賽按「本場結束」回到球桌列表
     document.activeElement && document.activeElement.blur();
     const x = D.tables.get(table);
-    if (!(x && x.m.team)) table = null;
-    point = null; render(); toast('紀錄已儲存'); window.scrollTo(0, 0);
+    // 比賽已分出勝負：記下完賽，這場離開球桌、晉級者自動帶到下一場
+    const over = x && (x.m.team ? x.m.result.done : !!x.m.result.winner);
+    if (over) updateMatch(x.m.id, r => { r.fin = Date.now(); delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); });
+    if (!(x && x.m.team) || over) table = null;
+    point = null; render(); toast(over ? '比賽結束，紀錄已儲存' : '紀錄已儲存'); window.scrollTo(0, 0);
   }
   else if ('points' in d) { point = null; render(); }
   else if (d.point) { point = Number(d.point); render(); }

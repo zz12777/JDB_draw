@@ -20,7 +20,7 @@ let modal = null; // { kind: 'score' | 'lineup', mid }
 let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['rec', '籤表'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
 const busyOpen = new Set();
 let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
@@ -36,7 +36,7 @@ function render() {
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
   const swN = swapList().filter(x => !x.sw.sent).length;
   const due = dueNotices(s).length, rep = [...D.byId.values()].filter(m => m.status === 'reported').length;
-  const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'rec' && rep ? `<span class="badge" title="${rep} 場待確認">${rep}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求">${swN}</span>` : '');
+  const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求">${swN}</span>` : '');
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
@@ -123,7 +123,7 @@ function card(m) {
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>
       ${m.team ? `<button class="btn ghost sm" data-lineup="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('list')}排點</button>` : ''}
-      <button class="btn ghost sm" data-score="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon(locked ? 'lock' : 'score')}成績</button></div>
+      <button class="btn ghost sm" data-score="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('score')}成績</button></div>
   </div>`;
 }
 
@@ -202,7 +202,8 @@ function lineupMail(s, x) {
     '只有以下信箱可以登入填寫點單：', ...x.mails.map(e => `・${e}`), '',
     '請用上列信箱的 Google 帳號登入。若無法線上填寫，請盡快將紙本點單交到大會台。', '',
     `${s.edition || ''}${s.title || '交大盃'}大會`].join('\n');
-  return `mailto:${x.mails.map(encodeURIComponent).join(',')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  // 用 Gmail 網頁版開好草稿（大會台登入的 Google 帳號寄出）
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(x.mails.join(','))}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 function onlinePanel(s) {
   const l = pendingOnline(s);
@@ -212,7 +213,7 @@ function onlinePanel(s) {
     <div class="row small" style="margin-bottom:6px">信中請隊伍於 <input type="number" min="1" max="60" value="${mailMin}" data-mailmin style="width:56px"> 分鐘內填寫</div>
     ${(mailAll ? l : l.slice(0, 5)).map(x => { const id = `${x.m.id}|${x.k}`; return `<div class="alertbox"><div class="small ameta">${esc(x.m.ev)} ${esc(x.m.no)}${x.slot ? `　表定 ${esc(x.slot.s)}` : ''}${sent[id] ? `　${fmtTime(sent[id])} 已擬信` : ''}</div>
       <div><b>${esc(x.team)}</b> 尚未填寫線上點單</div>
-      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" data-mailed="${esc(id)}">${icon('edit')}擬信催交</a></div></div>`; }).join('')}
+      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}用 Gmail 擬信催交</a></div></div>`; }).join('')}
     ${l.length > 5 ? `<button class="btn plain sm" data-mailall>${mailAll ? '只顯示前 5 隊' : `顯示全部 ${l.length} 隊`}</button>` : ''}</div>`;
 }
 
@@ -332,7 +333,7 @@ function lineupModal(m) {
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
       <div class="row"><button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>
-        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" data-mailed="${esc(m.id)}|${k}">${icon('edit')}擬信催交線上點單</a>`; })()}
+        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}用 Gmail 擬信催交</a>`; })()}
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
@@ -364,8 +365,8 @@ function lineupWarn(l) {
 /** 「中原大學 鮑起萱/蔡羽婷」排成校名一行、姓名一行（雙打保留斜線） */
 const twoLine = t => { const x = String(t || '').trim(), i = x.indexOf(' '); return i > 0 ? `${esc(x.slice(0, i))}<br>${esc(x.slice(i + 1))}` : esc(x); };
 function scoreModal(m) {
-  const locked = m.status === 'done';
-  const dis = locked ? 'disabled' : '';
+  const locked = false; // 不再鎖定：完賽後大會台仍可修改
+  const dis = '';
   const lu = m.rec.lineup || {};
   const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}>`;
   const block = (pi, games, title, an, bn, meta, solo) => `<div class="pt ${solo ? 'solo' : ''}"><h4>${title}</h4>
@@ -395,7 +396,7 @@ function scoreModal(m) {
       <button class="btn ghost sm" data-wo="a" ${dis}>${esc(sideText(m.B, m.team))} 棄權</button>
       ${m.rec.wo ? `<button class="btn ghost sm" data-wo="" ${dis}>取消棄權</button>` : ''}
       <span class="spacer"></span>
-      ${locked ? `<button class="btn ghost" data-unconfirm>${icon('edit')}取消確認以修改</button>` : `<button class="btn yellow" data-confirm id="sc-confirm">${icon('lock')}確認成績並鎖定</button>`}
+      ${m.status === 'done' ? '<span class="small muted">已完賽</span>' : `<button class="btn yellow" data-confirm id="sc-confirm">${icon('check')}結束本場</button>`}
     </div></div>`;
 }
 function refreshScore() {
@@ -493,23 +494,16 @@ function syncHistory() {
 // 只看成績：待確認的場次、各項目籤表（和即時賽程同步），點場次叫出紀錄核對並鎖定。不顯示桌次與排點。
 let recEv = null;
 function viewRec(s) {
-  const all = [...D.byId.values()];
-  const reported = all.filter(m => m.status === 'reported').sort((a, b) => (a.rec.u || 0) - (b.rec.u || 0));
-  if (!recEv || !D.events.some(e => e.name === recEv)) recEv = (reported[0] && reported[0].ev) || (D.events[0] && D.events[0].name);
+  if (!recEv || !D.events.some(e => e.name === recEv)) recEv = D.events[0] && D.events[0].name;
   const e = D.events.find(x => x.name === recEv);
   const shown = m => m.status !== 'wait' && m.status !== 'ready';
   const mark = m => (m.status === 'reported' ? 'rep' : m.status === 'playing' ? 'live' : '');
   const ko = e ? (e.team ? e.matches.filter(m => m.stage === 'F') : e.matches) : [];
   const t = e ? bracketSvg(ko, e.team, { pos: e.team, noTables: true }) : { svg: '' };
-  const repN = ev => reported.filter(m => m.ev === ev).length;
-  return `<div class="panel"><h2>待確認成績（${reported.length}）</h2>
-      ${reported.length ? `<table class="list"><tbody>${reported.map(m => `<tr><td class="nowrap"><b>${esc(m.ev)}</b>${esc(m.no)}</td><td>${names(m)}</td><td class="nowrap"><b>${m.score[0]} : ${m.score[1]}</b></td>
-        <td class="nowrap" style="text-align:right"><button class="btn sm" data-score="${esc(m.id)}">${icon('score')}核對</button></td></tr>`).join('')}</tbody></table>`
-        : ''}</div>
-    ${e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${D.events.map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}${repN(x.name) ? `<span class="badge">${repN(x.name)}</span>` : ''}</button>`).join('')}</div>
-      <div class="legend" style="margin:0 0 8px"><span><span class="lg rep"></span>待確認</span><span><span class="lg live"></span>進行中</span><span class="muted">點場次或比數可以看紀錄、確認成績</span></div>
+  return e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${D.events.map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
+      <div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span><span class="muted">點場次或比數可以看紀錄、修改成績</span></div>
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
-      ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : ''}`;
+      ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
 }
 
 // ---------------- 場控提醒 ----------------
@@ -1311,8 +1305,7 @@ document.addEventListener('click', async ev => {
     drawModal();
   }
   else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) r.wo = d.wo; else delete r.wo; }); drawModal(); }
-  else if ('confirm' in d) { updateMatch(modal.mid, r => { r.confirmed = true; r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); modal = null; drawModal(); toast('成績已確認並鎖定'); }
-  else if ('unconfirm' in d) { updateMatch(modal.mid, r => { r.confirmed = false; }); drawModal(); }
+  else if ('confirm' in d) { updateMatch(modal.mid, r => { r.fin = Date.now(); r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); modal = null; drawModal(); toast('本場已結束'); }
   else if ('fillRank' in d) {
     update(s => { const se = s.events.find(x => x.name === curEv); const e = D.events.find(x => x.name === curEv); se.rank = se.rank || {};
       e.groups.forEach(g => { if (g.table.all && !g.table.rows[0].lot && !g.table.rows[1].lot) se.rank[g.letter] = { c: g.table.rows[0].team, r: g.table.rows[1].team }; }); });

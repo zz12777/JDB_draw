@@ -74,6 +74,10 @@
                   ".validate": "newData.isString() && newData.val().length < 200"
                 }
               }
+            },
+            "fin": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 20"
             }
           }
         }

@@ -205,7 +205,8 @@ export function derive(state) {
     m.result = r;
     const complete = m.team ? r.done : !!r.winner;
     m.winner = complete ? r.winner : null;
-    m.confirmed = !!rec.confirmed && complete;
+    // 完賽：裁判按「本場結束／本點結束」（fin）或大會台按「結束本場」；不再需要紀錄組核對
+    m.confirmed = (!!rec.confirmed || !!rec.fin) && complete;
     m.known = !!(m.A && m.A.name) && !!(m.B && m.B.name);
     m.tables = rec.tables || [];
     m.lineupOk = { a: !!(rec.lineup && rec.lineup.a), b: !!(rec.lineup && rec.lineup.b) };
