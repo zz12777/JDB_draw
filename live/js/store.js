@@ -118,14 +118,14 @@ export function replaceState(s) {
     'desk/notices': JSON.stringify(next.notices || {}), checkin: null, parking: JSON.stringify(next.parking || {}) })
     .then(bumpV).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
-/** 裁判通行碼：裁判頁輸入通行碼（正確才會成功）；本機測試直接比對 */
+/** 裁判密碼：裁判頁輸入密碼（正確才會成功）；本機測試直接比對 */
 let refUnlockImpl = null;
 export function refUnlock(code) {
-  if (LOCAL) return String(code) === String(state.refcode || '') ? Promise.resolve() : Promise.reject(new Error('通行碼錯誤'));
+  if (LOCAL) return String(code) === String(state.refcode || '') ? Promise.resolve() : Promise.reject(new Error('密碼錯誤'));
   if (!refUnlockImpl) return Promise.reject(new Error('尚未連線'));
   return refUnlockImpl(code);
 }
-/** 大會台設定或取消裁判通行碼；refgen 讓裁判頁知道要重新輸入 */
+/** 大會台設定或取消裁判密碼；refgen 讓裁判頁知道要重新輸入 */
 export function setRefCode(code) {
   return remote.write(code ? { 'desk/refcode': String(code), 'pub/refgen': Date.now() } : { 'desk/refcode': null, 'pub/refgen': null }).then(bumpV);
 }
@@ -221,7 +221,7 @@ async function sdkRemote() {
   db.onValue(at('pub/m'), s => receive('m', s.val()), fail);
   if (ROLE === 'desk' || ROLE === 'checkin') db.onValue(at('parking'), s => receive('parking', s.val()), fail);
   if (ROLE === 'desk' || ROLE === 'ref') db.onValue(at('pub/refgen'), s => receive('refgen', s.val()), fail);
-  // 裁判紀錄區：用匿名身分登入，輸入通行碼後才能記分（大會台換通行碼，舊的立刻失效）
+  // 裁判紀錄區：用匿名身分登入，輸入密碼後才能記分（大會台換密碼，舊的立刻失效）
   if (au && ROLE === 'ref') {
     const a = au.getAuth(app);
     let ready, uid = null; const waitUid = new Promise(r => { ready = r; });
@@ -234,8 +234,9 @@ async function sdkRemote() {
       auth.ready = true; auth.user = user ? user.email : null; auth.error = '';
       // 管理員：兩個交大盃信箱，或由它們加入且尚未到期的帳號
       auth.isAdmin = !!user && ADMINS.includes(user.email);
+      auth.nick = !user ? '' : user.email === 'nctugtt@gmail.com' ? '女桌' : user.email === 'nctuttc@gmail.com' ? '交大盃' : '';
       if (user && !auth.isAdmin) {
-        try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); } catch (e) { auth.isAdmin = false; }
+        try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); auth.nick = (v && v.name) || ''; } catch (e) { auth.isAdmin = false; }
       }
       offs.forEach(f => f()); offs = [];
       if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('desk/lu'), s => receive('dlu', s.val()), fail), db.onValue(at('desk/receipt'), s => receive('receipt', s.val()), fail), db.onValue(at('olu'), s => receive('olu', s.val()), fail), db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail), db.onValue(at('teamacl'), s => receive('teamacl', s.val()), fail), db.onValue(at('nudge'), s => receive('nudge', s.val()), fail), db.onValue(at('desk/refcode'), s => receive('refcode', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),

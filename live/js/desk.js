@@ -901,12 +901,12 @@ function xsBanner(s) {
 function staffEditor(s) {
   const ym = (s.refOpt || {}).ym === 'off' ? 'off' : 'on';
   const rc = s.refcode;
-  return `<h3 style="margin:10px 0 4px">裁判通行碼</h3>
-    <p class="small muted">設定後，裁判第一次開裁判紀錄區要輸入通行碼才能記分，同一支手機輸入一次即可。通行碼外流時按「更換」，所有裁判都要重新輸入。</p>
-    <div class="row" style="margin-bottom:14px">${rc ? `<span>目前通行碼 <b style="font-size:20px;letter-spacing:2px">${esc(rc)}</b></span>` : '<span class="small" style="color:var(--red)">尚未設定，任何拿到連結的人都能記分</span>'}
+  return `<h3 style="margin:10px 0 4px">裁判密碼</h3>
+    <p class="small muted">設定後，裁判第一次開裁判紀錄區要輸入密碼才能記分，同一支手機輸入一次即可。密碼外流時按「更換」，所有裁判都要重新輸入。</p>
+    <div class="row" style="margin-bottom:14px">${rc ? `<span>目前密碼 <b style="font-size:20px;letter-spacing:2px">${esc(rc)}</b></span>` : '<span class="small" style="color:var(--red)">尚未設定，任何拿到連結的人都能記分</span>'}
       <input type="text" inputmode="numeric" id="rc-new" placeholder="自訂（可留空）" maxlength="12" style="width:130px">
       <button class="btn sm" data-refcode>${icon('shuffle')}${rc ? '更換' : '設定'}</button>
-      ${rc ? `<button class="btn ghost sm" data-refcode-off>取消通行碼</button>` : ''}</div>
+      ${rc ? `<button class="btn ghost sm" data-refcode-off>取消密碼</button>` : ''}</div>
     <p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
     <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
     <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>
@@ -930,7 +930,7 @@ function viewRefs(s) {
   if (staffOpen == null) staffOpen = !staff.length;
   const { now, soon, later, onDuty } = busyPeople(s);
   const sub = `<div class="row" style="margin-bottom:12px"><div class="pills">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div><span class="spacer"></span>
-    ${s.refcode ? `<span class="small">裁判通行碼 <b style="font-size:16px;letter-spacing:1px">${esc(s.refcode)}</b></span>` : `<span class="small" style="color:var(--red)">未設定裁判通行碼</span>`}
+    ${s.refcode ? `<span class="small">裁判密碼 <b style="font-size:16px;letter-spacing:1px">${esc(s.refcode)}</b></span>` : `<span class="small" style="color:var(--red)">未設定裁判密碼</span>`}
     <button class="btn ghost sm" data-staffopen>${icon('list')}${staffOpen ? '收合名單' : '編輯名單'}</button></div>`;
   const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">自己人裁判名單</h2><span class="spacer"></span><button class="btn ghost sm" data-staffopen title="收合">${icon('close')}</button></div>
       ${staffEditor(s)}</div></div>`;
@@ -1367,10 +1367,10 @@ document.addEventListener('click', async ev => {
   }
   if ('refcode' in d) {
     const v = ($('#rc-new').value || '').trim().replace(/\s/g, '') || String(Math.floor(1000 + Math.random() * 9000));
-    if (getState().refcode && !confirm(`更換成 ${v}？所有裁判都要重新輸入通行碼。`)) return;
-    setRefCode(v).then(() => toast(`裁判通行碼：${v}`)).catch(err => toast(`設定失敗：${err.message || err}`)); return;
+    if (getState().refcode && !confirm(`更換成 ${v}？所有裁判都要重新輸入密碼。`)) return;
+    setRefCode(v).then(() => toast(`裁判密碼：${v}`)).catch(err => toast(`設定失敗：${err.message || err}`)); return;
   }
-  if ('refcodeOff' in d) { if (!confirm('取消通行碼後，任何拿到連結的人都能記分。確定取消？')) return; setRefCode(null).then(() => toast('已取消裁判通行碼')).catch(err => toast(`取消失敗：${err.message || err}`)); return; }
+  if ('refcodeOff' in d) { if (!confirm('取消密碼後，任何拿到連結的人都能記分。確定取消？')) return; setRefCode(null).then(() => toast('已取消裁判密碼')).catch(err => toast(`取消失敗：${err.message || err}`)); return; }
   if (d.ymopt) { update(st => { st.refOpt = { ...(st.refOpt || {}), ym: d.ymopt }; }); return; }
   if (d.staffset !== undefined) { staffSetOpen = !staffSetOpen; render(); return; }
   if (d.parkopen !== undefined) { parkOpen = !parkOpen; render(); return; }
@@ -1530,7 +1530,7 @@ document.addEventListener('input', ev => {
     else { o = r; games = r.g = r.g || []; }
     games[gi] = games[gi] || ['', ''];
     games[gi][side] = v === '' ? '' : Number(v);
-    o.gb = o.gb || []; o.gb[gi] = '大會台'; for (let i = 0; i < o.gb.length; i++) if (o.gb[i] == null) o.gb[i] = '';
+    o.gb = o.gb || []; o.gb[gi] = auth.nick ? `大會台(${auth.nick})` : '大會台'; for (let i = 0; i < o.gb.length; i++) if (o.gb[i] == null) o.gb[i] = '';
     for (let i = 0; i < games.length; i++) if (!games[i]) games[i] = ['', ''];
   });
 });
