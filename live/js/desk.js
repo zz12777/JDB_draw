@@ -231,7 +231,7 @@ function pendingOnline(s) {
 /** 催交線上點單的信：收件人是這隊所有可登入的信箱 */
 function lineupMail(s, x) {
   const t = s.title || '交大盃';
-  const subject = `【${t}_請盡快送出點單】${x.team} ${EVENT_FULL[x.m.ev]} ${x.m.no} 請盡快送出線上點單`;
+  const subject = `【${t}_請盡快送出點單】${x.m.ev} ${x.team} ${x.m.no} 請盡快送出線上點單`;
   const body = [`${x.team} 您好：`, '',
     `${EVENT_FULL[x.m.ev]} ${matchTitle(x.m)}（對手：${x.opp}）尚未收到貴隊的線上點單，請盡快填寫完畢並送出。`, '',
     '填寫網址：https://nctu-ttc.tw/live/lineup.html', '',
