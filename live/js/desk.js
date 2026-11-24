@@ -998,7 +998,7 @@ function aclPanel(s) {
   const head = `<div class="row"><h2 style="margin:0">線上點單權限</h2><span class="spacer"></span><span class="small muted">${done} / ${list.length} 隊已設定聯絡人，已收 ${sent} 份線上點單</span><button class="btn ghost sm" data-aclopen>${icon('list')}${aclOpen ? '收合' : '展開'}</button></div>`;
   if (!aclOpen) return `<div class="panel">${head}</div>`;
   return `<div class="panel">${head}
-    <p class="small muted">匯入報名表單回應（男子組、女子組、社會組可一次選多個檔案），依隊名帶入聯絡人信箱。信箱只存在資料庫，只有大會台與本人看得到。參賽隊伍登入 <b>nctu-ttc.tw/live/lineup.html</b> 填寫。</p>
+    <p class="small muted">匯入報名表單回應（男子組、女子組、社會組可一次選多個檔案），依隊名帶入「聯絡人 email」欄的信箱，沒填的隊伍留空。信箱只存在資料庫，只有大會台與本人看得到。參賽隊伍登入 <b>nctu-ttc.tw/live/lineup.html</b> 填寫。</p>
     <div class="row"><label class="btn ghost sm">${icon('upload')}匯入報名表單回應<input type="file" accept=".xlsx,.csv" multiple hidden data-aclimp></label>
       <button class="btn ghost sm danger" data-aclwipe>清除全部權限與線上點單</button></div>
     ${aclMiss.length ? `<p class="small" style="color:var(--red)">報名表中有這些隊名在籤表找不到，請手動填寫：${esc(aclMiss.join('、'))}</p>` : ''}
@@ -1033,11 +1033,10 @@ async function importAcl(files) {
     const rows = await readFormFile(f);
     const { kind, responses } = parseResponses(rows);
     const teamEv = EVENTS[kind][0];
-    // 信箱：優先用「聯絡人 email」欄，沒有再用表單的「電子郵件地址」（社會組表單只有前者）
-    const mails = r => [r.contactEmail, r.email].join(' ').split(/[\s,，;；\/]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+    // 只用報名表的「聯絡人 email」欄；沒有填就留空，不用表單的「電子郵件地址」
     responses.filter(r => r.include).forEach(r => {
-      const m = mails(r); if (!m.length) return;
-      const use = r.contactEmail && mails({ contactEmail: r.contactEmail, email: '' }).length ? mails({ contactEmail: r.contactEmail, email: '' }) : m;
+      const use = String(r.contactEmail || '').split(/[\s,，;；\/]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+      if (!use.length) return;
       r.teams.filter(t => !t.waitlist).forEach(t => {
         const hit = byName.get(teamEv + '|' + nm(t.name)) || list.find(x => x.ev === teamEv && looseKey(x.team) === looseKey(t.name));
         if (hit) want.set(hit.key, [...new Set([...(want.get(hit.key) || []), ...use])]); else miss.push(`${teamEv} ${t.name}`);
