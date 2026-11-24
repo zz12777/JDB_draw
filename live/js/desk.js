@@ -807,9 +807,10 @@ function upcomingOf(s) {
       : [m.A, m.B].flatMap(x => String((x && x.name) || '').split(/[\/／]/)).map(x => x.trim().split(/\s+/).pop()).filter(Boolean);
     const sl = slotOf(s.sched, m), at = sl ? dueAt(s, { d: sl.d, t: sl.s }) : null;
     const text = `${sl ? `${dayLabel(s, sl.d, '')} ${sl.s}`.trim() : '未排時間'}　${m.ev} ${m.no}`;
-    ppl.forEach(n => { const k = nm(n); if (!out.has(k)) out.set(k, []); out.get(k).push({ at: at || Infinity, num: m.num, text }); });
+    ppl.forEach(n => { const k = nm(n); if (!out.has(k)) out.set(k, []); out.get(k).push({ at: at || Infinity, num: m.num, team: !!m.team, text }); });
   });
-  out.forEach(l => l.sort((a, b) => a.at - b.at || a.num - b.num));
+  // 只列下一場；同一時段個人賽和團體賽都有時兩場都列（最多兩行）
+  out.forEach((l, k) => { l.sort((a, b) => a.at - b.at || a.num - b.num); const f = l[0]; const g = l.find(x => x.team !== f.team && x.at === f.at && x.at !== Infinity); out.set(k, g ? [f, g] : [f]); });
   return out;
 }
 function busyPeople(s) {
@@ -953,7 +954,7 @@ function viewRefs(s) {
   const sub = `<div class="row" style="margin-bottom:12px"><div class="pills">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div><span class="spacer"></span>
     ${s.refcode ? `<span class="small">裁判密碼 <b style="font-size:16px;letter-spacing:1px">${esc(s.refcode)}</b></span>` : `<span class="small" style="color:var(--red)">未設定裁判密碼</span>`}
     <button class="btn ghost sm" data-staffopen aria-expanded="${staffOpen}">${icon(staffOpen ? 'chevup' : 'chevdown')}${staffOpen ? '收合裁判資料設定' : '裁判資料設定'}</button></div>`;
-  const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">裁判資料設定</h2><span class="spacer"></span><button class="btn ghost sm" data-staffopen title="收合" aria-label="收合裁判資料設定">${icon('chevup')}收合</button></div>
+  const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">裁判資料設定</h2></div>
       ${staffEditor(s, 'tab')}</div></div>`;
   const wrap = body => `${sub}<div class="${staffOpen ? 'desk' : ''}"><div>${body}</div>${staffOpen ? editor : ''}</div>`;
   if (refTab === 'count') {
@@ -973,7 +974,7 @@ function viewRefs(s) {
   const rest = pool.filter(n => why(n) && !spare.includes(n));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
   const plan = upcomingOf(s);
-  const tip = n => { const l = plan.get(k(n)) || []; return l.length ? ` class="tipcell" tabindex="0" data-tip="${esc(l.slice(0, 5).map(x => x.text).join('\n'))}"` : ''; };
+  const tip = n => { const l = plan.get(k(n)) || []; return l.length ? ` class="tipcell" tabindex="0" data-tip="${esc(l.map(x => x.text).join('\n'))}"` : ''; };
   const cols = (list, withTip) => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td${withTip ? tip(n) : ''}>${esc(n)}</td><td class="muted small" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
   // 球桌橫向排列，可以左右滑：每桌顯示裁判姓名與校區
   const swaps = new Map(swapList().map(x => [x.t, x.sw]));
@@ -986,7 +987,7 @@ function viewRefs(s) {
   return wrap(`${strip}${swapPanel()}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
-    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上可以看到他接下來的賽程。</p>${cols(spare, true)}</div>` : ''}
+    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}
     ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list restt"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
     ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }
