@@ -24,6 +24,7 @@ const TABS = [['ctrl', '賽程控制'], ['rec', '籤表'], ['notice', '場控提
 const busyOpen = new Set();
 let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
+const roundOpen = new Set();
 const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
 const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
 const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', notice: 'bell', tables: 'tables', refs: 'board', draw: 'shuffle', ann: 'trophy', setup: 'gear' };
@@ -69,8 +70,14 @@ function viewCtrl(s) {
         ${e.team ? '<span><span class="ltag ok">已送出</span>線上點單</span><span><span class="ltag got">已收</span>紙本已輸入</span><span><span class="ltag paper">紙</span>使用紙本，勾選＝已發點單</span>' : ''}
         
       </div>
-      <div class="rounds">${e.rounds.map(r => `<div class="round"><h3><span>${esc(r.label)}${roundTime(s, r)}</span><span class="muted small">${r.matches.filter(m => m.status === 'done').length}/${r.matches.length}</span></h3>
-        ${r.matches.map(card).join('')}</div>`).join('')}</div>
+      <div class="rounds">${e.rounds.map(r => {
+        // 整輪都完賽：收起來，只留標題，需要時再展開
+        const allDone = r.matches.length && r.matches.every(m => m.status === 'done');
+        const k = `${e.name}|${r.key}`, open = !allDone || roundOpen.has(k);
+        return `<div class="round ${open ? '' : 'folded'}"><h3><span>${esc(r.label)}${roundTime(s, r)}</span><span class="muted small">${r.matches.filter(m => m.status === 'done').length}/${r.matches.length}</span></h3>
+          ${allDone ? `<button class="btn ghost sm" data-round="${esc(k)}" style="margin-bottom:8px">${open ? '收起已完賽' : '已完賽，展開'}</button>` : ''}
+          ${open ? r.matches.map(card).join('') : ''}</div>`;
+      }).join('')}</div>
     </div></div>
     <div class="side">
       ${onlinePanel(s)}
@@ -455,7 +462,7 @@ function drawModal() {
         <li>全部都相同，由<b>裁判長抽籤</b>決定。</li>
       </ol>
       <div class="tiebox"><b>例：三隊各 1 勝 1 敗</b><br>A 3:0 勝 B、B 3:1 勝 C、C 3:2 勝 A。<br>點數：A 5:3、C 4:5、B 3:4，勝率 A &gt; C &gt; B，名次為 A、C、B。</div>
-      <p class="small muted" style="margin-top:10px">棄權：整場棄權算 3:0、每點 3:0、每局 11:0。此說明與簡報僅供內部參考，請勿提供給參賽隊伍。</p>
+      <p class="small muted" style="margin-top:10px">棄權：整場棄權算 3:0、每點 3:0、每局 11:0。</p>
       <p><a href="https://docs.google.com/presentation/d/1aShjDmIyPohnXjChnB2U_LsyDY85MJUb/edit?usp=sharing&amp;ouid=101657985704309911789&amp;rtpof=true&amp;sd=true" target="_blank" rel="noopener">開啟互咬計算簡報</a></p></div></div>`;
     return;
   }
@@ -1258,6 +1265,7 @@ document.addEventListener('click', async ev => {
     writePaths({ [`olu/${mid}/${tk}`]: JSON.stringify(rec) }).then(() => { toast('已退回，隊伍可以重新修改送出'); drawModal(); }).catch(err => toast(`退回失敗：${err.message || err}`));
     return;
   }
+  if (d.round) { roundOpen.has(d.round) ? roundOpen.delete(d.round) : roundOpen.add(d.round); render(); return; }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
   if ('aclopen' in d) { aclOpen = !aclOpen; render(); return; }
   if ('aclwipe' in d) {

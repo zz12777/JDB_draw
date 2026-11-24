@@ -116,6 +116,12 @@ function koMatches(ko, custom) {
  * 由狀態算出所有場次目前的樣子。
  * 回傳 { events: [{ name, type, rounds: [{ key, label, matches }], groups?, final? }], byId, tables }
  */
+/** 輪次名稱：一律寫幾強（阿拉伯數字），最後一輪是冠亞賽；不寫資格賽 */
+function roundName(r) {
+  if (r.depth == null) return r.label;
+  if (r.depth === 0) return '冠亞賽';
+  return `${2 ** r.depth * 2}強`;
+}
 export function derive(state) {
   const byId = new Map();
   const events = [];
@@ -135,7 +141,7 @@ export function derive(state) {
       const name = p => { const x = e.byPos[p]; return x ? { name: x.name, school: x.school, pos: p } : { name: '', school: '', pos: p }; };
       ms.forEach(m => add({ ...m, id: `${e.name}|K|${m.num}`, stage: 'K', label: toCn(m.num), src: [m.a, m.b] }));
       resolveKO(out.matches, name, res);
-      st.rounds.forEach((r, i) => out.rounds.push({ key: 'K' + i, label: r.label, matches: out.matches.filter(m => m.roundIdx === i) }));
+      st.rounds.forEach((r, i) => out.rounds.push({ key: 'K' + i, label: roundName(r), matches: out.matches.filter(m => m.roundIdx === i) }));
     } else {
       // 預賽
       out.groups = st.groups.map((g, gi) => ({ letter: g.letter, teams: e.groups[gi].teams.slice(), matches: [] }));
@@ -175,7 +181,7 @@ export function derive(state) {
         fm.forEach(add);
         const finals = out.matches.slice(before);
         resolveKO(finals, p => { const x = teamAt.get(p); return { name: x ? x.name : '', pos: p, hint: `${mark.get(p) || ''} ${p}`, seed: x ? x.seed : '' }; }, new Map());
-        ko.rounds.forEach((r, i) => out.rounds.push({ key: 'F' + i, label: `決賽 ${r.label}`, matches: finals.filter(m => m.roundIdx === i) }));
+        ko.rounds.forEach((r, i) => out.rounds.push({ key: 'F' + i, label: `決賽 ${roundName(r)}`, matches: finals.filter(m => m.roundIdx === i) }));
         out.final = { size: ko.positions, mark, teamAt, fp };
       }
     }
@@ -214,6 +220,19 @@ export function derive(state) {
     const lineReady = !m.team || (m.lineupOk.a && m.lineupOk.b);
     m.status = m.closed ? 'done' : complete ? 'reported' : m.tables.length ? 'playing' : (m.known && lineReady) ? 'ready' : 'wait';
   }
+
+  // 前一輪還沒全部分出勝負，後面輪次的場次不算可開賽（同一階段內依輪次順序）
+  events.forEach(e => {
+    const byStage = {};
+    (e.rounds || []).forEach(r => { (byStage[r.key[0]] = byStage[r.key[0]] || []).push(r); });
+    Object.values(byStage).forEach(rs => {
+      let open = true;
+      rs.forEach(r => {
+        if (!open) r.matches.forEach(m => { if (m.status === 'ready') m.status = 'wait'; });
+        if (r.matches.some(m => !m.confirmed)) open = false;
+      });
+    });
+  });
 
   // 球桌使用情形
   const tables = new Map();
