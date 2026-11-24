@@ -561,3 +561,5 @@ table.restt td:last-child { white-space: nowrap; }
 .mc.done .sd.win .nm, .mc.done .sd.win .sc { color: #374151; }
 /* 賽程控制右側欄：內容比畫面高時，在右側欄裡自己捲動 */
 @media (min-width: 1101px) { .side { max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; } }
+.lgtoggle { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; margin: 4px 0; display: inline-flex; gap: 4px; align-items: center; }
+.lgtoggle .tri { font-size: 11px; width: 12px; }

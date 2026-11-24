@@ -25,6 +25,7 @@ const busyOpen = new Set();
 let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
 const roundOpen = new Set();
+let legendOpen = false;
 const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
 const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
 const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', notice: 'bell', tables: 'tables', refs: 'board', draw: 'shuffle', ann: 'trophy', setup: 'gear' };
@@ -65,11 +66,12 @@ function viewCtrl(s) {
   return `<div class="desk"><div>
     <div class="panel">
       <div class="row"><div class="pills">${byPill(D.events).map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div></div>
-      <div class="legend">
+      <button class="lgtoggle" data-lgopen aria-expanded="${legendOpen}"><span class="tri">${legendOpen ? '▾' : '▸'}</span>圖例說明</button>
+      ${legendOpen ? `<div class="legend">
+        <span><span class="chip">等待中</span>對手未定或前一輪未打完</span><span><span class="chip ready">可開賽</span>可以派桌</span><span><span class="chip playing">進行中</span>已派桌</span><span><span class="chip reported">已打完</span>裁判尚未按結束</span><span><span class="chip done">已完賽</span>灰底</span>
         <span><span class="dot on"></span>前一輪已完賽</span>
         ${e.team ? '<span><span class="ltag ok">已送出</span>線上點單</span><span><span class="ltag got">已收</span>紙本已輸入</span><span><span class="ltag paper">紙</span>使用紙本，勾選＝已發點單</span>' : ''}
-        
-      </div>
+      </div>` : ''}
       <div class="rounds">${e.rounds.map(r => {
         // 整輪都完賽：收起來，只留標題，需要時再展開
         const allDone = r.matches.length && r.matches.every(m => m.status === 'done');
@@ -246,7 +248,7 @@ function onlinePanel(s) {
   return `<div class="panel"><h2>線上點單未填（${l.length}）</h2>
     ${(mailAll ? l : l.slice(0, 5)).map(x => { const id = `${x.m.id}|${x.k}`; return `<div class="alertbox"><div class="small ameta">${esc(x.m.ev)} ${esc(x.m.no)}${x.slot ? `　表定 ${esc(x.slot.s)}` : ''}${sent[id] ? `　${fmtTime(sent[id])} 已擬信` : ''}</div>
       <div><b>${esc(x.team)}</b> 尚未填寫線上點單</div>
-      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}用 Gmail 擬信催交</a></div></div>`; }).join('')}
+      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}信件催繳</a></div></div>`; }).join('')}
     ${l.length > 5 ? `<button class="btn plain sm" data-mailall>${mailAll ? '只顯示前 5 隊' : `顯示全部 ${l.length} 隊`}</button>` : ''}</div>`;
 }
 
@@ -366,7 +368,7 @@ function lineupModal(m) {
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
       <div class="row"><button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>
-        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}用 Gmail 擬信催交</a>`; })()}
+        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}信件催繳</a>`; })()}
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
@@ -1289,6 +1291,7 @@ document.addEventListener('click', async ev => {
     writePaths({ [`olu/${mid}/${tk}`]: JSON.stringify(rec) }).then(() => { toast('已退回，隊伍可以重新修改送出'); drawModal(); }).catch(err => toast(`退回失敗：${err.message || err}`));
     return;
   }
+  if ('lgopen' in d) { legendOpen = !legendOpen; render(); return; }
   if ('rareopen' in d) { rareOpen = !rareOpen; render(); return; }
   if (d.round) { roundOpen.has(d.round) ? roundOpen.delete(d.round) : roundOpen.add(d.round); render(); return; }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
