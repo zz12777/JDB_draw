@@ -59,7 +59,7 @@ function viewMatch() {
   };
   // 請求其他裁判支援替換：有急事、去廁所、輪到自己比賽
   const sw = (m.rec.swap || {})[table];
-  const swapPanel = `<div class="panel"><h2>請求支援</h2>${sw && sw.by === name
+  const swapPanel = `<div class="panel"><h2>我需要其他裁判來替換我</h2>${sw && sw.by === name
     ? `<div class="alertbox">${fmtTime(sw.ts)} 已請求其他裁判支援替換（${esc(sw.why)}）${sw.sent ? `<br><b>大會台 ${fmtTime(sw.sent)} 已派出替換裁判</b>，請在原地等候交接。` : '<br>等待大會台派出替換裁判。'}</div><button class="btn plain" data-swapcancel>取消請求</button>`
     : swapAsk ? `<p class="small muted">選擇原因，大會台會派其他裁判來替換。</p><div class="swapbtns">${['要去廁所', '輪到我比賽', '有急事'].map(w => `<button class="btn ghost" data-swap="${w}">${w}</button>`).join('')}</div><button class="btn plain" data-swapno style="margin-top:8px">取消</button>`
     : `<button class="btn ghost" data-swapask>請求支援</button>`}</div>`;

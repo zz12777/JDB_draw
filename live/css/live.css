@@ -588,3 +588,5 @@ table.restt td:last-child { white-space: nowrap; }
 .reflink { margin: 4px 0; }
 .reflink a { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .reflink .icon { width: 15px; height: 15px; }
+.tipcell { position: relative; cursor: help; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+.tipcell:hover::after, .tipcell:focus::after { content: attr(data-tip); position: absolute; left: 0; top: 100%; z-index: 20; margin-top: 4px; white-space: pre; background: #0f2a5c; color: #fff; font-size: 13px; line-height: 1.6; padding: 6px 10px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.18); }

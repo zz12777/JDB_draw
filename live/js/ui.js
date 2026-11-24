@@ -29,6 +29,8 @@ const ICONS = {
   upload: '<path d="M8 10.5V2.5M4.8 5.7L8 2.5l3.2 3.2M2.5 10.5v2.3c0 .4.3.7.7.7h9.6c.4 0 .7-.3.7-.7v-2.3" fill="none"/>',
   download: '<path d="M8 2.5v8M4.8 7.3L8 10.5l3.2-3.2M2.5 10.5v2.3c0 .4.3.7.7.7h9.6c.4 0 .7-.3.7-.7v-2.3" fill="none"/>',
   copy: '<rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1" fill="none"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v5.5a1 1 0 0 0 1 1h1.5" fill="none"/>',
+  chevdown: '<path d="M4 6l4 4 4-4" fill="none"/>',
+  chevup: '<path d="M4 10l4-4 4 4" fill="none"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8" fill="none"/>',
   list: '<path d="M5.5 4.5h8M5.5 8h8M5.5 11.5h8M2.5 4.5h.5M2.5 8h.5M2.5 11.5h.5" fill="none"/>',
   score: '<rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none"/><path d="M8 3.5v9" fill="none"/>',

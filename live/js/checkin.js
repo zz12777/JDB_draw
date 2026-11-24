@@ -45,7 +45,7 @@ function render() {
       <div class="pills"><button class="${onlyTodo ? '' : 'on'}" data-todo="0">全部</button><button class="${onlyTodo ? 'on' : ''}" data-todo="1">未簽到</button></div>
       <span class="small muted">已簽到 ${done} / ${all.length}</span>
       <button class="btn ghost sm" data-dlsign>${icon('download')}下載簽到表 Word</button></div>
-      <p class="small muted" style="margin:8px 0 0">資料以大會台匯入的各項目完成籤表為基準。大會台重新匯入後，簽到名單與簽到表會自動更新。也可以按 Ctrl+F（Mac 為 ⌘+F）搜尋學校。</p></div>
+      <ul class="small muted" style="margin:8px 0 0;padding-left:20px"><li>資料以大會台匯入的各項目完成籤表為基準。大會台重新匯入後，簽到名單與簽到表會自動更新。</li><li>可以按 Ctrl+F（Mac 為 ⌘+F）搜尋學校。</li></ul></div>
     ${body || '<div class="panel"><p class="small muted" style="text-align:center">沒有符合的名單。</p></div>'}`;
 }
 
