@@ -37,7 +37,7 @@ function render() {
       <ul>
         <li>請用<b>報名表上填寫的聯絡人信箱</b>登入。</li>
         <li>聯絡人登入後，可以再加入最多 3 個信箱一起填寫。</li>
-        <li>聯絡人信箱不是 Gmail 的話，可以用該信箱註冊 Google 帳號後登入，或請聯絡人把你的 Gmail 加進來。</li>
+        <li>登入上有問題，請洽大會。</li>
       </ul>
       <div style="text-align:center"><button class="btn" data-in>以 Google 帳號登入</button></div>
       ${me.error ? `<p class="small" style="color:var(--red);text-align:center">${esc(me.error)}</p>` : ''}</div>`;

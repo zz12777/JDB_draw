@@ -22,7 +22,7 @@ let D = null;
 
 const TABS = [['ctrl', '賽程控制'], ['rec', '紀錄組'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
 const busyOpen = new Set();
-let parkOpen = false;
+let parkOpen = false, staffSetOpen = false;
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
 
@@ -789,7 +789,7 @@ const orgTag = (s, n) => { const g = orgOf(s, n); return `<span class="otag o-${
 /** 裁判名單編輯：裁判分頁與資料設定共用 */
 function staffEditor(s) {
   const ym = (s.refOpt || {}).ym === 'off' ? 'off' : 'on';
-  return `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位或用空白分隔。【體資】列在人手不足時可支援；【大會】是大會工作人員，不會出現在裁判名單。也可以直接貼上報名名單，有寫「交大：」「陽明：」的會自動分組。</p>
+  return `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
     <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
     <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>`;
 }
@@ -965,7 +965,7 @@ function viewSetup(s) {
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇賽程時間表<input type="file" accept=".xlsx" hidden data-sched></label>
       <span class="small muted">${s.sched ? esc(s.sched.file || '') : ''}</span></div></div>
     ${aclPanel(s)}
-    <div class="panel"><div class="row"><h2 style="margin:0">裁判名單</h2><span class="spacer"></span><span class="small muted">${refSummary(s)}</span></div>${staffEditor(s)}</div>
+    <div class="panel"><div class="row"><h2 style="margin:0">裁判名單</h2><span class="spacer"></span><span class="small muted">${refSummary(s)}</span><button class="btn ghost sm" data-staffset>${icon('list')}${staffSetOpen ? '收合' : '展開'}</button></div>${staffSetOpen ? staffEditor(s) : ''}</div>
     ${parkPanel(s)}
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
@@ -1027,19 +1027,25 @@ async function importAcl(files) {
   const s = getState();
   const list = teamList(s);
   const byName = new Map(list.map(t => [t.ev + '|' + nm(t.team), t]));
-  const want = new Map(); // 隊伍代號 -> 信箱
+  const want = new Map(); // 隊伍代號 -> 信箱（可多個）
   const miss = [];
   for (const f of files) {
     const rows = await readFormFile(f);
     const { kind, responses } = parseResponses(rows);
     const teamEv = EVENTS[kind][0];
-    responses.filter(r => r.include && r.email).forEach(r => r.teams.filter(t => !t.waitlist).forEach(t => {
-      const hit = byName.get(teamEv + '|' + nm(t.name)) || list.find(x => x.ev === teamEv && looseKey(x.team) === looseKey(t.name));
-      if (hit) want.set(hit.key, r.email); else miss.push(`${teamEv} ${t.name}`);
-    }));
+    // 信箱：優先用「聯絡人 email」欄，沒有再用表單的「電子郵件地址」（社會組表單只有前者）
+    const mails = r => [r.contactEmail, r.email].join(' ').split(/[\s,，;；\/]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+    responses.filter(r => r.include).forEach(r => {
+      const m = mails(r); if (!m.length) return;
+      const use = r.contactEmail && mails({ contactEmail: r.contactEmail, email: '' }).length ? mails({ contactEmail: r.contactEmail, email: '' }) : m;
+      r.teams.filter(t => !t.waitlist).forEach(t => {
+        const hit = byName.get(teamEv + '|' + nm(t.name)) || list.find(x => x.ev === teamEv && looseKey(x.team) === looseKey(t.name));
+        if (hit) want.set(hit.key, [...new Set([...(want.get(hit.key) || []), ...use])]); else miss.push(`${teamEv} ${t.name}`);
+      });
+    });
   }
   const up = {};
-  want.forEach((e, key) => Object.assign(up, setOwner(s, key, e)));
+  want.forEach((e, key) => Object.assign(up, setOwner(s, key, e.join(','))));
   aclMiss = [...new Set(miss)];
   if (Object.keys(up).length) await writePaths(up);
   toast(`已帶入 ${want.size} 隊的聯絡人信箱`);
@@ -1196,6 +1202,7 @@ document.addEventListener('click', async ev => {
     return;
   }
   if (d.ymopt) { update(st => { st.refOpt = { ...(st.refOpt || {}), ym: d.ymopt }; }); return; }
+  if (d.staffset !== undefined) { staffSetOpen = !staffSetOpen; render(); return; }
   if (d.parkopen !== undefined) { parkOpen = !parkOpen; render(); return; }
   if ('staffopen' in d) { staffOpen = !staffOpen; render(); return; }
   if (d.swapsent || d.swapclear) {
