@@ -898,25 +898,30 @@ function xsBanner(s) {
     : today.length ? '目前時段沒有香山裁判，全部球桌由我們負責' : '今天沒有安排香山裁判';
   return `<div class="xsbar">${msg}${next ? `<span class="small muted">　${next.a} 起香山改為第 ${next.from}-${next.to} 桌</span>` : ''}${lk ? `<span class="spacer"></span><span class="small">${lk}</span>` : ''}</div>`;
 }
-function staffEditor(s) {
+function staffEditor(s, where) {
   const ym = (s.refOpt || {}).ym === 'off' ? 'off' : 'on';
   const rc = s.refcode;
-  return `<h3 style="margin:10px 0 4px">裁判密碼</h3>
-    <p class="small muted">設定後，裁判第一次開裁判紀錄區要輸入密碼才能記分，同一支手機輸入一次即可。密碼外流時按「更換」，所有裁判都要重新輸入。</p>
-    <div class="row" style="margin-bottom:14px">${rc ? `<span>目前密碼 <b style="font-size:20px;letter-spacing:2px">${esc(rc)}</b></span>` : '<span class="small" style="color:var(--red)">尚未設定，任何拿到連結的人都能記分</span>'}
+  const links = (s.refOpt || {}).links || {};
+  const sec = (title, body, first) => `<section class="refsec${first ? ' first' : ''}"><h3>${title}</h3>${body}</section>`;
+  const linkRow = (k, label) => {
+    const url = links[k] || '';
+    const a = url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${icon('list')}${label}</a>` : `<span class="muted">${label}</span>`;
+    return where === 'set'
+      ? `<div class="row" style="margin-bottom:6px"><label class="small" style="width:110px" for="lk-${k}">${label}</label><input type="url" id="lk-${k}" data-link="${k}" value="${esc(url)}" placeholder="Google 試算表網址" style="flex:1;min-width:200px">${url ? `<a class="btn ghost sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a>` : ''}</div>`
+      : `<div class="reflink">${a}${url ? '' : '<span class="small muted">　尚未設定</span>'}</div>`;
+  };
+  return sec('裁判密碼', `<p class="small muted">設定後，裁判要輸入密碼才能記分。密碼外流時按「更換」，所有裁判都要重新輸入。</p>
+    <div class="row">${rc ? `<span>目前密碼 <b style="font-size:20px;letter-spacing:2px">${esc(rc)}</b></span>` : '<span class="small" style="color:var(--red)">尚未設定，任何拿到連結的人都能記分</span>'}
       <input type="text" inputmode="numeric" id="rc-new" placeholder="自訂（可留空）" maxlength="12" style="width:130px">
       <button class="btn sm" data-refcode>${icon('shuffle')}${rc ? '更換' : '設定'}</button>
-      ${rc ? `<button class="btn ghost sm" data-refcode-off>取消密碼</button>` : ''}</div>
-    <p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
-    <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
-    <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>
-    <div class="row small" style="margin-top:10px">個人賽接下來 <input type="number" min="1" max="99" data-refbuf value="${refBuf(s)}" style="width:64px"> 場內會叫到的人，不列入可擔任裁判（預設＝球桌數）</div>
-    <h3 style="margin:14px 0 4px">香山負責的球桌</h3>
-    <p class="small muted">每行：日期 時段 桌號，例如「12/5 08:30-13:30 1-11」。香山從第 1 桌算起。</p>
-    <textarea data-xs rows="5" style="width:100%">${esc((s.refOpt || {}).xs ?? XS_DEFAULT)}</textarea>
-    <h3 style="margin:14px 0 4px">參考連結</h3>
-    <div class="row" style="margin-bottom:6px"><label class="small" style="width:110px" for="lk-self">自己人賽程</label><input type="url" id="lk-self" data-link="self" value="${esc(((s.refOpt || {}).links || {}).self || '')}" placeholder="Google 試算表網址" style="flex:1;min-width:200px"></div>
-    <div class="row"><label class="small" style="width:110px" for="lk-log">球隊裁判紀錄表</label><input type="url" id="lk-log" data-link="log" value="${esc(((s.refOpt || {}).links || {}).log || '')}" placeholder="Google 試算表網址" style="flex:1;min-width:200px"></div>`;
+      ${rc ? `<button class="btn ghost sm" data-refcode-off>取消密碼</button>` : ''}</div>`, true)
+    + sec('自己人裁判名單', `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
+    <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>`)
+    + sec('分類定義', `<p class="small" style="margin:0;line-height:2.2">個人賽接下來 <input type="number" min="1" max="99" data-refbuf value="${refBuf(s)}" style="width:64px;display:inline-block;vertical-align:middle"> 場內會叫到的人，不列入可擔任裁判（預設＝球桌數）</p>
+    <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>`)
+    + sec('香山負責的球桌', `<p class="small muted">例如「12/5 08:30-13:30 1-11」。香山從第 1 桌算起。</p>
+    <textarea data-xs rows="5" style="width:100%">${esc((s.refOpt || {}).xs ?? XS_DEFAULT)}</textarea>`)
+    + sec('參考連結', `${where === 'set' ? '' : '<p class="small muted">網址在「資料設定 &gt; 裁判資料設定」輸入。</p>'}${linkRow('self', '自己人賽程')}${linkRow('log', '球隊裁判紀錄表')}`);
 }
 function viewRefs(s) {
   const cnt = refCounts();
@@ -932,8 +937,8 @@ function viewRefs(s) {
   const sub = `<div class="row" style="margin-bottom:12px"><div class="pills">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div><span class="spacer"></span>
     ${s.refcode ? `<span class="small">裁判密碼 <b style="font-size:16px;letter-spacing:1px">${esc(s.refcode)}</b></span>` : `<span class="small" style="color:var(--red)">未設定裁判密碼</span>`}
     <button class="btn ghost sm" data-staffopen>${icon('list')}${staffOpen ? '收合名單' : '編輯名單'}</button></div>`;
-  const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">自己人裁判名單</h2><span class="spacer"></span><button class="btn ghost sm" data-staffopen title="收合">${icon('close')}</button></div>
-      ${staffEditor(s)}</div></div>`;
+  const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">裁判資料設定</h2><span class="spacer"></span><button class="btn ghost sm" data-staffopen title="收合">${icon('close')}</button></div>
+      ${staffEditor(s, 'tab')}</div></div>`;
   const wrap = body => `${sub}<div class="${staffOpen ? 'desk' : ''}"><div>${body}</div>${staffOpen ? editor : ''}</div>`;
   if (refTab === 'count') {
     const names = [...new Set([...staff, ...cnt.keys()])].sort((a, b) => (cnt.get(b) || 0) - (cnt.get(a) || 0) || a.localeCompare(b, 'zh-Hant'));
@@ -1092,7 +1097,7 @@ function viewSetup(s) {
       <div class="row"><label class="btn ghost sm">${icon('upload')}選擇賽程時間表<input type="file" accept=".xlsx" hidden data-sched></label>
       <span class="small muted">${s.sched ? esc(s.sched.file || '') : ''}</span></div></div>
     ${aclPanel(s)}
-    <div class="panel"><div class="row"><h2 style="margin:0">裁判名單</h2><span class="spacer"></span><span class="small muted">${refSummary(s)}</span><button class="btn ghost sm" data-staffset>${icon('list')}${staffSetOpen ? '收合' : '展開'}</button></div>${staffSetOpen ? staffEditor(s) : ''}</div>
+    <div class="panel"><div class="row"><h2 style="margin:0">裁判資料設定</h2><span class="spacer"></span><span class="small muted">${refSummary(s)}</span><button class="btn ghost sm" data-staffset>${icon('list')}${staffSetOpen ? '收合' : '展開'}</button></div>${staffSetOpen ? staffEditor(s, 'set') : ''}</div>
     ${parkPanel(s)}
     <div class="panel"><h2>備份與還原</h2><div class="row">
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
