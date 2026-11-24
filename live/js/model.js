@@ -205,13 +205,14 @@ export function derive(state) {
     m.result = r;
     const complete = m.team ? r.done : !!r.winner;
     m.winner = complete ? r.winner : null;
-    // 完賽：裁判按「本場結束／本點結束」（fin）或大會台按「結束本場」；不再需要紀錄組核對
-    m.confirmed = (!!rec.confirmed || !!rec.fin) && complete;
+    // 分出勝負就算成績確定（晉級、預賽名次立即更新）；裁判按「本場結束／本點結束」或大會台按「結束本場」後才離開球桌
+    m.confirmed = complete;
+    m.closed = (!!rec.confirmed || !!rec.fin) && complete;
     m.known = !!(m.A && m.A.name) && !!(m.B && m.B.name);
     m.tables = rec.tables || [];
     m.lineupOk = { a: !!(rec.lineup && rec.lineup.a), b: !!(rec.lineup && rec.lineup.b) };
     const lineReady = !m.team || (m.lineupOk.a && m.lineupOk.b);
-    m.status = m.confirmed ? 'done' : complete ? 'reported' : m.tables.length ? 'playing' : (m.known && lineReady) ? 'ready' : 'wait';
+    m.status = m.closed ? 'done' : complete ? 'reported' : m.tables.length ? 'playing' : (m.known && lineReady) ? 'ready' : 'wait';
   }
 
   // 球桌使用情形

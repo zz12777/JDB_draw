@@ -24,6 +24,8 @@ const TABS = [['ctrl', '賽程控制'], ['rec', '籤表'], ['notice', '場控提
 const busyOpen = new Set();
 let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
+const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
+const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
 const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', notice: 'bell', tables: 'tables', refs: 'board', draw: 'shuffle', ann: 'trophy', setup: 'gear' };
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
@@ -39,7 +41,7 @@ function render() {
   const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求">${swN}</span>` : '');
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
-  if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
+  if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events.length ? byPill(D.events)[0].name : null;
   $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
 }
 
@@ -61,7 +63,7 @@ function viewCtrl(s) {
   const calls = (s.calls || []).slice(-5).reverse();
   return `<div class="desk"><div>
     <div class="panel">
-      <div class="row"><div class="pills">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div></div>
+      <div class="row"><div class="pills">${byPill(D.events).map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div></div>
       <div class="legend">
         <span><span class="dot on"></span>前一輪已完賽</span>
         ${e.team ? '<span><span class="ltag ok">已送出</span>線上點單</span><span><span class="ltag got">已收</span>紙本已輸入</span><span><span class="ltag paper">紙</span>使用紙本，勾選＝已發點單</span>' : ''}
@@ -494,13 +496,13 @@ function syncHistory() {
 // 各項目籤表（和即時賽程同步），點場次可以看、改比分。不顯示桌次與排點。
 let recEv = null;
 function viewRec(s) {
-  if (!recEv || !D.events.some(e => e.name === recEv)) recEv = D.events[0] && D.events[0].name;
+  if (!recEv || !D.events.some(e => e.name === recEv)) recEv = D.events.length ? byPill(D.events)[0].name : null;
   const e = D.events.find(x => x.name === recEv);
   const shown = m => m.status !== 'wait' && m.status !== 'ready';
   const mark = m => (m.status === 'reported' ? 'rep' : m.status === 'playing' ? 'live' : '');
   const ko = e ? (e.team ? e.matches.filter(m => m.stage === 'F') : e.matches) : [];
   const t = e ? bracketSvg(ko, e.team, { pos: e.team, noTables: true }) : { svg: '' };
-  return e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${D.events.map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
+  return e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${byPill(D.events).map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
       <div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span><span class="muted">點場次或比數可以看紀錄、修改成績</span></div>
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
       ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
@@ -804,11 +806,38 @@ function staffText(s) {
 }
 const orgTag = (s, n) => { const g = orgOf(s, n); return `<span class="otag o-${esc(g)}">${esc(g)}</span>`; };
 /** 裁判名單編輯：裁判分頁與資料設定共用 */
+// ---------------- 香山負責的球桌 ----------------
+// 每行：日期 時段 桌號，例如「12/5 08:30-13:30 1-11」；香山一律從第 1 桌算起
+const XS_DEFAULT = '12/5 08:30-13:30 1-11\n12/5 13:30-17:40 1-8\n12/6 08:30-13:40 1-10\n12/6 14:10-15:40 1-6';
+function xsSlots(s) {
+  const text = (s.refOpt || {}).xs ?? XS_DEFAULT;
+  return String(text).split('\n').map(l => l.trim().match(/^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}:\d{2})\s*[-~～]\s*(\d{1,2}:\d{2})\s+(\d+)\s*[-~～]\s*(\d+)/)).filter(Boolean)
+    .map(([, mo, d, a, b, x, y]) => ({ mo: +mo, d: +d, a: a.padStart(5, '0'), b: b.padStart(5, '0'), from: +x, to: +y }));
+}
+/** 現在這個時段香山負責哪幾桌；也回傳今天下一個時段 */
+function xsNow(s) {
+  const now = NOW(), hm2 = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const today = xsSlots(s).filter(x => x.mo === now.getMonth() + 1 && x.d === now.getDate()).sort((p, q) => p.a.localeCompare(q.a));
+  return { cur: today.find(x => hm2 >= x.a && hm2 < x.b) || null, next: today.find(x => x.a > hm2) || null, today };
+}
+function xsBanner(s) {
+  const { cur, next, today } = xsNow(s), T = s.tables || 24, links = (s.refOpt || {}).links || {};
+  const lk = [['自己人賽程', links.self], ['球隊裁判紀錄表', links.log]].filter(([, u]) => u).map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`).join('　');
+  const msg = cur ? `<b>${cur.a}-${cur.b}</b> 香山負責第 <b>${cur.from}-${cur.to}</b> 桌，我們負責第 <b>${cur.to + 1}-${T}</b> 桌`
+    : today.length ? '目前時段沒有香山裁判，全部球桌由我們負責' : '今天沒有安排香山裁判';
+  return `<div class="xsbar">${msg}${next ? `<span class="small muted">　${next.a} 起香山改為第 ${next.from}-${next.to} 桌</span>` : ''}${lk ? `<span class="spacer"></span><span class="small">${lk}</span>` : ''}</div>`;
+}
 function staffEditor(s) {
   const ym = (s.refOpt || {}).ym === 'off' ? 'off' : 'on';
   return `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
     <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
-    <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>`;
+    <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>
+    <h3 style="margin:14px 0 4px">香山負責的球桌</h3>
+    <p class="small muted">每行：日期 時段 桌號，例如「12/5 08:30-13:30 1-11」。香山從第 1 桌算起。</p>
+    <textarea data-xs rows="5" style="width:100%">${esc((s.refOpt || {}).xs ?? XS_DEFAULT)}</textarea>
+    <h3 style="margin:14px 0 4px">參考連結</h3>
+    <div class="row" style="margin-bottom:6px"><label class="small" style="width:110px" for="lk-self">自己人賽程</label><input type="url" id="lk-self" data-link="self" value="${esc(((s.refOpt || {}).links || {}).self || '')}" placeholder="Google 試算表網址" style="flex:1;min-width:200px"></div>
+    <div class="row"><label class="small" style="width:110px" for="lk-log">球隊裁判紀錄表</label><input type="url" id="lk-log" data-link="log" value="${esc(((s.refOpt || {}).links || {}).log || '')}" placeholder="Google 試算表網址" style="flex:1;min-width:200px"></div>`;
 }
 function viewRefs(s) {
   const cnt = refCounts();
@@ -845,9 +874,11 @@ function viewRefs(s) {
   const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;
   // 球桌橫向排列，可以左右滑：每桌顯示裁判姓名與校區
   const swaps = new Map(swapList().map(x => [x.t, x.sw]));
-  const strip = `<div class="panel"><h2>各桌裁判</h2><div class="refstrip">${Array.from({ length: s.tables || 24 }, (_, i) => i + 1).map(t => {
+  const xs = xsNow(s).cur;
+  const strip = `<div class="panel"><h2>各桌裁判</h2>${xsBanner(s)}<div class="refstrip">${Array.from({ length: s.tables || 24 }, (_, i) => i + 1).map(t => {
     const x = D.tables.get(t), on = x && x.m.status === 'playing', n = on ? (x.m.rec.refs || {})[t] : '', sw = swaps.get(t);
-    return `<div class="rcell ${on ? (n ? 'on' : 'none') : 'idle'} ${sw ? 'swap' : ''}"><b>${t}</b>${on ? (n ? `<span>${staff.includes(n) ? orgTag(s, n) : ''}</span><span class="rn">${esc(n)}</span>` : '<span class="rn">未登記</span>') : '<span class="rn muted">空桌</span>'}${sw ? `<small>請求替換</small>` : ''}</div>`;
+    const isXs = xs && t >= xs.from && t <= xs.to;
+    return `<div class="rcell ${on ? (n ? 'on' : 'none') : 'idle'} ${sw ? 'swap' : ''} ${isXs ? 'xs' : ''}"><b>${t}${isXs ? '<span class="xst">香山</span>' : ''}</b>${on ? (n ? `<span>${staff.includes(n) ? orgTag(s, n) : ''}</span><span class="rn">${esc(n)}</span>` : '<span class="rn">未登記</span>') : '<span class="rn muted">空桌</span>'}${sw ? `<small>請求替換</small>` : ''}</div>`;
   }).join('')}</div></div>`;
   return wrap(`${strip}${swapPanel()}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
@@ -920,7 +951,7 @@ function histPanel() {
   const inFile = HISTORY.some(y => y.edition === h.edition);
   const saved = !h.isNew && histSaved[histKey(h.edition)] != null;
   return `<div class="panel"><div class="row"><h2 style="margin:0">歷屆名次</h2><span class="spacer"></span><button class="btn ghost sm" data-hnew>${icon('plus')}新增一屆</button></div>
-    <p class="small muted">修改後按儲存，即時賽程的歷屆名次就會更新。今年的名次在上方公布成績時會自動存入。</p>
+    <p class="small muted">今年的名次在上方公布成績時會自動存入。</p>
     <div class="pills" style="margin:8px 0 12px">${list.map(y => `<button class="${!h.isNew && y.edition === h.edition ? 'on' : ''}" data-hsel="${esc(y.edition)}">${y.year}</button>`).join('')}${h.isNew ? '<button class="on">新的一屆</button>' : ''}</div>
     <div class="row" style="margin-bottom:10px"><label>年份 <input type="number" data-hyear value="${h.year}" style="width:90px"></label>
       <label>屆數 ${h.isNew ? `<input type="text" data-hed value="${esc(h.edition)}" placeholder="例如 第十四屆" style="width:140px">` : `<b>${esc(h.edition)}</b>`}</label></div>
@@ -1363,6 +1394,8 @@ document.addEventListener('change', async ev => {
   else if ('aclimp' in d) { if (t.files.length) { try { await importAcl([...t.files]); } catch (err) { toast(`匯入失敗：${err.message || err}`); } t.value = ''; } }
   else if (d.acled !== undefined) { const up = setEditors(getState(), d.acled, t.value); if (Object.keys(up).length) writePaths(up).then(() => toast('已更新共同編輯')).catch(err => toast(`更新失敗：${err.message || err}`)); }
   else if (d.aclown !== undefined) { const up = setOwner(getState(), d.aclown, t.value); writePaths(up).then(() => toast('已更新聯絡人信箱')).catch(err => toast(`更新失敗：${err.message || err}`)); }
+  else if ('xs' in d) update(st => { st.refOpt = { ...(st.refOpt || {}), xs: t.value }; });
+  else if (d.link) update(st => { st.refOpt = { ...(st.refOpt || {}), links: { ...((st.refOpt || {}).links || {}), [d.link]: t.value.trim() } }; });
   else if ('staff' in d) { const p = parseStaff(t.value); update(s => { s.staff = p.names; s.staffOrg = p.org; }); }
   else if ('sched' in d) {
     if (t.files[0]) try { const slots = parseTimetable(await readWorkbookValues(await t.files[0].arrayBuffer())); const file = t.files[0].name; update(s => { s.sched = { file, slots }; }); toast(`賽程時間表已匯入：${slots.length} 個時段`); } catch (err) { toast(`匯入失敗：${err.message}`); }

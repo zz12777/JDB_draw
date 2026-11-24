@@ -548,3 +548,6 @@ table.restt td:first-child { white-space: nowrap; }
 }
 table.restt td:last-child { white-space: nowrap; }
 .dall { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; padding: 8px 12px; background: var(--blue-soft); border-radius: 8px; font-size: 14px; }
+.xsbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; background: #ecfdf3; border: 1px solid #a7e3bd; color: #14532d; border-radius: 8px; padding: 6px 10px; margin: 0 0 10px; font-size: 14px; }
+.rcell.xs { border-color: #a7e3bd; background: #f3fcf6; }
+.rcell .xst { font-size: 11px; font-weight: 700; color: #15803d; margin-left: 4px; vertical-align: 3px; }
