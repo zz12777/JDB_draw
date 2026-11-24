@@ -123,15 +123,15 @@ function structureOf(name) {
 const sig = entries => entries.map(x => `${x.id}|${x.school}|${fmtSeed(x.seed)}`).join(';');
 
 // ---------------- 版面 ----------------
-const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '停車證', '猛將資料庫', '使用說明'];
+const STEPS = ['上傳表單回應', '名單校正', '籤表規劃', '抽籤', '下載完成籤表', '點單', '賽程時間表', '猛將資料庫', '使用說明'];
 
 function renderSteps() {
   $('#steps').innerHTML = STEPS.map((s, i) =>
-    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 8 ? `<span class="n">${i + 1}</span>` : icon(i === 8 ? 'star' : 'help')}${s}</button>`).join('');
+    `<button class="${S.step === i ? 'on' : ''}" data-step="${i}">${i < 7 ? `<span class="n">${i + 1}</span>` : icon(i === 7 ? 'star' : 'help')}${s}</button>`).join('');
 }
 function render() {
   renderSteps();
-  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepParking, stepStrong, stepHelp][S.step]();
+  [stepUpload, stepEdit, stepPlan, stepDraw, stepExport, stepSheets, stepTime, stepStrong, stepHelp][S.step]();
   save();
 }
 function eventTabs(withCount = true) {
@@ -814,65 +814,6 @@ function overlapData() {
 async function dlOverlap() {
   download(await workbookBlob(overlapWorkbook(overlapData())), '重疊名單.xlsx');
 }
-// ---------------- 步驟 8：停車證 ----------------
-// 從繳費表單（單位名稱／停車證需要張數）整理各單位張數，可以手動調整，再同步到資料庫給簽到處使用。
-// 紙本簽到表統一在簽到處頁面下載（以大會台匯入的完成籤表為準）。
-const PARK_SITE = new URL('../live/checkin.html', location.href).href;
-function parkRows() { if (!S.parking) S.parking = { rows: [] }; return S.parking.rows; }
-function stepParking() {
-  const rows = parkRows();
-  const total = rows.reduce((a, r) => a + (Number(r.n) || 0), 0);
-  $('#main').innerHTML = `<section class="panel"><div class="row"><h2>停車證</h2><span class="spacer"></span>
-      <label class="btn ghost sm">${icon('upload')}匯入繳費表單回應<input type="file" accept=".xlsx,.csv" hidden data-parkfile></label></div>
-    <p class="small muted">匯入繳費表單的回應（Excel 或 CSV），系統讀取「單位名稱／隊伍名稱」和「停車證需要張數」兩欄，依學校合計。追加申請可以直接修改張數或新增一列，確認後按「同步到簽到處」。</p>
-    <p class="small muted">紙本簽到表請到<a href="${PARK_SITE}" target="_blank">簽到處頁面</a>下載，名單以大會台匯入的各項目完成籤表為準，停車證欄會依校名自動帶入張數。</p>
-    ${S.parking.file ? `<p class="small">已匯入：${esc(S.parking.file)}</p>` : ''}
-    <table class="list" style="max-width:640px"><thead><tr><th>單位</th><th style="width:120px">張數</th><th style="width:60px"></th></tr></thead><tbody>
-    ${rows.map((r, i) => `<tr><td><input type="text" data-dpu="${i}" value="${esc(r.unit)}" style="width:100%"></td><td><input type="number" min="0" data-dpn="${i}" value="${Number(r.n) || 0}" style="width:90px"></td><td><button class="btn ghost sm" data-dpdel="${i}" title="刪除">${icon('trash') || '刪除'}</button></td></tr>`).join('')}
-    </tbody></table>
-    <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-dpadd>新增一列</button><span class="small muted">共 ${rows.length} 個單位、${total} 張</span><span class="spacer"></span>
-      <button class="btn ghost sm" data-dpload>讀取資料庫目前的張數</button><button class="btn sm" data-dpsync>同步到簽到處</button></div>
-    ${S.parking.syncedAt ? `<p class="small muted">上次同步：${new Date(S.parking.syncedAt).toLocaleString('zh-TW', { hour12: false })}。同步後大會台資料設定也能修改張數。</p>` : ''}</section>`;
-}
-async function importParking(file) {
-  // Excel 讀出來每格是 { t, keep }，CSV 是字串
-  const cv = x => (x && typeof x === 'object' ? (x.keep ?? x.t ?? '') : String(x ?? ''));
-  const rows = (await readFormFile(file)).map(r => (r || []).map(cv));
-  const head = rows[0] || [];
-  const cu = head.findIndex(h => /單位|隊伍/.test(h)), cn = head.findIndex(h => /停車/.test(h));
-  if (cu < 0 || cn < 0) { toast('找不到「單位名稱」或「停車證」欄位'); return; }
-  const sum = new Map();
-  rows.slice(1).forEach(r => {
-    const raw = String(r[cu] || '').trim(), n = parseInt(String(r[cn] || '').replace(/[^\d]/g, ''), 10) || 0;
-    if (!raw || !n) return;
-    const u = unitFromTeam(raw, S.aliases) || raw;
-    sum.set(u, (sum.get(u) || 0) + n);
-  });
-  S.parking = { ...(S.parking || {}), file: file.name, rows: [...sum.entries()].map(([unit, n]) => ({ unit, n })) };
-  save(); render();
-  toast(`已讀取 ${sum.size} 個單位的停車證`);
-}
-let parkForce = false;
-async function syncParking() {
-  if (!window.__drawCloud) { toast('尚未登入，無法同步'); return; }
-  const obj = {};
-  parkRows().forEach(r => { const u = String(r.unit || '').trim(), n = Number(r.n) || 0; if (u && n) obj[u] = (obj[u] || 0) + n; });
-  try {
-    // 大會台同步後改過張數，直接覆蓋會蓋掉那些修改：先提醒，再按一次才覆蓋
-    const cloud = JSON.stringify(await window.__drawCloud.loadParking());
-    if (cloud !== '{}' && cloud !== (S.parking.lastSync || '{}') && !parkForce) {
-      parkForce = true; toast('資料庫的張數在大會台被修改過。要保留那些修改，請先按「讀取資料庫目前的張數」；確定要覆蓋，再按一次同步。'); return;
-    }
-    parkForce = false;
-    await window.__drawCloud.saveParking(obj); S.parking.syncedAt = Date.now(); S.parking.lastSync = JSON.stringify(obj); save(); render(); toast(`已同步 ${Object.keys(obj).length} 個單位到簽到處`);
-  }
-  catch (err) { toast(`同步失敗：${err.message || err}`); }
-}
-async function loadParking() {
-  if (!window.__drawCloud) { toast('尚未登入，無法讀取'); return; }
-  try { const obj = await window.__drawCloud.loadParking(); S.parking = { ...(S.parking || {}), lastSync: JSON.stringify(obj), rows: Object.entries(obj).map(([unit, n]) => ({ unit, n })) }; save(); render(); toast('已讀取資料庫目前的張數'); }
-  catch (err) { toast(`讀取失敗：${err.message || err}`); }
-}
 async function dlParticipants() {
   const evs = {};
   ALL_EVENTS.forEach(e => { if (S.events[e]) evs[e] = S.events[e].entries; });
@@ -901,7 +842,7 @@ async function loadSheet() {
   } catch (err) {
     sheetStatus = { state: 'fail', msg: err.name === 'AbortError' ? '逾時' : err.message };
   }
-  if (S.step === 3 || S.step === 8) render();
+  if (S.step === 3 || S.step === 7) render();
 }
 const strongOpen = new Set();
 const KIND_TEXT = { 全大運: '全大運決賽前八', 盃賽: '交大盃與其他盃賽前四' };
@@ -1067,10 +1008,6 @@ document.addEventListener('click', async ev0 => {
   if (d.dlsched !== undefined) return dlSched();
   if (d.dlov !== undefined) return dlOverlap();
   if (d.dlpart !== undefined) return dlParticipants();
-  if (d.dpadd !== undefined) { parkRows().push({ unit: '', n: 1 }); save(); return render(); }
-  if (d.dpdel !== undefined) { parkRows().splice(+d.dpdel, 1); save(); return render(); }
-  if (d.dpsync !== undefined) return syncParking();
-  if (d.dpload !== undefined) return loadParking();
   if (d.ovreset !== undefined) { S.schedule.override = {}; return render(); }
   if (d.spreset !== undefined) { S.schedule.params = {}; S.schedule.override = {}; return render(); }
   if (d.sheetclear) { delete S.sheetUploads[d.sheetclear]; render(); }
@@ -1148,9 +1085,6 @@ document.addEventListener('toggle', ev0 => {
 
 document.addEventListener('change', ev0 => {
   const pd = d0(ev0);
-  if (pd.parkfile !== undefined) { const f = ev0.target.files && ev0.target.files[0]; if (f) importParking(f).catch(err => toast(`匯入失敗：${err.message}`)); return; }
-  if (pd.dpu !== undefined) { parkRows()[+pd.dpu].unit = ev0.target.value.trim(); save(); return; }
-  if (pd.dpn !== undefined) { parkRows()[+pd.dpn].n = Math.max(0, Number(ev0.target.value) || 0); save(); return render(); }
   if (d0(ev0).sp) {
     const k = ev0.target.dataset.sp, v = ev0.target.type === 'checkbox' ? ev0.target.checked : ev0.target.value;
     const P = S.schedule.params;
