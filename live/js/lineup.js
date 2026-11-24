@@ -13,6 +13,7 @@ let teams = null;          // 我可以填的隊伍代號
 let cur = null;            // 目前選的隊伍代號
 let acl = null;            // 目前隊伍的權限表 {信箱代號: owner|editor}
 let olu = {};              // 目前隊伍各場已送出的點單 {場次: {lu, by, ts}}
+let nudge = {};            // 大會台的頁面通知 {場次: {text, ts}}
 let open = null;           // 展開填寫的場次
 let draft = {};            // 填到一半的點單 {場次: [...]}
 const offs = [];
@@ -64,8 +65,23 @@ function render() {
       <p class="small muted">送出點單後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
     ${ms.length ? ms.map(m => matchCard(m, info)).join('') : '<div class="panel"><p class="muted">目前沒有需要填寫點單的場次。</p></div>'}
     ${editorsPanel(owner)}`;
+  showNudge(ms);
+}
+// 頁面通知：還沒送出點單的場次有新通知時跳出視窗，按「收到」才關閉（這台裝置記住已讀）
+const ackKey = (mid, x) => `jdb-nudge|${cur}|${mid}|${x.ts}`;
+const acked = (mid, x) => { try { return !!localStorage.getItem(ackKey(mid, x)); } catch (e) { return false; } };
+function showNudge(ms) {
+  let host = $('#nudge-dlg');
+  if (!host) { host = document.createElement('div'); host.id = 'nudge-dlg'; document.body.append(host); }
+  const m = ms.find(x => nudge[x.id] && !x.rec.start && !fin0(olu[x.id]) && !acked(x.id, nudge[x.id]));
+  if (!m) { host.innerHTML = ''; return; }
+  const x = nudge[m.id];
+  host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2 style="margin:0 0 8px">${icon('bell')} 大會通知</h2>
+    <p class="small muted" style="margin:0 0 6px">${esc(m.no)}　${fmtTime(x.ts)}</p><p style="font-size:17px;margin:0 0 14px">${esc(x.text)}</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" data-ack="${esc(m.id)}">收到</button></div></div></div>`;
 }
 
+const fin0 = sub => !!(sub && sub.final);
 function matchCard(m, info) {
   const side = m.A && m.A.name === info.team ? 'a' : 'b';
   const opp = side === 'a' ? m.B : m.A;
@@ -76,13 +92,14 @@ function matchCard(m, info) {
   const head = `<div class="row mhead"><b class="mno">${esc(m.no)}</b><span class="chip">${m.stage === 'F' ? '決賽' : `預賽 ${esc(m.group || '')} 組`}</span><span class="spacer"></span>${open === m.id && !m.rec.start && !(sub && sub.final) ? `<button class="btn ghost sm" data-cancel title="收起" aria-label="收起">${icon('close')}</button>` : ''}</div>
     <div class="mvs"><b>${esc(sideText(me0, true))}</b><span class="muted">vs</span><span>${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</span></div>`;
   const fin = sub && sub.final;
+  const ng = !locked && !fin0(sub) && nudge[m.id] ? `<div class="nudgetag">${icon('bell')}大會通知 ${fmtTime(nudge[m.id].ts)}：${esc(nudge[m.id].text)}</div>` : '';
   const status = locked ? `<span class="chip">${icon('lock')}已鎖定</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
   if (locked || fin) {
     const l = official || (sub && sub.lu);
-    return `<div class="panel">${head}<div class="row">${status}${locked ? '<span class="small muted">大會已派桌，點單以大會登錄為準。</span>' : ''}</div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
+    return `<div class="panel">${head}${ng}<div class="row">${status}${locked ? '<span class="small muted">大會已派桌，點單以大會登錄為準。</span>' : ''}</div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
   }
   if (open !== m.id) {
-    return `<div class="panel">${head}<div class="row">${status}<span class="spacer"></span><button class="btn ${sub ? 'ghost' : ''} sm" data-open="${esc(m.id)}">${icon('edit')}${sub ? '繼續編輯' : '填寫點單'}</button></div>
+    return `<div class="panel">${head}${ng}<div class="row">${status}<span class="spacer"></span><button class="btn ${sub ? 'ghost' : ''} sm" data-open="${esc(m.id)}">${icon('edit')}${sub ? '繼續編輯' : '填寫點單'}</button></div>
       ${sub ? lineupView(sub.lu) : ''}${logView(sub)}</div>`;
   }
   const l = draft[m.id] || (sub && sub.lu) || [];
@@ -90,7 +107,7 @@ function matchCard(m, info) {
   const sel = (i, j, v) => r.length
     ? `<select data-lu="${i}|${j}"><option value="">選擇選手</option>${r.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`
     : `<input type="text" data-lu="${i}|${j}" value="${esc(v || '')}" placeholder="姓名">`;
-  return `<div class="panel">${head}${status}
+  return `<div class="panel">${head}${ng}${status}
     <div class="luform">${POINTS.map((p, i) => `<div class="lurow"><span class="lul">第${'一二三四五'[i]}點<small>${p.dbl ? '雙打' : '單打'}</small></span>
       <span class="luin">${p.dbl ? sel(i, 0, (l[i] || [])[0]) + sel(i, 1, (l[i] || [])[1]) : sel(i, null, l[i])}</span></div>`).join('')}</div>
     <p class="small" id="lu-warn" style="color:var(--red);min-height:18px;margin:6px 0"></p>
@@ -140,13 +157,15 @@ let saveTimer = null;
 
 function listenTeam() {
   while (offs.length > 1) offs.pop()();
-  acl = null; olu = {};
+  acl = null; olu = {}; nudge = {};
   const key = cur;
   offs.push(watch(`teamacl/${key}`, v => { if (cur === key) { acl = v || {}; render(); } }));
+  // 大會台的頁面通知：整隊一次讀
+  offs.push(watch(`nudge/${key}`, v => { if (cur !== key) return; nudge = {}; Object.entries(v || {}).forEach(([mid, x]) => { try { nudge[mid] = JSON.parse(x); } catch (e) { /* 略過 */ } }); if (editing()) return; render(); }));
   // 每一場的點單分開讀：沒有權限的場次不會影響其他場
   const D = derive(getState());
   const info = teamInfo(key);
-  [...D.byId.values()].filter(m => m.team && m.ev === info.ev && ((m.A && m.A.name === info.team) || (m.B && m.B.name === info.team))).forEach(m => {
+  [...D.byId.values()].filter(m => m.team && m.ev === info.ev && ((m.A && m.A.name === info.team) || (m.B && m.B.name === info.team)) && m.status !== 'done' && m.status !== 'reported').forEach(m => {
     offs.push(watch(`olu/${m.id}/${key}`, v => { if (cur !== key) return; try { const x = v ? JSON.parse(v) : null; if (x) olu[m.id] = x; else delete olu[m.id]; } catch (e) { /* 格式錯誤略過 */ } if (editing()) return; render(); }));
   });
 }
@@ -174,6 +193,7 @@ onAuth(() => render());
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('button, a[data-out]'); if (!t) return;
   const d = t.dataset;
+  if (d.ack) { const x = nudge[d.ack]; if (x) { try { localStorage.setItem(ackKey(d.ack, x), '1'); } catch (e) { /* 無法記住也沒關係 */ } } render(); return; }
   if ('in' in d) signIn();
   else if ('out' in d) { ev.preventDefault(); signOut(); }
   else if (d.team) { cur = d.team; open = null; listenTeam(); render(); }

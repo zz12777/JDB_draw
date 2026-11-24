@@ -207,6 +207,13 @@ function withOnline(s) {
 /** 這隊可以登入填點單的信箱 */
 function teamMails(s, ev, team) { return Object.keys((s.teamacl || {})[teamKey(ev, team)] || {}).map(k => k.replace(/,/g, '.')); }
 let mailAll = false;
+/** 大會台送到隊伍線上點單頁面的通知 */
+function nudgeOf(s, m, k) {
+  const S = k === 'a' ? m.A : m.B; if (!S || !S.name) return null;
+  const v = ((s.nudge || {})[teamKey(m.ev, S.name)] || {})[m.id];
+  try { return v ? JSON.parse(v) : null; } catch (e) { return null; }
+}
+function nudgeDefault(s, m) { const sl = slotOf(s.sched, m); return sl ? `此為表定 ${sl.s} 的賽程，請盡速送出點單，謝謝！` : `請盡速送出 ${m.no} 的點單，謝謝！`; }
 /** 該填線上點單還沒填的隊伍：這隊的下一場（有時間表時為表定 30 分鐘內）、還沒派桌、這隊有設定信箱、大會台與線上都沒有點單 */
 function pendingOnline(s) {
   const now = NOW().getTime(), out = [];
@@ -248,7 +255,7 @@ function onlinePanel(s) {
   return `<div class="panel"><h2>線上點單未填（${l.length}）</h2>
     ${(mailAll ? l : l.slice(0, 5)).map(x => { const id = `${x.m.id}|${x.k}`; return `<div class="alertbox"><div class="small ameta">${esc(x.m.ev)} ${esc(x.m.no)}${x.slot ? `　表定 ${esc(x.slot.s)}` : ''}${sent[id] ? `　${fmtTime(sent[id])} 已擬信` : ''}</div>
       <div><b>${esc(x.team)}</b> 尚未填寫線上點單</div>
-      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}信件催繳</a></div></div>`; }).join('')}
+      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱${nudgeOf(s, x.m, x.k) ? `　${fmtTime(nudgeOf(s, x.m, x.k).ts)} 已頁面通知` : ''}</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(id)}">${icon('bell')}頁面通知</button></div></div>`; }).join('')}
     ${l.length > 5 ? `<button class="btn plain sm" data-mailall>${mailAll ? '只顯示前 5 隊' : `顯示全部 ${l.length} 隊`}</button>` : ''}</div>`;
 }
 
@@ -368,7 +375,7 @@ function lineupModal(m) {
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
       <div class="row"><button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>
-        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}信件催繳</a>`; })()}
+        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(m.id)}|${k}">${icon('bell')}頁面通知</button>`; })()}
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
@@ -457,6 +464,14 @@ function drawModal() {
   const host = $('#modal');
   if (!modal) { host.innerHTML = ''; host.hidden = true; return; }
   host.hidden = false;
+  if (modal.kind === 'nudge') {
+    const st = getState(), m = D.byId.get(modal.mid), S = modal.side === 'a' ? m.A : m.B, old = nudgeOf(st, m, modal.side);
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(480px,100%)"><div class="row"><h2 style="margin:0">頁面通知</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉">${icon('close')}</button></div>
+      <p class="small muted">${esc(m.ev)} ${esc(m.no)}　${esc(S.name)}。送出後，隊伍打開線上點單頁面會跳出這則通知，這場送出點單前都會標示。${old ? `<br>上次通知：${fmtTime(old.ts)}` : ''}</p>
+      <textarea id="nudge-t" rows="3" style="width:100%">${esc(nudgeDefault(st, m))}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-nudge-ok>${icon('bell')}送出通知</button></div></div></div>`;
+    return;
+  }
   if (modal.kind === 'rnote') {
     const r = (getState().receipt || {})[modal.unit] || {};
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(460px,100%)"><div class="row"><h2 style="margin:0">${esc(modal.unit)} 備註</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉">${icon('close')}</button></div>
@@ -1148,7 +1163,7 @@ function parkPanel(s) {
   const head = `<div class="row"><h2 style="margin:0">停車證與收據</h2><span class="spacer"></span><span class="small muted">停車證 ${total} 張${need ? `，收據 ${need} 份` : ''}</span><button class="btn ghost sm" data-parkopen aria-expanded="${parkOpen}">${icon('list')}${parkOpen ? '收合' : '展開'}</button></div>`;
   if (!parkOpen) return `<div class="panel">${head}</div>`;
   return `<div class="panel">${head}
-    <p class="small muted">匯入繳費表單回應，帶入各單位的停車證張數（有「收據」欄位時一併帶入）。追加申請、要不要收據、收據抬頭等要求可以直接修改。簽到處會依校名自動帶入停車證張數。</p>
+    <p class="small muted">匯入繳費表單回應，帶入各單位的停車證張數（有「收據」欄位時一併帶入）。帶入後請核對標題旁的總張數；賽前透過粉專追加停車證的單位，直接在表格增減張數。要不要收據、收據抬頭等要求也可以直接修改。簽到處會依校名自動帶入停車證張數。</p>
     <div class="row" style="margin-bottom:8px"><label class="btn ghost sm">${icon('upload')}匯入繳費表單<input type="file" accept=".xlsx,.csv" hidden data-payimp></label></div>
     <table class="list"><thead><tr><th>單位</th><th style="width:100px">停車證</th><th style="width:70px">收據</th><th>備註</th><th style="width:50px"></th></tr></thead><tbody>
     ${units.map(u => { const r = rc[u] || {}; return `<tr><td>${esc(u)}</td><td><input type="number" min="0" style="width:70px" data-parkn="${esc(u)}" value="${Number(park[u]) || 0}"></td>
@@ -1178,7 +1193,7 @@ async function importPayment(file) {
     if (needIt || note) rc[u] = { need: needIt || !!(rc[u] && rc[u].need), note: [rc[u] && rc[u].note, note].filter(Boolean).join('；') };
   });
   update(st => { st.parking = park; st.receipt = { ...rc }; });
-  toast(`已匯入：停車證 ${Object.values(park).reduce((a, n) => a + n, 0)} 張${Object.keys(rc).length ? `，收據 ${Object.values(rc).filter(x => x.need).length} 份` : ''}`);
+  toast(`已匯入：停車證 ${Object.values(park).reduce((a, n) => a + n, 0)} 張${Object.keys(rc).length ? `，收據 ${Object.values(rc).filter(x => x.need).length} 份` : ''}。請核對張數，粉專追加的請手動增減`);
 }
 
 /** 由檔名或工作表名稱判斷項目 */
@@ -1305,6 +1320,14 @@ document.addEventListener('click', async ev => {
     return;
   }
   if ('lgopen' in d) { legendOpen = !legendOpen; render(); return; }
+  if (d.nudge) { const i = d.nudge.lastIndexOf('|'); modal = { kind: 'nudge', mid: d.nudge.slice(0, i), side: d.nudge.slice(i + 1) }; drawModal(); return; }
+  if ('nudgeOk' in d) {
+    const m = D.byId.get(modal.mid), S = modal.side === 'a' ? m.A : m.B, text = $('#nudge-t').value.trim().slice(0, 300);
+    if (!text) { toast('請輸入通知內容'); return; }
+    const tk = teamKey(m.ev, S.name), mid = modal.mid; modal = null; drawModal();
+    writePaths({ [`nudge/${tk}/${mid}`]: JSON.stringify({ text, ts: Date.now() }) }).then(() => toast(`已通知 ${S.name}`)).catch(err => toast(`通知失敗：${err.message || err}`));
+    return;
+  }
   if ('rareopen' in d) { rareOpen = !rareOpen; render(); return; }
   if (d.round) { roundOpen.has(d.round) ? roundOpen.delete(d.round) : roundOpen.add(d.round); render(); return; }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
@@ -1314,7 +1337,7 @@ document.addEventListener('click', async ev => {
   }
   if ('aclwipeOk' in d) {
     modal = null; drawModal();
-    writePaths({ teamacl: null, myteams: null, olu: null }).then(() => toast('已清除線上點單權限與點單')).catch(err => toast(`清除失敗：${err.message || err}`));
+    writePaths({ teamacl: null, myteams: null, olu: null, nudge: null }).then(() => toast('已清除線上點單權限與點單')).catch(err => toast(`清除失敗：${err.message || err}`));
     return;
   }
   if (d.ymopt) { update(st => { st.refOpt = { ...(st.refOpt || {}), ym: d.ymopt }; }); return; }
@@ -1401,7 +1424,7 @@ document.addEventListener('click', async ev => {
     const keep = $('#wipe-staff') && $('#wipe-staff').checked, st0 = getState();
     modal = null; drawModal();
     replaceState({ ...emptyState(), ...(keep ? { staff: st0.staff || [], staffOrg: st0.staffOrg || {}, refOpt: st0.refOpt || {} } : {}) });
-    writePaths({ teamacl: null, myteams: null, olu: null }).catch(() => {});
+    writePaths({ teamacl: null, myteams: null, olu: null, nudge: null }).catch(() => {});
     render(); toast('已清除全部資料');
   }
 });

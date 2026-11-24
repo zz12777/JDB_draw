@@ -11,7 +11,7 @@ import { FIREBASE, ROOT, ADMINS, POLL_SECONDS } from './config.js';
 const ROLE = document.documentElement.dataset.role || 'public';
 export const LOCAL = new URLSearchParams(location.search).has('local') || !FIREBASE;
 const listeners = new Set(), authListeners = new Set();
-const raw = { meta: null, events: null, m: {}, pcalls: null, calls: null, staff: null, staffOrg: null, refOpt: null, receipt: null, dlu: null, olu: null, teamacl: null, notices: null, checkin: {}, parking: null };
+const raw = { meta: null, events: null, m: {}, pcalls: null, calls: null, staff: null, staffOrg: null, refOpt: null, receipt: null, dlu: null, olu: null, teamacl: null, nudge: null, notices: null, checkin: {}, parking: null };
 let state = emptyState();
 let remote = null;
 export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, error: '', loaded: false };
@@ -63,7 +63,7 @@ function assemble() {
   for (const id of Object.keys(raw.m || {})) m[id] = nodeToRec(raw.m[id]);
   state = { ...emptyState(), ...Object.fromEntries(META_KEYS.filter(k => meta[k] !== undefined).map(k => [k, meta[k]])),
     events: parse(raw.events, []), m, calls: parse(raw.calls, []), pcalls: parse(raw.pcalls, []), staff: parse(raw.staff, []), staffOrg: parse(raw.staffOrg, {}), refOpt: parse(raw.refOpt, {}), receipt: parse(raw.receipt, {}), dlu: parse(raw.dlu, {}),
-    olu: Object.fromEntries(Object.entries(raw.olu || {}).map(([mid, t]) => [mid, Object.fromEntries(Object.entries(t || {}).map(([k, v]) => [k, parse(v, null)]).filter(([, v]) => v))])), teamacl: raw.teamacl || {},
+    olu: Object.fromEntries(Object.entries(raw.olu || {}).map(([mid, t]) => [mid, Object.fromEntries(Object.entries(t || {}).map(([k, v]) => [k, parse(v, null)]).filter(([, v]) => v))])), teamacl: raw.teamacl || {}, nudge: raw.nudge || {},
     notices: parse(raw.notices, {}), parking: parse(raw.parking, {}), checkin: Object.fromEntries(Object.entries(raw.checkin || {}).map(([k, v]) => [k, parse(v, {})])) };
 }
 const metaOf = s => JSON.stringify(Object.fromEntries(META_KEYS.map(k => [k, s[k] ?? null])));
@@ -165,7 +165,7 @@ function localRemote() {
   const KEY = 'jdb-live-tree';
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } };
   const push = () => { const t = load(); const pub = t.pub || {}, desk = t.desk || {};
-    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.pcalls = pub.calls ?? null; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.staffOrg = desk.staffOrg ?? null; raw.refOpt = desk.refOpt ?? null; raw.dlu = desk.lu ?? null; raw.receipt = desk.receipt ?? null; raw.olu = t.olu || null; raw.teamacl = t.teamacl || null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
+    raw.meta = pub.meta ?? null; raw.events = pub.events ?? null; raw.m = pub.m || {}; raw.pcalls = pub.calls ?? null; raw.calls = desk.calls ?? null; raw.staff = desk.staff ?? null; raw.staffOrg = desk.staffOrg ?? null; raw.refOpt = desk.refOpt ?? null; raw.dlu = desk.lu ?? null; raw.receipt = desk.receipt ?? null; raw.olu = t.olu || null; raw.teamacl = t.teamacl || null; raw.nudge = t.nudge || null; raw.notices = desk.notices ?? null; raw.checkin = t.checkin || {}; raw.parking = t.parking ?? null;
     auth.loaded = true; assemble(); };
   window.addEventListener('storage', e => { if (e.key === KEY) { push(); emit(false); } });
   push();
@@ -179,7 +179,7 @@ function localRemote() {
         if (v === null) delete o[parts[parts.length - 1]]; else o[parts[parts.length - 1]] = v;
       }
       localStorage.setItem(KEY, JSON.stringify(t));
-      if (Object.keys(up).some(k => /^(olu|teamacl)/.test(k))) { push(); emit(false); }
+      if (Object.keys(up).some(k => /^(olu|teamacl|nudge)/.test(k))) { push(); emit(false); }
     },
     async setHistory(key, v) { const h = this.history(); if (v == null) delete h[key]; else h[key] = v; localStorage.setItem('jdb-live-history', JSON.stringify(h)); },
     history() { try { return JSON.parse(localStorage.getItem('jdb-live-history') || '{}'); } catch (e) { return {}; } },
@@ -220,7 +220,7 @@ async function sdkRemote() {
         try { const v = (await db.get(db.ref(database, `admins/${adminKey(user.email)}`))).val(); auth.isAdmin = !!v && v.until > Date.now(); } catch (e) { auth.isAdmin = false; }
       }
       offs.forEach(f => f()); offs = [];
-      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('desk/lu'), s => receive('dlu', s.val()), fail), db.onValue(at('desk/receipt'), s => receive('receipt', s.val()), fail), db.onValue(at('olu'), s => receive('olu', s.val()), fail), db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail), db.onValue(at('teamacl'), s => receive('teamacl', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
+      if (auth.isAdmin) offs = [db.onValue(at('desk/calls'), s => receive('calls', s.val()), fail), db.onValue(at('desk/staff'), s => receive('staff', s.val()), fail), db.onValue(at('desk/staffOrg'), s => receive('staffOrg', s.val()), fail), db.onValue(at('desk/refOpt'), s => receive('refOpt', s.val()), fail), db.onValue(at('desk/lu'), s => receive('dlu', s.val()), fail), db.onValue(at('desk/receipt'), s => receive('receipt', s.val()), fail), db.onValue(at('olu'), s => receive('olu', s.val()), fail), db.onValue(at('checkin'), s => receive('checkin', s.val() || {}), fail), db.onValue(at('teamacl'), s => receive('teamacl', s.val()), fail), db.onValue(at('nudge'), s => receive('nudge', s.val()), fail), db.onValue(at('desk/notices'), s => receive('notices', s.val()), fail),
         db.onValue(at('pub/calls'), s => receive('pcalls', s.val() ?? ''), fail)];
       emitAuth();
     });

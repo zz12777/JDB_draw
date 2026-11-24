@@ -580,3 +580,5 @@ table.restt td:last-child { white-space: nowrap; }
   html[data-role="public"] .top .top-group, html[data-role="team"] .top .top-group { border-right: 0; padding-right: 0; }
   html[data-role="public"] .top a, html[data-role="team"] .top a { padding: 4px 8px; white-space: nowrap; }
 }
+.nudgetag { display: flex; gap: 6px; align-items: flex-start; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 6px; padding: 6px 10px; margin: 4px 0 8px; font-size: 14px; font-weight: 600; }
+.nudgetag .icon { width: 15px; height: 15px; flex: none; margin-top: 2px; }

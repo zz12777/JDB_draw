@@ -132,6 +132,16 @@
             ".validate": "newData.isString() && newData.val().length < 3000"
           }
         }
+      },
+      "nudge": {
+        ".read": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+        "$team": {
+          ".read": "auth != null && root.child('t13').child('teamacl').child($team).child(auth.token.email.toLowerCase().replace('.', ',')).exists()",
+          "$mid": {
+            ".validate": "newData.isString() && newData.val().length < 1000"
+          }
+        }
       }
     },
     "history": {
