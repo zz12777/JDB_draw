@@ -77,7 +77,7 @@ function showNudge(ms) {
   if (!m) { host.innerHTML = ''; return; }
   const x = nudge[m.id];
   host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2 style="margin:0 0 8px">${icon('bell')} 大會通知</h2>
-    <p class="small muted" style="margin:0 0 6px">${esc(m.no)}　${fmtTime(x.ts)}</p><p style="font-size:17px;margin:0 0 14px">${esc(x.text)}</p>
+    <p class="small muted" style="margin:0 0 6px">${esc(m.ev)} ${esc(m.no)}</p><p style="font-size:17px;margin:0 0 14px">${esc(x.text)}</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" data-ack="${esc(m.id)}">收到</button></div></div></div>`;
 }
 
@@ -92,7 +92,7 @@ function matchCard(m, info) {
   const head = `<div class="row mhead"><b class="mno">${esc(m.no)}</b><span class="chip">${m.stage === 'F' ? '決賽' : `預賽 ${esc(m.group || '')} 組`}</span><span class="spacer"></span>${open === m.id && !m.rec.start && !(sub && sub.final) ? `<button class="btn ghost sm" data-cancel title="收起" aria-label="收起">${icon('close')}</button>` : ''}</div>
     <div class="mvs"><b>${esc(sideText(me0, true))}</b><span class="muted">vs</span><span>${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</span></div>`;
   const fin = sub && sub.final;
-  const ng = !locked && !fin0(sub) && nudge[m.id] ? `<div class="nudgetag">${icon('bell')}大會通知 ${fmtTime(nudge[m.id].ts)}：${esc(nudge[m.id].text)}</div>` : '';
+  const ng = !locked && !fin0(sub) && nudge[m.id] ? `<div class="nudgetag">${icon('bell')}大會通知：${esc(nudge[m.id].text)}</div>` : '';
   const status = locked ? `<span class="chip">${icon('lock')}已鎖定</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
   if (locked || fin) {
     const l = official || (sub && sub.lu);

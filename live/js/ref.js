@@ -151,10 +151,13 @@ document.addEventListener('input', ev => {
   const m = x.m, pi = point;
   updateMatch(m.id, r => {
     let games;
-    if (m.team) { r.pts = r.pts || []; r.pts[pi] = r.pts[pi] || {}; games = r.pts[pi].g = r.pts[pi].g || []; r.pts[pi].ref = name; if (!r.pts[pi].table) r.pts[pi].table = table; }
-    else { games = r.g = r.g || []; r.ref = name; }
+    let o;
+    if (m.team) { r.pts = r.pts || []; o = r.pts[pi] = r.pts[pi] || {}; games = o.g = o.g || []; o.ref = name; if (!o.table) o.table = table; }
+    else { o = r; games = r.g = r.g || []; r.ref = name; }
     games[gi] = games[gi] || ['', ''];
     games[gi][side] = v === '' ? '' : Number(v);
+    // 記下這局是誰記的（大會台可以查）
+    o.gb = o.gb || []; o.gb[gi] = name; for (let i = 0; i < o.gb.length; i++) if (o.gb[i] == null) o.gb[i] = '';
     for (let i = 0; i < games.length; i++) if (!games[i]) games[i] = ['', ''];
   });
 });

@@ -406,14 +406,23 @@ function lineupWarn(l) {
 // ---------------- 成績 ----------------
 /** 「中原大學 鮑起萱/蔡羽婷」排成校名一行、姓名一行（雙打保留斜線） */
 const twoLine = t => { const x = String(t || '').trim(), i = x.indexOf(' '); return i > 0 ? `${esc(x.slice(0, i))}<br>${esc(x.slice(i + 1))}` : esc(x); };
+const BY_COLORS = ['#dcfce7', '#fef3c7', '#dbeafe', '#fce7f3', '#ede9fe', '#ffedd5'];
+let showBy = false;
 function scoreModal(m) {
   const locked = false; // 不再鎖定：完賽後大會台仍可修改
   const dis = '';
   const lu = m.rec.lineup || {};
-  const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}>`;
+  const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}${byCol(pi, gi) ? ` style="background:${byCol(pi, gi)}"` : ''}>`;
+  // 每局是誰記的：按「紀錄者」才顯示色塊
+  const srcs = m.team ? (m.rec.pts || []).map(x => (x || {}).gb || []) : [m.rec.gb || []];
+  const who = [...new Set(srcs.flat().filter(Boolean))];
+  const byOf = pi => (m.team ? ((m.rec.pts || [])[pi] || {}).gb : m.rec.gb) || [];
+  const byCol = (pi, gi) => { if (!showBy) return ''; const i = who.indexOf(byOf(pi)[gi]); return i < 0 ? '' : BY_COLORS[i % BY_COLORS.length]; };
+  const bg = (pi, gi) => { const c = byCol(pi, gi); return c ? ` title="${esc(byOf(pi)[gi])}"` : ''; };
+  const byBar = who.length ? `<div class="row small" style="margin:4px 0 6px"><button class="btn ghost sm" data-showby aria-pressed="${showBy}">${icon('list')}${showBy ? '隱藏紀錄者' : '紀錄者'}</button>${showBy ? who.map((n, i) => `<span style="background:${BY_COLORS[i % BY_COLORS.length]};padding:2px 8px;border-radius:6px">${esc(n)}</span>`).join('') : ''}</div>` : '';
   const block = (pi, games, title, an, bn, meta, solo) => `<div class="pt ${solo ? 'solo' : ''}"><h4>${title}</h4>
     ${an || bn ? `<div class="pn"><span>${twoLine(an)}</span><span>${twoLine(bn)}</span></div>` : ''}
-    ${[0, 1, 2, 3, 4].map(gi => `<div class="gr">${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</div>`).join('')}
+    ${[0, 1, 2, 3, 4].map(gi => `<div class="gr"${bg(pi, gi)}>${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</div>`).join('')}
     <div class="res" data-res="${pi}" ${solo ? 'hidden' : ''}></div><div class="meta">${meta}</div></div>`;
   let body;
   if (m.team) {
@@ -430,6 +439,7 @@ function scoreModal(m) {
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}${m.status === 'playing' && m.tables.length ? `<span class="small muted">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${m.team ? esc(sideText(m.A, true)) : twoLine(sideText(m.A))}</div><div class="total" id="sc-total"></div><div class="n">${m.team ? esc(sideText(m.B, true)) : twoLine(sideText(m.B))}</div></div>
     ${refLogHtml(m.rec, fmtTime)}
+    ${byBar}
     <div class="pts">${body}</div>
     <p class="small" id="sc-note" style="color:var(--red);min-height:18px"></p>
     <div class="row">
@@ -467,9 +477,10 @@ function drawModal() {
   if (modal.kind === 'nudge') {
     const st = getState(), m = D.byId.get(modal.mid), S = modal.side === 'a' ? m.A : m.B, old = nudgeOf(st, m, modal.side);
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(480px,100%)"><div class="row"><h2 style="margin:0">頁面通知</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉">${icon('close')}</button></div>
-      <p class="small muted">${esc(m.ev)} ${esc(m.no)}　${esc(S.name)}。送出後，隊伍打開線上點單頁面會跳出這則通知，這場送出點單前都會標示。${old ? `<br>上次通知：${fmtTime(old.ts)}` : ''}</p>
-      <textarea id="nudge-t" rows="3" style="width:100%">${esc(nudgeDefault(st, m))}</textarea>
-      <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-nudge-ok>${icon('bell')}送出通知</button></div></div></div>`;
+      <p class="small muted">給 ${esc(m.ev)} ${esc(m.no)}　${esc(S.name)} 的通知。</p>
+      ${old ? `<div class="alertbox small" style="margin-bottom:8px">${fmtTime(old.ts)} 已通知：${esc(old.text)}</div>` : ''}
+      <textarea id="nudge-t" rows="3" style="width:100%">${esc(old ? old.text : nudgeDefault(st, m))}</textarea>
+      <div class="row" style="margin-top:10px">${old ? `<button class="btn ghost sm" data-nudge-del>${icon('close')}收回通知</button>` : ''}<span class="spacer"></span><button class="btn" data-nudge-ok>${icon('bell')}${old ? '重新送出' : '送出通知'}</button></div></div></div>`;
     return;
   }
   if (modal.kind === 'rnote') {
@@ -1321,6 +1332,12 @@ document.addEventListener('click', async ev => {
   }
   if ('lgopen' in d) { legendOpen = !legendOpen; render(); return; }
   if (d.nudge) { const i = d.nudge.lastIndexOf('|'); modal = { kind: 'nudge', mid: d.nudge.slice(0, i), side: d.nudge.slice(i + 1) }; drawModal(); return; }
+  if ('showby' in d) { showBy = !showBy; drawModal(); return; }
+  if ('nudgeDel' in d) {
+    const m = D.byId.get(modal.mid), S = modal.side === 'a' ? m.A : m.B, tk = teamKey(m.ev, S.name), mid = modal.mid; modal = null; drawModal();
+    writePaths({ [`nudge/${tk}/${mid}`]: null }).then(() => toast(`已收回給 ${S.name} 的通知`)).catch(err => toast(`收回失敗：${err.message || err}`));
+    return;
+  }
   if ('nudgeOk' in d) {
     const m = D.byId.get(modal.mid), S = modal.side === 'a' ? m.A : m.B, text = $('#nudge-t').value.trim().slice(0, 300);
     if (!text) { toast('請輸入通知內容'); return; }
@@ -1494,10 +1511,12 @@ document.addEventListener('input', ev => {
   const m = D.byId.get(modal.mid);
   updateMatch(modal.mid, r => {
     let games;
-    if (m.team) { r.pts = r.pts || []; r.pts[pi] = r.pts[pi] || {}; games = r.pts[pi].g = r.pts[pi].g || []; }
-    else games = r.g = r.g || [];
+    let o;
+    if (m.team) { r.pts = r.pts || []; o = r.pts[pi] = r.pts[pi] || {}; games = o.g = o.g || []; }
+    else { o = r; games = r.g = r.g || []; }
     games[gi] = games[gi] || ['', ''];
     games[gi][side] = v === '' ? '' : Number(v);
+    o.gb = o.gb || []; o.gb[gi] = '大會台'; for (let i = 0; i < o.gb.length; i++) if (o.gb[i] == null) o.gb[i] = '';
     for (let i = 0; i < games.length; i++) if (!games[i]) games[i] = ['', ''];
   });
 });

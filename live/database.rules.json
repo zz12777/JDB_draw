@@ -72,12 +72,20 @@
                 "absent": {
                   ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
                   ".validate": "newData.isString() && newData.val().length < 200"
+                },
+                "gb": {
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".validate": "newData.isString() && newData.val().length < 400"
                 }
               }
             },
             "fin": {
               ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
               ".validate": "newData.isString() && newData.val().length < 20"
+            },
+            "gb": {
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".validate": "newData.isString() && newData.val().length < 400"
             }
           }
         },
