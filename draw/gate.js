@@ -1,5 +1,5 @@
 // 抽籤系統的登入限制：只有管理員（兩個交大盃信箱，或由它們加入且未到期的帳號）能使用。
-// 抽籤資料仍只存在這台電腦的瀏覽器，不會上傳；只有步驟 8 的停車證張數會同步到資料庫。
+// 抽籤資料只存在這台電腦的瀏覽器，不會上傳到資料庫。
 import { FIREBASE, ADMINS } from '../live/js/config.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
