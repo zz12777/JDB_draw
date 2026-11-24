@@ -21,10 +21,7 @@ function render() {
 function viewName() {
   return `<div class="panel"><h2>裁判姓名</h2>
     <div class="row"><input id="rn" type="text" placeholder="請輸入全名" style="flex:1;font-size:18px;padding:8px"><button class="btn" data-setname>開始</button></div>
-    <ul class="small muted" style="margin:10px 0 0;padding-left:18px;line-height:1.7">
-      <li>請填寫<b>正確全名</b>。</li>
-      <li>輪到你比賽時，大會靠姓名知道你正在哪一桌當裁判。</li>
-      <li>擔任裁判次數也依姓名計算，名字不完整就不會算到。</li></ul></div>`;
+    <p class="small" style="margin:8px 0 0;color:var(--red)">請填寫正確全名</p></div>`;
 }
 function viewTables(s) {
   return `<div class="panel"><div class="row"><h2 style="margin:0">請選擇球桌</h2><span class="spacer"></span><span class="small muted">裁判：${esc(name)}</span><button class="btn ghost sm" data-rename>更改</button></div>

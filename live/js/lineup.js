@@ -94,7 +94,7 @@ function matchCard(m, info) {
     <div class="luform">${POINTS.map((p, i) => `<div class="lurow"><span class="lul">第${'一二三四五'[i]}點<small>${p.dbl ? '雙打' : '單打'}</small></span>
       <span class="luin">${p.dbl ? sel(i, 0, (l[i] || [])[0]) + sel(i, 1, (l[i] || [])[1]) : sel(i, null, l[i])}</span></div>`).join('')}</div>
     <p class="small" id="lu-warn" style="color:var(--red);min-height:18px;margin:6px 0"></p>
-    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button><span class="small muted" id="lu-saved">${sub && !sub.final ? `已自動儲存 ${fmtTime(sub.ts)}` : ''}</span></div>
+    <div class="row"><button class="btn" data-send="${esc(m.id)}">${icon('check')}送出點單</button></div>
     ${r.length ? '' : '<p class="small muted">大會尚未匯入此隊名單，請直接輸入姓名。</p>'}${logView(sub)}</div>`;
 }
 const lineupView = l => `<table class="list luview"><tbody>${POINTS.map((p, i) => `<tr><td class="muted small nowrap">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</td><td>${esc(lineName(l, i)) || '<span class="muted">未填</span>'}</td></tr>`).join('')}</tbody></table>`;
@@ -209,7 +209,7 @@ document.addEventListener('change', ev => {
   if (warn) warn.textContent = w;
   if (w) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveLu(mid, l, false).then(() => { delete draft[mid]; const x = $('#lu-saved'); if (x) x.textContent = `已自動儲存 ${fmtTime(Date.now())}`; })
+  saveTimer = setTimeout(() => saveLu(mid, l, false).then(() => { delete draft[mid]; })
     .catch(err => toast(/permission|PERMISSION/i.test(String(err)) ? '這一場已送出或已鎖定，無法再修改' : `儲存失敗：${err.message || err}`)), 600);
 });
 render();

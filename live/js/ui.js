@@ -6,6 +6,7 @@ export const $ = (sel, el = document) => el.querySelector(sel);
 export const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
 const ICONS = {
+  board: '<rect x="1.8" y="3" width="12.4" height="9" rx="1" fill="none"/><path d="M8 3v9M4 6h1.6v3H4zM10.4 6H12v3h-1.6zM5 12.5v1.5M11 12.5v1.5" fill="none"/>',
   bell: '<path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1H3z" fill="none"/><path d="M6.8 13.8a1.3 1.3 0 0 0 2.4 0" fill="none"/>',
   whistle: '<circle cx="5.5" cy="10" r="3.5" fill="none"/><path d="M8.5 7.6 14 5.5V9l-5 .5M5.5 10h.01" fill="none"/><path d="M3 3.5l1.5 1.5M6 2.5v1.8" fill="none"/>',
   shuffle: '<path d="M2 4.5h2.5c3 0 4 7 7 7H14M2 11.5h2.5c1.2 0 2-1.1 2.7-2.3M9.3 6.8C10 5.6 10.8 4.5 12 4.5h2M12.5 3l1.5 1.5L12.5 6M12.5 10l1.5 1.5-1.5 1.5" fill="none"/>',
