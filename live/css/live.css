@@ -547,3 +547,4 @@ table.restt td:first-child { white-space: nowrap; }
   table.restt td:first-child .otag { display: block; width: fit-content; margin: 0 0 2px; }
 }
 table.restt td:last-child { white-space: nowrap; }
+.dall { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; padding: 8px 12px; background: var(--blue-soft); border-radius: 8px; font-size: 14px; }

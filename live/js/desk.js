@@ -421,6 +421,13 @@ function drawModal() {
   const host = $('#modal');
   if (!modal) { host.innerHTML = ''; host.hidden = true; return; }
   host.hidden = false;
+  if (modal.kind === 'rnote') {
+    const r = (getState().receipt || {})[modal.unit] || {};
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(460px,100%)"><div class="row"><h2 style="margin:0">${esc(modal.unit)} 備註</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉">${icon('close')}</button></div>
+      <p class="small muted">收據抬頭、統編或其他要求。</p><textarea id="rnote-t" rows="4" style="width:100%">${esc(r.note || '')}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-rnote-ok>${icon('check')}儲存</button></div></div></div>`;
+    return;
+  }
   if (modal.kind === 'aclwipe') {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>清除線上點單權限</h2>
       <p>所有隊伍的聯絡人信箱、共同編輯與線上送出的點單都會刪除，且無法復原。已寫進排點的點單不受影響。</p>
@@ -429,7 +436,9 @@ function drawModal() {
   }
   if (modal.kind === 'wipe') {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>清除全部資料</h2>
-      <p>籤表、名單、排點、成績與裁判紀錄都會刪除，且無法復原。建議先下載備份檔。</p>
+      <p>籤表、參賽名單、時間表、排點、成績、廣播、場控提醒、簽到紀錄、停車證與收據、線上點單權限與線上點單都會刪除，且無法復原。建議先下載備份檔。</p>
+      <p class="small muted">歷屆名次、管理員與首頁主視覺不會刪除。</p>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="wipe-staff" checked>保留裁判名單</label>
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
     return;
   }
@@ -1061,16 +1070,44 @@ function refSummary(s) {
   return [...ORGS, '未分組'].map(g => [g, staff.filter(n => orgOf(s, n) === g).length]).filter(([, n]) => n).map(([g, n]) => `${g} ${n}`).join('、') || '尚未輸入';
 }
 function parkPanel(s) {
-  const rows = Object.entries(s.parking || {});
-  const total = rows.reduce((a, [, n]) => a + (Number(n) || 0), 0);
-  const head = `<div class="row"><h2 style="margin:0">停車證</h2><span class="spacer"></span><span class="small muted">共 ${rows.length} 個單位、${total} 張</span><button class="btn ghost sm" data-parkopen aria-expanded="${parkOpen}">${icon('list')}${parkOpen ? '收合' : '展開'}</button></div>`;
+  const park = s.parking || {}, rc = s.receipt || {};
+  const units = [...new Set([...Object.keys(park), ...Object.keys(rc)])].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  const total = Object.values(park).reduce((a, n) => a + (Number(n) || 0), 0);
+  const need = units.filter(u => (rc[u] || {}).need).length;
+  const head = `<div class="row"><h2 style="margin:0">停車證與收據</h2><span class="spacer"></span><span class="small muted">停車證 ${total} 張${need ? `，收據 ${need} 份` : ''}</span><button class="btn ghost sm" data-parkopen aria-expanded="${parkOpen}">${icon('list')}${parkOpen ? '收合' : '展開'}</button></div>`;
   if (!parkOpen) return `<div class="panel">${head}</div>`;
   return `<div class="panel">${head}
-    <p class="small muted">由抽籤系統步驟 8 從繳費表單同步過來，追加申請可以直接在這裡修改。簽到處的名單與簽到表會依校名自動帶入張數。</p>
-    <table class="list"><thead><tr><th>單位</th><th style="width:110px">張數</th><th style="width:60px"></th></tr></thead><tbody>
-    ${rows.map(([u, n]) => `<tr><td>${esc(u)}</td><td><input type="number" min="0" style="width:80px" data-parkn="${esc(u)}" value="${Number(n) || 0}"></td><td><button class="btn ghost sm" data-parkdel="${esc(u)}" title="刪除">${icon('close')}</button></td></tr>`).join('')}
-    <tr><td><input type="text" id="park-u" placeholder="學校或單位名稱" style="width:100%"></td><td><input type="number" id="park-n" min="1" value="1" style="width:80px"></td><td><button class="btn ghost sm" data-parkadd>${icon('plus')}新增</button></td></tr>
+    <p class="small muted">匯入繳費表單回應，帶入各單位的停車證張數（有「收據」欄位時一併帶入）。追加申請、要不要收據、收據抬頭等要求可以直接修改。簽到處會依校名自動帶入停車證張數。</p>
+    <div class="row" style="margin-bottom:8px"><label class="btn ghost sm">${icon('upload')}匯入繳費表單<input type="file" accept=".xlsx,.csv" hidden data-payimp></label></div>
+    <table class="list"><thead><tr><th>單位</th><th style="width:100px">停車證</th><th style="width:70px">收據</th><th>備註</th><th style="width:50px"></th></tr></thead><tbody>
+    ${units.map(u => { const r = rc[u] || {}; return `<tr><td>${esc(u)}</td><td><input type="number" min="0" style="width:70px" data-parkn="${esc(u)}" value="${Number(park[u]) || 0}"></td>
+      <td><input type="checkbox" data-rneed="${esc(u)}" ${r.need ? 'checked' : ''} aria-label="需要收據"></td>
+      <td><span class="small">${esc(r.note || '')}</span> <button class="btn ghost sm ${r.note ? 'on' : ''}" data-rnote="${esc(u)}" title="備註" aria-label="備註">${icon('edit')}</button></td>
+      <td><button class="btn ghost sm" data-parkdel="${esc(u)}" title="刪除">${icon('close')}</button></td></tr>`; }).join('')}
+    <tr><td><input type="text" id="park-u" placeholder="學校或單位名稱" style="width:100%"></td><td><input type="number" id="park-n" min="0" value="1" style="width:70px"></td><td></td><td></td><td><button class="btn ghost sm" data-parkadd>${icon('plus')}新增</button></td></tr>
     </tbody></table></div>`;
+}
+/** 繳費表單：單位、停車證張數，有收據、抬頭、統編欄位時一併帶入 */
+async function importPayment(file) {
+  const cv = x => (x && typeof x === 'object' && !(x instanceof Date) ? (x.keep ?? x.t ?? '') : String(x ?? ''));
+  const rows = (await readFormFile(file)).map(r => (r || []).map(cv));
+  const head = (rows[0] || []).map(h => String(h).replace(/\s+/g, ''));
+  const col = re => head.findIndex(h => re.test(h));
+  const cu = col(/單位|隊伍|學校/), cn = col(/停車/), cr = col(/收據/), ct = col(/抬頭/), ci = col(/統編|統一編號/);
+  if (cu < 0) { toast('找不到「單位名稱」欄位'); return; }
+  const park = {}, rc = {};
+  rows.slice(1).forEach(r => {
+    const raw = String(r[cu] || '').trim(); if (!raw) return;
+    const u = unitFromTeam(raw) || raw;
+    const n = cn >= 0 ? parseInt(String(r[cn] || '').replace(/[^\d]/g, ''), 10) || 0 : 0;
+    if (n) park[u] = (park[u] || 0) + n;
+    const rv = cr >= 0 ? String(r[cr] || '').trim() : '';
+    const needIt = !!rv && !/不需|不要|^否|^無|^no/i.test(rv);
+    const note = [ct >= 0 && r[ct] ? `抬頭：${String(r[ct]).trim()}` : '', ci >= 0 && r[ci] ? `統編：${String(r[ci]).trim()}` : ''].filter(Boolean).join('　');
+    if (needIt || note) rc[u] = { need: needIt || !!(rc[u] && rc[u].need), note: [rc[u] && rc[u].note, note].filter(Boolean).join('；') };
+  });
+  update(st => { st.parking = park; st.receipt = { ...rc }; });
+  toast(`已匯入：停車證 ${Object.values(park).reduce((a, n) => a + n, 0)} 張${Object.keys(rc).length ? `，收據 ${Object.values(rc).filter(x => x.need).length} 份` : ''}`);
 }
 
 /** 由檔名或工作表名稱判斷項目 */
@@ -1224,7 +1261,9 @@ document.addEventListener('click', async ev => {
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
-  if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; }); return; }
+  if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; const r = { ...(st.receipt || {}) }; delete r[d.parkdel]; st.receipt = r; }); return; }
+  if (d.rnote) { modal = { kind: 'rnote', unit: d.rnote }; drawModal(); return; }
+  if ('rnoteOk' in d) { const v = $('#rnote-t').value.trim().slice(0, 200), u = modal.unit; modal = null; drawModal(); update(st => { st.receipt = { ...(st.receipt || {}) }; st.receipt[u] = { ...(st.receipt[u] || {}), note: v }; }); return; }
   if ('parkadd' in d) {
     const u = $('#park-u').value.trim(), n = Math.max(0, Number($('#park-n').value) || 0);
     if (!u || !n) { toast('請填單位名稱和張數'); return; }
@@ -1285,13 +1324,21 @@ document.addEventListener('click', async ev => {
     a.download = `交大盃當日備份_${fmtTime(Date.now()).replace(':', '')}.json`; a.click();
   } else if ('demo' in d) { if (!getState().events.length || t.dataset.sure) { replaceState(demoState()); tab = 'ctrl'; render(); toast('已載入示範資料'); } else { t.dataset.sure = 1; t.textContent = '再按一次以覆蓋現有資料'; } }
   else if ('wipe' in d) { modal = { kind: 'wipe' }; drawModal(); }
-  else if ('wipeOk' in d) { modal = null; drawModal(); replaceState(emptyState()); render(); toast('已清除全部資料'); }
+  else if ('wipeOk' in d) {
+    const keep = $('#wipe-staff') && $('#wipe-staff').checked, st0 = getState();
+    modal = null; drawModal();
+    replaceState({ ...emptyState(), ...(keep ? { staff: st0.staff || [], staffOrg: st0.staffOrg || {}, refOpt: st0.refOpt || {} } : {}) });
+    writePaths({ teamacl: null, myteams: null, olu: null }).catch(() => {});
+    render(); toast('已清除全部資料');
+  }
 });
 
 document.addEventListener('change', async ev => {
   const t = ev.target, d = t.dataset;
   if (noticeChange(t)) return;
   if (d.parkn) { const n = Math.max(0, Number(t.value) || 0); update(st => { st.parking = { ...(st.parking || {}), [d.parkn]: n }; }); return; }
+  if (d.rneed) { update(st => { st.receipt = { ...(st.receipt || {}) }; st.receipt[d.rneed] = { ...(st.receipt[d.rneed] || {}), need: t.checked }; }); return; }
+  if ('payimp' in d) { if (t.files[0]) { try { await importPayment(t.files[0]); } catch (err) { toast(`匯入失敗：${err.message || err}`); } t.value = ''; } return; }
   if (d.lu) {
     const side = d.lu[0];
     if (t.value === '__other') {

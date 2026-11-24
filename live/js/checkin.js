@@ -54,6 +54,9 @@ function drawDlg() {
   let host = $('#dlg');
   if (!host) { host = document.createElement('div'); host.id = 'dlg'; document.body.append(host); }
   if (!dlg) { host.innerHTML = ''; return; }
+  // 重畫時保留還沒送出的輸入
+  const keep = ['downer', 'deditor', 'dnote'].map(id => { const el = document.getElementById(id); return [id, el ? el.value : null]; });
+  setTimeout(() => keep.forEach(([id, v]) => { const el = document.getElementById(id); if (el && v != null && !el.value) el.value = v; }));
   const s = getState(), ci = (s.checkin || {})[dlg.key] || {};
   if (dlg.kind === 'note') {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(460px,100%)"><div class="row"><h2 style="margin:0">備註</h2><span class="spacer"></span><button class="btn ghost sm" data-dclose aria-label="關閉">${icon('close')}</button></div>
@@ -73,27 +76,27 @@ function drawDlg() {
       <tr><td class="nowrap muted small">聯絡人</td><td>${own.length ? own.map(esc).join('<br>') : '<span class="muted">未設定</span>'}</td></tr>
       <tr><td class="nowrap muted small">共同編輯</td><td>${eds.length ? eds.map(esc).join('<br>') : '<span class="muted">無</span>'}</td></tr></tbody></table>
     <p style="margin:12px 0 6px"><b>聯絡人今天會在場負責填點單嗎？</b></p>
-    <p class="small muted" style="margin:0 0 8px">會的話不用更改。不會的話，把現場負責的人設成新的聯絡人；只是多一個人幫忙，就加入共同編輯。</p>
-    <div class="dform"><label class="small" for="downer">更新聯絡人（取代原本的聯絡人，可以再新增其他信箱）</label>
-      <div class="row"><input type="email" id="downer" placeholder="現場負責人的 Google 帳號信箱" style="flex:1;min-width:200px"><button class="btn sm" data-downer>取代聯絡人</button></div></div>
-    <div class="dform"><label class="small" for="deditor">加入共同編輯（可以填點單，不能新增其他信箱）</label>
-      <div class="row"><input type="email" id="deditor" placeholder="Google 帳號信箱" style="flex:1;min-width:200px"><button class="btn ghost sm" data-deditor>${icon('plus')}加入</button></div></div>
-    ${many ? `<label class="small" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="dall">套用到同校全部 ${dlg.names.length} 隊</label>` : ''}
-    <div class="dpaper"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dpaper" ${paper ? 'checked' : ''}><span><b>這隊使用紙本點單</b><br><span class="small muted">大會台賽程控制會標示「紙」，並提醒發點單</span></span></label></div>
+    <div class="dform"><label class="small" for="downer">更新聯絡人（取代原本的聯絡人，可以新增其他帳號一起編輯點單）</label>
+      <div class="row"><input type="email" id="downer" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn sm" data-downer>取代聯絡人</button></div></div>
+    <div class="dform"><label class="small" for="deditor">加入共同編輯（可以填點單，不能新增其他帳號）</label>
+      <div class="row"><input type="email" id="deditor" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn ghost sm" data-deditor>${icon('plus')}加入</button></div></div>
+    ${many ? `<label class="dall"><input type="checkbox" id="dall" ${dlg.all ? 'checked' : ''}>套用到同單位全部 ${dlg.names.length} 隊</label>` : ''}
+    <div class="dpaper"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dpaper" ${paper ? 'checked' : ''}><b>使用紙本點單</b></label></div>
   </div></div>`;
 }
-const dlgTeams = () => (($('#dall') || {}).checked ? dlg.names : [dlg.team]);
+const dlgTeams = () => (dlg.all ? dlg.names : [dlg.team]);
 function aclWrite(kind) {
   const inp = $(kind === 'owner' ? '#downer' : '#deditor'), mails = parseMails(inp.value);
   if (!mails.length) { toast('請輸入正確的信箱'); return; }
   const acl = getState().teamacl || {}, up = {};
   dlgTeams().forEach(n => Object.assign(up, (kind === 'owner' ? ownerUpdates : editorUpdates)(acl, teamKey(dlg.ev, n), kind === 'owner' ? mails : mails)));
   if (!Object.keys(up).length) { toast('這個信箱已經可以填寫'); return; }
-  writePaths(up).then(() => { inp.value = ''; toast(kind === 'owner' ? '已更新聯絡人' : '已加入共同編輯'); drawDlg(); }).catch(err => toast(`更新失敗：${err.message || err}`));
+  const typed = inp.value; inp.value = '';
+  writePaths(up).then(() => { toast(kind === 'owner' ? '已更新聯絡人' : '已加入共同編輯'); drawDlg(); }).catch(err => { const el = $(kind === 'owner' ? '#downer' : '#deditor'); if (el) el.value = typed; toast(`更新失敗：${err.message || err}`); });
 }
 
 // 有人在打備註時先不重畫，離開輸入框後再更新
-const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('#q, #dlg input, #dlg textarea'); };
+const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('#q, #dlg input[type=email], #dlg textarea'); };
 function refresh() { if (typing()) { pending = true; return; } pending = false; render(); if (dlg) drawDlg(); }
 subscribe(refresh);
 onAuth(refresh);
@@ -132,6 +135,7 @@ async function downloadSignin() {
   } catch (err) { toast(`簽到表產生失敗：${err.message || err}`); }
 }
 document.addEventListener('change', ev => {
+  if (ev.target.id === 'dall' && dlg) { dlg.all = ev.target.checked; return; }
   if (ev.target.id !== 'dpaper' || !dlg) return;
   const x = (getState().checkin || {})[dlg.key] || {}, paper = { ...(x.paper || {}) };
   dlgTeams().forEach(n => { if (ev.target.checked) paper[n] = true; else delete paper[n]; });
