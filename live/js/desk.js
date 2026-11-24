@@ -769,6 +769,7 @@ function refCounts() {
  * 比賽中＝正在打；即將出賽＝「進行中的項目」裡還有比賽要打（項目已開打且還沒打完）；擔任裁判＝正在某桌當裁判。
  * 其他項目還沒開打的人、已經淘汰的人都算可以當裁判。
  */
+const refBuf = s => Math.max(1, Number((s.refOpt || {}).buf) || s.tables || 24);
 function busyPeople(s) {
   // now：正在比賽；soon：馬上要打（暫不可擔任）；later：還有比賽但不是馬上（人手不足時可支援）；onDuty：正在當裁判
   const now = new Map(), soon = new Map(), later = new Map();
@@ -778,17 +779,18 @@ function busyPeople(s) {
     return [m.A, m.B].flatMap(x => ((e && e.rosters && e.rosters[x && x.name]) || []).flat());
   };
   const undone = m => m.known && !m.rec.start && m.status !== 'done' && m.status !== 'reported';
-  // 進行中的項目：已有場次開打，或依時間表 30 分鐘內就要開始
+  // 進行中的項目：已有場次開打，或依時間表 10 分鐘內就要開始
   const t0 = NOW().getTime(), active = new Set();
   D.events.forEach(e => {
     const st = e.matches.map(m => m.status);
     const started = st.includes('playing') || st.some(x => x === 'done' || x === 'reported');
-    const soonBySched = e.matches.some(m => { if (!undone(m)) return false; const sl = slotOf(s.sched, m); const at = sl ? dueAt(s, { d: sl.d, t: sl.s }) : null; return at && at - t0 <= 30 * 60000; });
+    const soonBySched = e.matches.some(m => { if (!undone(m)) return false; const sl = slotOf(s.sched, m); const at = sl ? dueAt(s, { d: sl.d, t: sl.s }) : null; return at && at - t0 <= 10 * 60000; });
     if ((started && st.some(x => x !== 'done')) || soonBySched) active.add(e.name);
   });
-  // 個人賽：接下來要叫的前 3 場算馬上要打；同項目後面的場次算還沒輪到
+  // 個人賽：接下來要叫的前 N 場算馬上要打（預設＝球桌數，大約是接下來 20～30 分鐘會叫到的場次）；同項目後面的場次算還沒輪到
+  const N = refBuf(s);
   const next3 = new Set();
-  D.events.filter(e => !e.team && active.has(e.name)).forEach(e => e.matches.filter(undone).sort((a, b) => a.num - b.num).slice(0, 3).forEach(m => next3.add(m.id)));
+  D.events.filter(e => !e.team && active.has(e.name)).forEach(e => e.matches.filter(undone).sort((a, b) => a.num - b.num).slice(0, N).forEach(m => next3.add(m.id)));
   const put = (map, n, m) => { const k = nm(n); if (!map.has(k)) map.set(k, m); };
   D.byId.forEach(m => {
     if (m.status === 'playing') { people(m).forEach(n => put(now, n, m)); return; }
@@ -875,6 +877,7 @@ function staffEditor(s) {
   return `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
     <textarea data-staff rows="16" style="width:100%" placeholder="【交大】&#10;王小明 李大華&#10;【陽明】&#10;【香山】&#10;【大會】">${esc(staffText(s))}</textarea>
     <div class="pills" style="margin-top:8px">${[['on', '陽明會當裁判'], ['off', '陽明不當裁判']].map(([k, t]) => `<button class="${ym === k ? 'on' : ''}" data-ymopt="${k}">${t}</button>`).join('')}</div>
+    <div class="row small" style="margin-top:10px">個人賽接下來 <input type="number" min="1" max="99" data-refbuf value="${refBuf(s)}" style="width:64px"> 場內會叫到的人，不列入可擔任裁判（預設＝球桌數）</div>
     <h3 style="margin:14px 0 4px">香山負責的球桌</h3>
     <p class="small muted">每行：日期 時段 桌號，例如「12/5 08:30-13:30 1-11」。香山從第 1 桌算起。</p>
     <textarea data-xs rows="5" style="width:100%">${esc((s.refOpt || {}).xs ?? XS_DEFAULT)}</textarea>
@@ -904,7 +907,7 @@ function viewRefs(s) {
       ${names.length ? `<table class="list" style="max-width:480px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`);
   }
   const k = nm;
-  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${soon.get(k(n)).team ? '下一場要比賽' : '3 場內會叫到'}（${shortEv(soon.get(k(n)))}）` : '');
+  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${soon.get(k(n)).team ? '下一場要比賽' : `${refBuf(s)} 場內會叫到`}（${shortEv(soon.get(k(n)))}）` : '');
   const byCnt = (a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0);
   const pool = staff.filter(n => !notRef(s, n));
   // 體資：有缺才請他們支援，放在「人手不足時可支援」
@@ -1439,6 +1442,7 @@ document.addEventListener('change', async ev => {
   else if ('aclimp' in d) { if (t.files.length) { try { await importAcl([...t.files]); } catch (err) { toast(`匯入失敗：${err.message || err}`); } t.value = ''; } }
   else if (d.acled !== undefined) { const up = setEditors(getState(), d.acled, t.value); if (Object.keys(up).length) writePaths(up).then(() => toast('已更新共同編輯')).catch(err => toast(`更新失敗：${err.message || err}`)); }
   else if (d.aclown !== undefined) { const up = setOwner(getState(), d.aclown, t.value); writePaths(up).then(() => toast('已更新聯絡人信箱')).catch(err => toast(`更新失敗：${err.message || err}`)); }
+  else if ('refbuf' in d) update(st => { st.refOpt = { ...(st.refOpt || {}), buf: Math.max(1, Number(t.value) || 0) || null }; });
   else if ('xs' in d) update(st => { st.refOpt = { ...(st.refOpt || {}), xs: t.value }; });
   else if (d.link) update(st => { st.refOpt = { ...(st.refOpt || {}), links: { ...((st.refOpt || {}).links || {}), [d.link]: t.value.trim() } }; });
   else if ('staff' in d) { const p = parseStaff(t.value); update(s => { s.staff = p.names; s.staffOrg = p.org; }); }
