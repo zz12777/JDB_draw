@@ -28,63 +28,63 @@
           ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
           "$mid": {
             "u": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isNumber()"
             },
             "g": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 400"
             },
             "ref": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 60"
             },
             "refs": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 400"
             },
             "absent": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 200"
             },
             "swap": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 1000"
             },
             "reflog": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 4000"
             },
             "pts": {
               "$i": {
                 "g": {
-                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
                   ".validate": "newData.isString() && newData.val().length < 400"
                 },
                 "ref": {
-                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
                   ".validate": "newData.isString() && newData.val().length < 60"
                 },
                 "table": {
-                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
                   ".validate": "newData.isString() && newData.val().length < 10"
                 },
                 "absent": {
-                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
                   ".validate": "newData.isString() && newData.val().length < 200"
                 },
                 "gb": {
-                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true'",
+                  ".write": "data.parent().parent().parent().child('tables').exists() && data.parent().parent().parent().child('tables').val() != '[]' && data.parent().parent().parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
                   ".validate": "newData.isString() && newData.val().length < 400"
                 }
               }
             },
             "fin": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 20"
             },
             "gb": {
-              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true'",
+              ".write": "data.parent().child('tables').exists() && data.parent().child('tables').val() != '[]' && data.parent().child('confirmed').val() != 'true' && (!root.child('t13').child('desk').child('refcode').exists() || (auth != null && root.child('t13').child('refauth').child(auth.uid).val() == root.child('t13').child('desk').child('refcode').val()))",
               ".validate": "newData.isString() && newData.val().length < 400"
             }
           }
@@ -92,6 +92,10 @@
         "v": {
           ".write": true,
           ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "refgen": {
+          ".write": "auth != null && auth.token.email_verified == true && ((auth.token.email == 'nctugtt@gmail.com' || auth.token.email == 'nctuttc@gmail.com') || root.child('admins').child(auth.token.email.replace('.', ',')).child('until').val() > now)",
+          ".validate": "!newData.exists() || newData.isNumber()"
         }
       },
       "parking": {
@@ -149,6 +153,13 @@
           "$mid": {
             ".validate": "newData.isString() && newData.val().length < 1000"
           }
+        }
+      },
+      "refauth": {
+        "$uid": {
+          ".read": "auth != null && auth.uid == $uid",
+          ".write": "auth != null && auth.uid == $uid",
+          ".validate": "newData.isString() && newData.val() == root.child('t13').child('desk').child('refcode').val()"
         }
       }
     },

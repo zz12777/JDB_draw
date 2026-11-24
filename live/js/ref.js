@@ -1,12 +1,18 @@
 // 裁判頁：輸入姓名、選球桌、記錄每局比分、回報未到
 import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner, fmtTime } from './model.js';
-import { getState, subscribe, updateMatch, onAuth } from './store.js';
+import { getState, subscribe, updateMatch, onAuth, refUnlock, LOCAL } from './store.js';
 import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
 
 const NAME_KEY = 'jdb-ref-name';
 let name = localStorage.getItem(NAME_KEY) || '';
 let table = null, point = null, swapAsk = false;
 let D = null;
+// 裁判通行碼：輸入一次就記在這台手機，大會台更換通行碼後才要重新輸入
+const PASS_KEY = 'jdb-ref-pass';
+const loadPass = () => { try { return JSON.parse(localStorage.getItem(PASS_KEY) || 'null'); } catch (e) { return null; } };
+let pass = loadPass(), synced = false;
+const needPass = s => !!s.refgen && !(pass && pass.gen === s.refgen);
+const inLine = /\bLine\//i.test(navigator.userAgent);
 // 學校和選手姓名分兩行（雙打名字比較長）
 const two = t => { const x = String(t || '').trim(), i = x.indexOf(' '); return i > 0 ? `${esc(x.slice(0, i))}<br>${esc(x.slice(i + 1))}` : esc(x); };
 
@@ -14,10 +20,18 @@ function render() {
   const s = getState();
   D = derive(s);
   $('#top').innerHTML = header(s, '裁判紀錄區', []);
-  $('#main').innerHTML = !name ? viewName() : table == null ? viewTables(s) : viewMatch();
+  // 換了手機或清除資料時，用記下的通行碼重新取得記分權限
+  if (!LOCAL && s.refgen && pass && pass.gen === s.refgen && !synced) { synced = true; refUnlock(pass.code).catch(() => { pass = null; try { localStorage.removeItem(PASS_KEY); } catch (e) { /* 略過 */ } render(); }); }
+  const tip = inLine ? `<div class="alertbox" style="margin-bottom:10px">目前是 LINE 內建瀏覽器，請按右下角「⋯」→「以瀏覽器開啟」。</div>` : '';
+  $('#main').innerHTML = tip + (needPass(s) ? viewPass() : !name ? viewName() : table == null ? viewTables(s) : viewMatch());
   if (name && table != null) refresh();
 }
 
+function viewPass() {
+  return `<div class="panel"><h2>裁判通行碼</h2>
+    <div class="row"><input id="rp" type="text" inputmode="numeric" autocomplete="off" placeholder="請輸入大會提供的通行碼" style="flex:1;font-size:18px;padding:8px"><button class="btn" data-setpass>確認</button></div>
+    <p class="small muted" style="margin:8px 0 0">輸入一次即可，大會更換通行碼時才需要重新輸入。</p></div>`;
+}
 function viewName() {
   return `<div class="panel"><h2>裁判姓名</h2>
     <div class="row"><input id="rn" type="text" placeholder="請輸入全名" style="flex:1;font-size:18px;padding:8px"><button class="btn" data-setname>開始</button></div>
@@ -95,6 +109,13 @@ function refresh() {
 document.addEventListener('click', ev => {
   const t = ev.target.closest('button'); if (!t) return;
   const d = t.dataset;
+  if ('setpass' in d) {
+    const code = $('#rp').value.trim(); if (!code) { toast('請輸入通行碼'); return; }
+    t.disabled = true;
+    refUnlock(code).then(() => { pass = { code, gen: getState().refgen }; synced = true; try { localStorage.setItem(PASS_KEY, JSON.stringify(pass)); } catch (e) { /* 略過 */ } toast('通行碼正確'); render(); })
+      .catch(() => { t.disabled = false; toast('通行碼錯誤，請向大會確認'); });
+    return;
+  }
   if ('setname' in d) { const v = $('#rn').value.trim(); if (!v) { toast('請輸入姓名'); return; } name = v; localStorage.setItem(NAME_KEY, name); render(); }
   else if ('rename' in d) { name = ''; render(); }
   else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
@@ -161,12 +182,12 @@ document.addEventListener('input', ev => {
     for (let i = 0; i < games.length; i++) if (!games[i]) games[i] = ['', ''];
   });
 });
-document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'rn') $('[data-setname]').click(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'rn') $('[data-setname]').click(); if (ev.key === 'Enter' && ev.target.id === 'rp') $('[data-setpass]').click(); });
 
 onAuth(a => { if (a.error) toast(a.error); });
 subscribe((s, local) => {
   D = derive(s);
   const a = document.activeElement;
-  if (a && a.dataset && a.dataset.g) refresh(); else if (!(a && a.id === 'rn')) render();
+  if (a && a.dataset && a.dataset.g) refresh(); else if (!(a && (a.id === 'rn' || a.id === 'rp'))) render();
 });
 render();
