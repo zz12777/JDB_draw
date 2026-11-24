@@ -770,25 +770,35 @@ function refCounts() {
  * 其他項目還沒開打的人、已經淘汰的人都算可以當裁判。
  */
 function busyPeople(s) {
-  const now = new Map(), soon = new Map();
+  // now：正在比賽；soon：馬上要打（暫不可擔任）；later：還有比賽但不是馬上（人手不足時可支援）；onDuty：正在當裁判
+  const now = new Map(), soon = new Map(), later = new Map();
   const people = m => {
     if (!m.team) return [m.A, m.B].flatMap(x => String((x && x.name) || '').split(/[\/／]/)).map(x => x.trim()).filter(Boolean);
     const e = s.events.find(x => x.name === m.ev);
     return [m.A, m.B].flatMap(x => ((e && e.rosters && e.rosters[x && x.name]) || []).flat());
   };
-  const active = new Set();
-  D.events.forEach(e => { const st = e.matches.map(m => m.status); if (st.includes('playing') || (st.some(x => x === 'done' || x === 'reported') && st.some(x => x !== 'done'))) active.add(e.name); });
-  // 個人賽：只有接下來要叫的前 3 場才算即將出賽，同一輪後面的場次不算
+  const undone = m => m.known && !m.rec.start && m.status !== 'done' && m.status !== 'reported';
+  // 進行中的項目：已有場次開打，或依時間表 30 分鐘內就要開始
+  const t0 = NOW().getTime(), active = new Set();
+  D.events.forEach(e => {
+    const st = e.matches.map(m => m.status);
+    const started = st.includes('playing') || st.some(x => x === 'done' || x === 'reported');
+    const soonBySched = e.matches.some(m => { if (!undone(m)) return false; const sl = slotOf(s.sched, m); const at = sl ? dueAt(s, { d: sl.d, t: sl.s }) : null; return at && at - t0 <= 30 * 60000; });
+    if ((started && st.some(x => x !== 'done')) || soonBySched) active.add(e.name);
+  });
+  // 個人賽：接下來要叫的前 3 場算馬上要打；同項目後面的場次算還沒輪到
   const next3 = new Set();
-  D.events.filter(e => !e.team && active.has(e.name)).forEach(e => e.matches.filter(m => m.known && !m.rec.start && m.status !== 'done' && m.status !== 'reported')
-    .sort((a, b) => a.num - b.num).slice(0, 3).forEach(m => next3.add(m.id)));
+  D.events.filter(e => !e.team && active.has(e.name)).forEach(e => e.matches.filter(undone).sort((a, b) => a.num - b.num).slice(0, 3).forEach(m => next3.add(m.id)));
+  const put = (map, n, m) => { const k = nm(n); if (!map.has(k)) map.set(k, m); };
   D.byId.forEach(m => {
-    if (m.status === 'playing') people(m).forEach(n => now.set(nm(n), m));
-    else if (!m.team ? next3.has(m.id) : (active.has(m.ev) && m.known && m.status !== 'done' && m.status !== 'reported')) people(m).forEach(n => { const k = nm(n), o = soon.get(k); if (!o || (m.status === 'ready' && o.status !== 'ready')) soon.set(k, m); });
+    if (m.status === 'playing') { people(m).forEach(n => put(now, n, m)); return; }
+    if (!active.has(m.ev) || !undone(m)) return;
+    const urgent = m.team ? m.status === 'ready' : next3.has(m.id);
+    people(m).forEach(n => put(urgent ? soon : later, n, m));
   });
   const onDuty = new Map();
   D.tables.forEach((x, t) => { if (x.m.status === 'playing') { const n = (x.m.rec.refs || {})[t]; if (n) onDuty.set(nm(n), { t, m: x.m }); } });
-  return { now, soon, onDuty };
+  return { now, soon, later, onDuty };
 }
 /** 進行中場次的裁判替換請求 */
 function swapList() {
@@ -882,7 +892,7 @@ function viewRefs(s) {
     setTimeout(() => update(st => { st.staff = p.names; st.staffOrg = { ...(st.staffOrg || {}), ...p.org }; }));
   }
   if (staffOpen == null) staffOpen = !staff.length;
-  const { now, soon, onDuty } = busyPeople(s);
+  const { now, soon, later, onDuty } = busyPeople(s);
   const sub = `<div class="row" style="margin-bottom:12px"><div class="pills">${[['avail', '可擔任裁判'], ['count', '擔任次數']].map(([k, t]) => `<button class="${refTab === k ? 'on' : ''}" data-reftab="${k}">${t}</button>`).join('')}</div><span class="spacer"></span>
     <button class="btn ghost sm" data-staffopen>${icon('list')}${staffOpen ? '收合名單' : '編輯名單'}</button></div>`;
   const editor = `<div><div class="panel"><div class="row"><h2 style="margin:0">自己人裁判名單</h2><span class="spacer"></span><button class="btn ghost sm" data-staffopen title="收合">${icon('close')}</button></div>
@@ -894,14 +904,14 @@ function viewRefs(s) {
       ${names.length ? `<table class="list" style="max-width:480px"><thead><tr><th>姓名</th><th>次數</th></tr></thead><tbody>${names.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td>${cnt.get(n) || 0}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">尚無紀錄。</p>'}</div>`);
   }
   const k = nm;
-  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${!soon.get(k(n)).team ? '3 場內會叫到' : soon.get(k(n)).status === 'ready' ? '下一場要比賽' : '所屬項目進行中，尚未輪到'}（${shortEv(soon.get(k(n)))}）` : '');
+  const why = n => (onDuty.has(k(n)) ? `正在第 ${onDuty.get(k(n)).t} 桌擔任裁判` : now.has(k(n)) ? `正在比賽（${shortEv(now.get(k(n)))}）` : soon.has(k(n)) ? `${soon.get(k(n)).team ? '下一場要比賽' : '3 場內會叫到'}（${shortEv(soon.get(k(n)))}）` : '');
   const byCnt = (a, b) => (cnt.get(a) || 0) - (cnt.get(b) || 0);
   const pool = staff.filter(n => !notRef(s, n));
   // 體資：有缺才請他們支援，放在「人手不足時可支援」
   const backup = n => orgOf(s, n) === '體資';
-  const free = pool.filter(n => !why(n) && !backup(n)).sort(byCnt);
+  const free = pool.filter(n => !why(n) && !backup(n) && !later.has(k(n))).sort(byCnt);
   // 人手不足時：所屬項目進行中、但自己的場次還沒輪到的人也可以支援
-  const spare = pool.filter(n => !onDuty.has(k(n)) && !now.has(k(n)) && ((backup(n) && !soon.has(k(n))) || (soon.has(k(n)) && soon.get(k(n)).team && soon.get(k(n)).status !== 'ready'))).sort(byCnt);
+  const spare = pool.filter(n => !why(n) && (backup(n) || later.has(k(n)))).sort(byCnt);
   const rest = pool.filter(n => why(n) && !spare.includes(n));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
   const cols = list => `<div class="orgcols">${groups.map(g => [g, list.filter(n => orgOf(s, n) === g)]).filter(([, l]) => l.length).map(([g, l]) => `<div><h3><span class="otag o-${esc(g)}">${esc(g)}</span>${l.length} 位</h3><table class="list"><tbody>${l.map(n => `<tr><td>${esc(n)}</td><td class="muted small" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>`).join('')}</div>`;

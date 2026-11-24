@@ -567,3 +567,5 @@ table.restt td:last-child { white-space: nowrap; }
 .luhead h1 { font-size: 24px; color: var(--blue); margin: 0 0 4px; }
 .luhead h1 span { font-size: 17px; color: var(--ink); font-weight: 600; margin-left: 4px; }
 .luhead p { margin: 0; }
+.luhead h1 .evtag { font-size: 15px; vertical-align: 4px; margin-right: 2px; }
+.pills button .evtag { font-size: 11px; margin-right: 2px; }

@@ -30,7 +30,7 @@ function teamInfo(key) {
 
 function render() {
   const s = getState();
-  $('#top').innerHTML = header(s, '線上點單', [], { account: me.email ? `<a href="#" data-out title="${esc(me.email)}">登出</a>` : '' });
+  $('#top').innerHTML = header(s, '線上點單', [['即時賽程', './']], { account: me.email ? `<a href="#" data-out title="${esc(me.email)}">登出</a>` : '' });
   const main = $('#main');
   if (!me.ready) { main.innerHTML = '<div class="panel"><p class="muted">連線中。</p></div>'; return; }
   if (!me.email) {
@@ -54,14 +54,14 @@ function render() {
   if (!cur || !teams.includes(cur)) { cur = teams[0]; listenTeam(); }
   const info = teamInfo(cur);
   const owner = acl && acl[myKey()] === 'owner';
-  const pills = teams.length > 1 ? `<div class="pills" style="margin-bottom:12px">${teams.map(k => { const x = teamInfo(k); return `<button class="${k === cur ? 'on' : ''}" data-team="${esc(k)}"><span class="small">${esc(x.ev)}</span> ${esc(x.team)}</button>`; }).join('')}</div>` : '';
+  const pills = teams.length > 1 ? `<div class="pills" style="margin-bottom:12px">${teams.map(k => { const x = teamInfo(k); return `<button class="${k === cur ? 'on' : ''}" data-team="${esc(k)}"><span class="evtag ev-${esc(x.ev)}">${esc(x.ev)}</span> ${esc(x.team)}</button>`; }).join('')}</div>` : '';
   const D = derive(s);
   const ms = [...D.byId.values()].filter(m => m.team && m.ev === info.ev && ((m.A && m.A.name === info.team) || (m.B && m.B.name === info.team)) && m.status !== 'done' && m.status !== 'reported'
       // 預賽各場一開始就能一起填；決賽要等對手確定才開放
       && (m.stage !== 'F' || (m.A && m.A.name && m.B && m.B.name)))
     .sort((a, b) => (a.stage === 'F') - (b.stage === 'F') || a.num - b.num);
-  main.innerHTML = `${pills}<div class="luhead"><h1>${esc(info.team)} <span>${esc(EVENT_FULL[info.ev] || info.ev)}</span></h1>
-      <p class="small muted">「送出點單」後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
+  main.innerHTML = `${pills}<div class="luhead"><h1><span class="evtag ev-${esc(info.ev)}">${esc(info.ev)}</span> ${esc(info.team)}</h1>
+      <p class="small muted">送出點單後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
     ${ms.length ? ms.map(m => matchCard(m, info)).join('') : '<div class="panel"><p class="muted">目前沒有需要填寫點單的場次。</p></div>'}
     ${editorsPanel(owner)}`;
 }
@@ -105,7 +105,7 @@ function editorsPanel(owner) {
   const list = Object.entries(acl || {});
   const ed = list.filter(([, v]) => v === 'editor').map(([k]) => k.replace(/,/g, '.'));
   const own = list.filter(([, v]) => v === 'owner').map(([k]) => k.replace(/,/g, '.'));
-  return `<div class="panel"><h2>新增點單填寫權限</h2>
+  return `<div class="panel"><h2>${owner ? '新增點單填寫權限' : '點單填寫權限'}</h2>
     <table class="list"><tbody>${own.map(e => `<tr><td>${esc(e)}</td><td class="small muted">聯絡人</td><td></td></tr>`).join('')}
     ${ed.map(e => `<tr><td>${esc(e)}</td><td class="small muted">共同編輯</td><td style="text-align:right">${owner ? `<button class="btn plain sm" data-rmed="${esc(e)}">移除</button>` : ''}</td></tr>`).join('')}</tbody></table>
     ${owner ? (ed.length < MAX_EDITORS ? `<div class="row" style="margin-top:8px"><input type="email" id="ed-new" placeholder="輸入 Google 帳號信箱" style="flex:1;min-width:200px"><button class="btn ghost sm" data-added>${icon('plus')}加入共同編輯</button></div>

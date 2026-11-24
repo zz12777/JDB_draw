@@ -16,7 +16,7 @@ function render() {
   const s = getState();
   // 決賽籤號要等大會台按「確定並公開」才顯示
   D = derive({ ...s, events: (s.events || []).map(e => (e.finalPub ? e : { ...e, finalPos: {} })) });
-  $('#top').innerHTML = header(s, '即時賽程', []);
+  $('#top').innerHTML = header(s, '即時賽程', [['線上點單', 'lineup.html']]);
   if (tab === 'time' && !s.sched) tab = 'sched';
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}<span>${t}</span></button>`).join('');
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
