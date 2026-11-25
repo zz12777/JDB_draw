@@ -28,6 +28,7 @@ const ICONS = {
   alert: '<path d="M8 2.2l6 10.8H2z" fill="none"/><path d="M8 6.5v3M8 11.3v.2" fill="none"/>',
   upload: '<path d="M8 10.5V2.5M4.8 5.7L8 2.5l3.2 3.2M2.5 10.5v2.3c0 .4.3.7.7.7h9.6c.4 0 .7-.3.7-.7v-2.3" fill="none"/>',
   print: '<path d="M4 6V2h8v4M4 12H2.5A1 1 0 0 1 1.5 11V7a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H12M4 10h8v4H4z" fill="none"/>',
+  mail: '<path d="M2 4h12v8H2zM2.4 4.4L8 8.8l5.6-4.4" fill="none"/>',
   download: '<path d="M8 2.5v8M4.8 7.3L8 10.5l3.2-3.2M2.5 10.5v2.3c0 .4.3.7.7.7h9.6c.4 0 .7-.3.7-.7v-2.3" fill="none"/>',
   copy: '<rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1" fill="none"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v5.5a1 1 0 0 0 1 1h1.5" fill="none"/>',
   chevdown: '<path d="M4 6l4 4 4-4" fill="none"/>',

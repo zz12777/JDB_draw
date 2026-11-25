@@ -43,7 +43,9 @@ function render() {
   const hands = D ? handovers(s) : [];
   // 新的裁判更換：在任何分頁都跳出提醒
   const newest = hands.length ? hands[0].ts : 0;
-  if (handSeen == null) handSeen = newest; else if (newest > handSeen) { handSeen = newest; const x = hands[0]; toast(`第 ${x.t} 桌裁判 ${fmtTime(x.ts)} 由 ${x.from} 換成 ${x.to}，請到「裁判」分頁確認`, 8000); }
+  // 每台電腦只跳一次（記在這台電腦），重新整理不會再跳；紅框提醒要按確認才會消失
+  if (handSeen == null) { try { handSeen = Number(localStorage.getItem('jdb-hand-seen') || 0); } catch (e) { handSeen = 0; } }
+  if (newest > handSeen) { handSeen = newest; try { localStorage.setItem('jdb-hand-seen', String(newest)); } catch (e) { /* 略過 */ } const x = hands[0]; if (Date.now() - x.ts < 30 * 60000) toast(`第 ${x.t} 桌裁判 ${fmtTime(x.ts)} 由 ${x.from} 換成 ${x.to}，請到「裁判」分頁確認`, 8000); }
   const swN = swapList().filter(x => !x.sw.sent).length + hands.length;
   const due = dueNotices(s).length, rep = [...D.byId.values()].filter(m => m.status === 'reported').length;
   const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求或裁判更換">${swN}</span>` : '');
@@ -355,7 +357,7 @@ function onlinePanel(s) {
   return `<div class="panel"><h2>線上點單未填（${l.length}）</h2>
     ${(mailAll ? l : l.slice(0, 5)).map(x => { const id = `${x.m.id}|${x.k}`; return `<div class="alertbox"><div class="small ameta">${esc(x.m.ev)} ${esc(x.m.no)}${x.slot ? `　表定 ${esc(x.slot.s)}` : ''}${sent[id] ? `　${fmtTime(sent[id])} 已擬信` : ''}</div>
       <div><b>${esc(x.team)}</b> 尚未填寫線上點單</div>
-      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱${nudgeOf(s, x.m, x.k) ? `　${fmtTime(nudgeOf(s, x.m, x.k).ts)} 已頁面通知` : ''}</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('edit')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(id)}">${icon('bell')}頁面通知</button></div></div>`; }).join('')}
+      <div class="row" style="margin-top:4px"><span class="small muted" style="flex:1">${x.mails.length} 個信箱${nudgeOf(s, x.m, x.k) ? `　${fmtTime(nudgeOf(s, x.m, x.k).ts)} 已頁面通知` : ''}</span><a class="btn ghost sm" href="${esc(lineupMail(s, x))}" target="_blank" rel="noopener" data-mailed="${esc(id)}">${icon('mail')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(id)}">${icon('bell')}頁面通知</button></div></div>`; }).join('')}
     ${l.length > 5 ? `<button class="btn plain sm" data-mailall>${mailAll ? '只顯示前 5 隊' : `顯示全部 ${l.length} 隊`}</button>` : ''}</div>`;
 }
 
@@ -492,14 +494,13 @@ function lineupModal(m) {
       ? `<select data-lu="${k}|${i}|${j}" ${dis} style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
       : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" ${dis} style="width:${j == null ? 100 : 48}%">`);
     return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.rec.olSrc && m.rec.olSrc[k] ? `<span class="chip playing">線上點單 ${fmtTime(m.rec.olSrc[k].ts)} 送出</span>` : m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : draftLu(getState(), m, k) ? `<span class="chip warn">線上編輯中</span>` : '<span class="chip">尚未輸入</span>'}</h3>
-      ${m.rec.olSrc && m.rec.olSrc[k] && !m.rec.start ? `<div class="small muted" style="margin:-4px 0 6px">${esc(m.rec.olSrc[k].by || '')} 送出　<button class="btn plain sm" data-lureturn="${esc(m.id)}|${k}">退回讓隊伍修改</button></div>` : ''}
+      ${m.rec.olSrc && m.rec.olSrc[k] && !m.rec.start ? `<div class="small" style="margin:-4px 0 6px"><button class="btn plain sm" data-lureturn="${esc(m.id)}|${k}">退回讓隊伍修改</button></div>` : ''}
       ${POINTS.map((p, i) => `<div class="row" style="margin-bottom:6px;flex-wrap:nowrap"><span class="nowrap small muted" style="width:76px">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</span>
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
-      ${online ? '<div class="small muted" style="margin-bottom:6px">隊伍已線上送出，大會台不能修改；需要更改請按「退回讓隊伍修改」。</div>' : ''}
       ${luLogHtml(m, k, S)}
       <div class="row">${open ? `<button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>` : online ? '' : `<button class="btn ghost sm" data-luunlock="${esc(m.id)}|${k}">${icon('edit')}代填點單</button>`}
-        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(m.id)}|${k}">${icon('bell')}頁面通知</button>`; })()}
+        ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('mail')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(m.id)}|${k}">${icon('bell')}頁面通知</button>`; })()}
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　排點</h2><span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
