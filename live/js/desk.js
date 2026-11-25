@@ -33,15 +33,20 @@ const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', time: 'clock', notice: 'be
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
 
+let handSeen = null;
 function render() {
   const s = getState();
   D = derive(withOnline(s));
   paperSet = paperTeams(s);
   $('#top').innerHTML = header(s, '大會台', [['即時賽程', './'], ['裁判紀錄區', 'ref.html'], ['簽到處', 'checkin.html']], { nav: 'desk', account: auth.cloud && auth.user ? `<a href="#" data-signout title="${esc(auth.user)}">登出</a>` : '' });
   if (auth.cloud && !auth.isAdmin) { $('#tabs').innerHTML = ''; $('#main').innerHTML = viewLogin(); return; }
-  const swN = swapList().filter(x => !x.sw.sent).length;
+  const hands = D ? handovers(s) : [];
+  // 新的裁判更換：在任何分頁都跳出提醒
+  const newest = hands.length ? hands[0].ts : 0;
+  if (handSeen == null) handSeen = newest; else if (newest > handSeen) { handSeen = newest; const x = hands[0]; toast(`第 ${x.t} 桌裁判 ${fmtTime(x.ts)} 由 ${x.from} 換成 ${x.to}，請到「裁判」分頁確認`, 8000); }
+  const swN = swapList().filter(x => !x.sw.sent).length + hands.length;
   const due = dueNotices(s).length, rep = [...D.byId.values()].filter(m => m.status === 'reported').length;
-  const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求">${swN}</span>` : '');
+  const badge = k => (k === 'notice' && due ? `<span class="badge" title="${due} 則提醒待處理">${due}</span>` : k === 'refs' && swN ? `<span class="badge" title="${swN} 則替換請求或裁判更換">${swN}</span>` : '');
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events.length ? byPill(D.events)[0].name : null;
@@ -115,6 +120,30 @@ function roundTime(s, r) {
   const a = sl.reduce((x, y) => (`${y.d}${y.s}` < `${x.d}${x.s}` ? y : x)), b = sl.reduce((x, y) => (`${y.d}${y.e}` > `${x.d}${x.e}` ? y : x));
   return ` <span class="rt">${esc(dayLabel(getState(), a.d, a.day))} ${a.s}-${b.e}</span>`;
 }
+// ---------------- 裁判更換確認 ----------------
+// 同一桌的記分裁判換人時提醒大會確認，避免外人猜到密碼接手記分
+function handovers(s) {
+  const ack = (s.notices || {}).hand || {}, out = [];
+  D.byId.forEach(m => {
+    let log = m.rec.reflog; if (typeof log === 'string') { try { log = JSON.parse(log); } catch (e) { log = []; } }
+    if (!Array.isArray(log) || log.length < 2) return;
+    const last = new Map();
+    log.slice().sort((a, b) => a.ts - b.ts).forEach(x => {
+      const p = last.get(x.t);
+      if (p && nm(p.n) !== nm(x.n)) { const key = `${m.id}|${x.t}|${x.ts}`.replace(/[.#$/\[\]]/g, '_'); if (!ack[key]) out.push({ key, m, t: x.t, from: p.n, to: x.n, ts: x.ts }); }
+      last.set(x.t, x);
+    });
+  });
+  return out.sort((a, b) => b.ts - a.ts);
+}
+function handPanel(s) {
+  const l = handovers(s);
+  if (!l.length) return '';
+  return `<div class="panel handp"><h2 style="color:var(--red)">${icon('whistle')}裁判更換確認（${l.length}）</h2>
+    <p class="small muted" style="margin:0 0 6px">請確認接手的是大會派去的裁判。不是的話請馬上到該桌確認，並在「裁判資料設定」更換裁判密碼。</p>
+    ${l.map(x => `<div class="handrow"><span>第 ${esc(x.t)} 桌　${esc(x.m.ev)} ${esc(x.m.no)}　${fmtTime(x.ts)} 由 <b>${esc(x.from)}</b> 換成 <b>${esc(x.to)}</b></span><button class="btn sm" data-handok="${esc(x.key)}">${icon('check')}確認</button></div>`).join('')}</div>`;
+}
+
 // ---------------- 時間表 ----------------
 const CALL_RULES = [
   '個人賽與團體賽同時進行，叫場以個人賽為主。',
@@ -1072,7 +1101,7 @@ function viewRefs(s) {
     const isXs = xs && t >= xs.from && t <= xs.to;
     return `<div class="rcell ${on ? (n ? 'on' : 'none') : 'idle'} ${sw ? 'swap' : ''} ${isXs ? 'xs' : ''}"><b>${t}${isXs ? '<span class="xst">香山</span>' : ''}</b>${on ? (n ? `<span>${staff.includes(n) ? orgTag(s, n) : ''}</span><span class="rn">${esc(n)}</span>` : '<span class="rn">未登記</span>') : '<span class="rn muted">空桌</span>'}${sw ? `<small>請求替換</small>` : ''}</div>`;
   }).join('')}</div></div>`;
-  return wrap(`${strip}${swapPanel()}${queueNote(s)}
+  return wrap(`${handPanel(s)}${strip}${swapPanel()}${queueNote(s)}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
     ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}
@@ -1502,6 +1531,7 @@ document.addEventListener('click', async ev => {
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
+  if (d.handok) { const k = d.handok; update(s => { s.notices = s.notices || {}; s.notices.hand = { ...(s.notices.hand || {}), [k]: Date.now() }; }); return; }
   if ('bcopen' in d) { bcOpen = !bcOpen; render(); return; }
   if ('bcmore' in d) { bcMore = !bcMore; render(); return; }
   if ('qopen' in d) { qOpen = !qOpen; render(); return; }

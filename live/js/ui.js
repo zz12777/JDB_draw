@@ -38,11 +38,11 @@ const ICONS = {
 export const icon = n => `<svg class="icon" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none">${ICONS[n]}</svg>`;
 
 let toastTimer;
-export function toast(msg) {
+export function toast(msg, ms = 2600) {
   let el = $('#toast');
   if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
   el.textContent = msg; el.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, ms);
 }
 
 export const STATUS_TEXT = { wait: '等待中', ready: '可開賽', playing: '進行中', reported: '已打完', done: '已完賽' };
