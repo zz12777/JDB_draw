@@ -176,7 +176,7 @@ function bcPanel(s, calls) {
   const latest = calls.length ? Math.max(...calls.map(c => c.ts)) : 0;
   if (bcSeen == null) bcSeen = latest;
   else if (latest > bcSeen) { bcSeen = latest; bcOpen = true; bcMore = false; }
-  const head = `<div class="row"><h2 style="margin:0">廣播稿</h2>${calls.length ? `<span class="small muted">${calls.length} 則</span>` : ''}<span class="spacer"></span>${calls.length ? `<button class="btn ghost sm" data-bcopen aria-expanded="${bcOpen}">${icon(bcOpen ? 'chevup' : 'chevdown')}${bcOpen ? '收合' : '展開'}</button>` : ''}</div>`;
+  const head = calls.length ? `<div class="row phead" data-bcopen role="button" tabindex="0" aria-expanded="${bcOpen}"><h2 style="margin:0">廣播稿</h2><span class="spacer"></span>${icon(bcOpen ? 'chevup' : 'chevdown')}</div>` : '<h2 style="margin:0">廣播稿</h2>';
   if (!calls.length) return `<div class="panel bc">${head}<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p></div>`;
   if (!bcOpen) return `<div class="panel bc">${head}</div>`;
   return `<div class="panel bc">${head}<div style="margin-top:8px">${callList(s.calls, D, { max: bcMore ? 5 : 1, undo: true })}</div>
@@ -265,7 +265,7 @@ function rareList() {
 function rarePanel() {
   const l = rareList();
   if (!l.length) return '';
-  return `<div class="panel"><div class="row"><h2 style="margin:0">生僻字讀音</h2><span class="spacer"></span><button class="btn ghost sm" data-rareopen>${icon('list')}${rareOpen ? '收合' : '展開'}</button></div>
+  return `<div class="panel"><div class="row phead" data-rareopen role="button" tabindex="0" aria-expanded="${rareOpen}"><h2 style="margin:0">生僻字讀音</h2><span class="spacer"></span>${icon(rareOpen ? 'chevup' : 'chevdown')}</div>
     ${rareOpen ? `<table class="list rare" style="margin-top:8px"><thead><tr><th>項目</th><th>場次</th><th>全稱</th><th>讀音</th></tr></thead><tbody>${l.map(x => `<tr><td class="nowrap">${esc(x.ev)}</td><td class="nowrap">${esc(x.no)}</td><td>${esc(x.full).replace(new RegExp(`[${x.chars.join('')}]`, 'gu'), c => `<b class="rk2">${c}</b>`)}</td><td class="nowrap">${x.chars.map(c => `<b>${c}</b>讀「${RARE[c]}」`).join('<br>')}</td></tr>`).join('')}</tbody></table>` : ''}</div>`;
 }
 
@@ -674,7 +674,7 @@ function viewRec(s) {
   const mark = m => (m.status === 'reported' ? 'rep' : m.status === 'playing' ? 'live' : '');
   const ko = e ? (e.team ? e.matches.filter(m => m.stage === 'F') : e.matches) : [];
   const t = e ? bracketSvg(ko, e.team, { pos: e.team, noTables: true }) : { svg: '' };
-  return e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${byPill(D.events).map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
+  return e ? `<div class="recwrap"><div class="pills" style="margin-bottom:10px">${byPill(D.events).map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
       ${e.team ? '<div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span></div>' : ''}
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
       ${t.svg ? `<div class="row" style="margin-top:10px"><h3 class="rech" style="margin:0">${e.team ? '決賽' : '籤表'}</h3><span class="spacer"></span><button class="btn ghost sm" data-reczoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-reczoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div><div class="treebox rectree">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * recZoom)}" height="${Math.round(t.height * recZoom)}"`)}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
@@ -1446,7 +1446,7 @@ document.addEventListener('click', ev => {
   setTimeout(() => update(st => { st.notices = st.notices || {}; st.notices.mail = { ...(st.notices.mail || {}), [id]: Date.now() }; }), 400);
 });
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('button, [data-table], [data-signout], [data-mid]');
+  const t = ev.target.closest('button, [data-table], [data-signout], [data-mid], .phead');
   if (t && 'signout' in t.dataset) ev.preventDefault();
   if (!t) { if (ev.target.classList.contains('modal-bg')) { modal = null; draft = {}; drawModal(); } return; }
   const d = t.dataset;
@@ -1707,3 +1707,5 @@ subscribe((s, local) => {
 onAuth(a => { if (a.error && (a.isAdmin || !a.cloud)) toast(a.error); render(); });
 setInterval(() => { const a = document.activeElement; if (!modal && !(a && /INPUT|SELECT/.test(a.tagName))) render(); }, 30000);
 render();
+// 可收合區塊的標題列也能用鍵盤展開
+document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('phead')) { ev.preventDefault(); ev.target.click(); } });

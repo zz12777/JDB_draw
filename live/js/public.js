@@ -6,6 +6,10 @@ import { getState, subscribe, auth, onAuth, loadHistory } from './store.js';
 import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables, callList } from './ui.js';
 import { bracketSvg } from './tree.js';
 import { timetableHtml } from './ttview.js';
+
+// 項目順序跟大會台一樣
+const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
+const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
 import { mergeHistory } from './history.js';
 
 let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
@@ -20,7 +24,7 @@ function render() {
   $('#top').innerHTML = header(s, '即時賽程', [['線上點單', 'lineup.html']]);
   if (tab === 'time' && !s.sched) tab = 'sched';
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}<span>${t}</span></button>`).join('');
-  if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? D.events[0].name : null;
+  if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? byPill(D.events)[0].name : null;
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = `<label class="sbox">${icon('search')}<input id="q" class="search" type="search" placeholder="學校、隊名或姓名"></label><div style="height:12px"></div><div id="content"></div>`;
   if ($('#q').value !== q && !composing) $('#q').value = q;
@@ -99,7 +103,7 @@ function viewSched() {
   const pre = groups ? `<div class="panel flat"><h2>預賽</h2>${groups}</div>` : '';
   // 決賽籤表公開後排到預賽上面
   const pub = e.team && (getState().events || []).some(x => x.name === e.name && x.finalPub);
-  return `<div class="pills" style="margin-bottom:12px">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
+  return `<div class="pills" style="margin-bottom:12px">${byPill(D.events).map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>
     ${pub ? tree + pre : pre + tree}`;
 }
 
