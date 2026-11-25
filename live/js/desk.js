@@ -91,7 +91,7 @@ function viewCtrl(s) {
         const mins = t => Math.max(0, Math.floor((Date.now() - t) / 60000));
         // 判棄權：個人賽與整隊未到才有；雙打一人沒到算整組未到
         const woBtns = ab.key === 'm' ? ['a', 'b'].filter(k => ab[k]).map(k => `<button class="btn ghost sm danger" data-wojudge="${esc(m.id)}|${k}">判 ${esc(sideText(k === 'a' ? m.A : m.B, m.team))} 棄權</button>`).join('') : '';
-        return `<div class="alertbox"><div class="small ameta">第 ${esc(tb)} 桌　${fmtTime(ab.ts)} 回報（${mins(ab.ts) ? `${mins(ab.ts)} 分鐘前` : '剛剛'}）　裁判 ${esc(ab.by || '')}</div>
+        return `<div class="alertbox"><div class="small ameta">第 ${esc(tb)} 桌　${fmtTime(ab.ts)}　裁判 ${esc(ab.by || '')}</div>
           <div>${esc(recallText(m, ab))}</div>
           ${ab.called ? `<div class="small" style="color:var(--green);margin-top:2px">${fmtTime(ab.called)} 已廣播，已過 ${mins(ab.called)} 分鐘</div>` : ''}
           ${woBtns ? `<div class="row" style="margin-top:4px;justify-content:flex-end">${woBtns}</div>` : ''}
