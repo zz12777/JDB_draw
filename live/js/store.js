@@ -24,6 +24,9 @@ const META_KEYS = ['title', 'edition', 'tables', 'notice', 'rosterFile', 'rev', 
 const pt = v => { if (v === '' || v == null) return ''; const n = Number(v); return Number.isInteger(n) && n >= 0 && n < 100 ? n : ''; };
 const games = g => (Array.isArray(g) ? g.slice(0, 5).map(x => (Array.isArray(x) ? [pt(x[0]), pt(x[1])] : ['', ''])) : undefined);
 
+/** 每場最後一次寫入資料庫的時間（裁判或大會台） */
+const lastU = new Map();
+export const matchUpdatedAt = id => lastU.get(id) || 0;
 function nodeToRec(node) {
   const rec = {};
   for (const k of Object.keys(node || {})) {
@@ -62,7 +65,7 @@ function recToNode(rec, ts) {
 function assemble() {
   const meta = parse(raw.meta, {});
   const m = {};
-  for (const id of Object.keys(raw.m || {})) m[id] = nodeToRec(raw.m[id]);
+  for (const id of Object.keys(raw.m || {})) { m[id] = nodeToRec(raw.m[id]); if (raw.m[id] && raw.m[id].u) lastU.set(id, Number(raw.m[id].u)); }
   state = { ...emptyState(), ...Object.fromEntries(META_KEYS.filter(k => meta[k] !== undefined).map(k => [k, meta[k]])),
     events: parse(raw.events, []), m, calls: parse(raw.calls, []), pcalls: parse(raw.pcalls, []), staff: parse(raw.staff, []), staffOrg: parse(raw.staffOrg, {}), refOpt: parse(raw.refOpt, {}), receipt: parse(raw.receipt, {}), dlu: parse(raw.dlu, {}),
     olu: Object.fromEntries(Object.entries(raw.olu || {}).map(([mid, t]) => [mid, Object.fromEntries(Object.entries(t || {}).map(([k, v]) => [k, parse(v, null)]).filter(([, v]) => v))])), teamacl: raw.teamacl || {}, nudge: raw.nudge || {}, refcode: raw.refcode ?? null, refgen: raw.refgen ?? null,

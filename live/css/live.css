@@ -629,3 +629,6 @@ td.tts-part { background: #f6f8fb; }
 .lg.tdone { background: #eceff3; } .lg.tlive { background: var(--blue-soft); border-color: var(--blue-2); } .lg.tready { background: var(--yellow-soft); border-color: var(--red); } .lg.tpart { background: #f6f8fb; }
 .ttrules { margin-top: 10px; font-size: 13px; }
 .ttrules div { margin-top: 4px; } .ttrules .tm { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.legend span.tto { display: inline-grid; place-items: center; flex: none; margin-right: 2px; }
+.mc .stale { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; padding: 4px 8px; border: 1px solid var(--red); background: var(--red-soft); border-radius: 6px; font-size: 13px; color: var(--red); }
+.mc .stale span { flex: 1; }

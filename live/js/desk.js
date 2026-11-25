@@ -1,12 +1,12 @@
 // 大會台
 import { derive, isTeam, matchTitle, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel, callQueue, queueRuns } from './model.js';
-import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory, writePaths, teamKey, mailKey, parseMails, ownerUpdates, setRefCode } from './store.js';
+import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory, writePaths, teamKey, mailKey, parseMails, ownerUpdates, setRefCode, matchUpdatedAt } from './store.js';
 import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
 import { timetableHtml } from './ttview.js';
-import { buildNotices, noticesHtml, KIND_NAME, RULES } from './notices.js';
+import { buildNotices, noticesHtml, KIND_NAME } from './notices.js';
 import { checkinSections, missingLineup } from './units.js';
 import { readWorkbookValues, readFormFile } from '../../js/reader.js';
 import { parseResponses, EVENTS } from '../../js/parse.js';
@@ -111,21 +111,25 @@ function roundTime(s, r) {
   return ` <span class="rt">${esc(dayLabel(getState(), a.d, a.day))} ${a.s}-${b.e}</span>`;
 }
 // ---------------- 時間表 ----------------
+const CALL_RULES = [
+  '個人賽與團體賽同時進行，叫場以個人賽為主。',
+  '團體決賽與團體預賽（例如大專決賽和社會組預賽）同時進行，以決賽為主，有空桌再拆給預賽。',
+  '抽籤前最後一輪，男團、女團都在打時女團先叫，錯開抽籤。',
+  '叫團體賽的原則：同一輪中，已交點單、可以打的就先叫。',
+  '團賽同一循環的兩場盡量一起叫。',
+  '每個時段開始時廣播目前要進行的場次。',
+  '進度落後時間表超過 1 小時，可以先請各隊派代表到大會台協調。',
+];
 function viewTimeDesk(s) {
   if (!(s.sched && s.sched.slots && s.sched.slots.length)) return '<div class="panel"><h2>時間表</h2><p class="muted small">尚未匯入賽程時間表，請到「資料設定」匯入。</p></div>';
   const info = buildNotices(s.sched.slots).filter(x => x.kind === 'info');
   const after = d => { const l = info.filter(x => x.d === d); return l.length ? `<div class="ttrules"><b>這天的叫場原則</b>${l.map(x => `<div><span class="tm">${x.t}</span>${esc(x.text)}</div>`).join('')}</div>` : ''; };
   return `<div class="desk"><div>
-    <div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg tdone"></span>已完賽</span><span><span class="lg tlive"></span>進行中</span><span><span class="lg tready"></span>可開賽</span><span><span class="lg tpart"></span>部分完賽</span><span><span class="tto">①</span>同一時段的叫場順序</span></div>
-      <p class="small muted" style="margin:6px 0 0">格子右下角是已完賽／總場數，點格子會切到「賽程控制」的該項目。</p></div>
+    <div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg tdone"></span>已完賽</span><span><span class="lg tlive"></span>進行中</span><span><span class="lg tpart"></span>部分完賽</span><span><span class="tto">1</span>同一時段的叫場順序</span></div></div>
     ${timetableHtml(s, { D, after })}</div>
     <div class="side">${queuePanel(s)}
       <div class="panel"><h2>叫場原則</h2><ul class="small" style="margin:0;padding-left:18px">
-        <li>個人賽與團體賽同時進行，叫場以個人賽為主。</li>
-        <li>個人賽同一輪依男單、女單、男雙、女雙的順序叫。</li>
-        <li>團體決賽與團體預賽（例如大專決賽和社會組預賽）同時進行，以決賽為主，有空桌再拆給預賽。</li>
-        <li>抽籤前最後一輪，男團、女團都在打時女團先叫，錯開抽籤。</li>
-        ${RULES.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div></div></div>`;
+        ${CALL_RULES.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div></div></div>`;
 }
 
 // ---------------- 個人賽叫場順序 ----------------
@@ -137,9 +141,8 @@ function queuePanel(s) {
   if (!q.length) return '';
   const runs = queueRuns(q).slice(0, 5);
   return `<div class="panel"><h2>個人賽叫場順序</h2>
-    <p class="small muted" style="margin:0 0 6px">同一輪依男單、女單、男雙、女雙的順序叫。</p>
     <table class="list qrun"><tbody>${runs.map((r, i) => { const rd = r.list.filter(m => m.status === 'ready').length; return `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
-      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.list.length} 場${rd ? `，可開賽 ${rd}` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.list.length} 場</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 /** 裁判分頁：接下來 N 場會叫到哪些場次（這些場次的選手列在暫不可擔任） */
 function queueNote(s) {
@@ -149,6 +152,10 @@ function queueNote(s) {
   return `<div class="alertbox info" style="margin-bottom:12px"><b>個人賽接下來 ${head.length} 場：</b>${runs.map(r => esc(runText(r))).join('、')}<br>
     <span class="small muted">這些場次的選手列在「暫不可擔任」；後面才會叫到的選手列在「人手不足時可支援」。${q.length > N ? `之後接著是 ${esc(runText(queueRuns(q.slice(N))[0]))}。` : ''}</span></div>`;
 }
+const deskName = () => (auth.nick ? `大會台(${auth.nick})` : '大會台');
+// 裁判打完沒按結束：超過 15 分鐘沒有更新，大會台可以直接完賽
+const STALE_MS = 15 * 60000;
+const staleReported = m => m.status === 'reported' && matchUpdatedAt(m.id) && Date.now() - matchUpdatedAt(m.id) > STALE_MS;
 const hasRec = m => !!(m.rec.start || m.rec.fin || (m.rec.g || []).some(g => g && (g[0] !== '' || g[1] !== '')) || (m.rec.pts || []).some(p => p && (p.g || []).some(g => g && (g[0] !== '' || g[1] !== ''))));
 const stageOrder = m => (m.stage === 'F' ? 1 : 0) * 100 + m.roundIdx;
 
@@ -173,6 +180,7 @@ function card(m) {
     <div class="hd"><span class="no">${esc(m.no)}</span>${m.group ? `<span class="muted">${m.group} 組</span>` : ''}${chip(m)}<span class="spacer"></span>
       ${m.status === 'done' || m.status === 'reported' ? '' : m.status === 'playing' && m.rec.start ? `<span class="muted">${fmtTime(m.rec.start)} 開賽</span>` : planned(m)}</div>
     ${sideRow('a', m.A)}${sideRow('b', m.B)}
+    ${staleReported(m) ? `<div class="stale"><span>已打完超過 15 分鐘，裁判還沒按結束</span><button class="btn sm yellow" data-finish="${esc(m.id)}">${icon('check')}完賽</button></div>` : ''}
     ${!m.tables.length && m.known && m.status !== 'done' ? (busy => (busy.length ? `<div class="busytag"><button class="busybtn" data-busyopen="${esc(m.id)}" aria-expanded="${busyOpen.has(m.id)}">${icon('alert')}提醒 ${busy.length}</button>${busyOpen.has(m.id) ? `<ul>${busy.map(b => `<li>${esc(b.text)}</li>`).join('')}</ul>` : ''}</div>` : ''))(busyOf(m)) : ''}
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>
@@ -450,6 +458,13 @@ function lineupWarn(l) {
 const twoLine = t => { const x = String(t || '').trim(), i = x.indexOf(' '); return i > 0 ? `${esc(x.slice(0, i))}<br>${esc(x.slice(i + 1))}` : esc(x); };
 const BY_COLORS = ['#dcfce7', '#fef3c7', '#dbeafe', '#fce7f3', '#ede9fe', '#ffedd5'];
 let showBy = false;
+/** 成績視窗上方：這場的裁判、棄權是誰登記的、最後更新時間 */
+function refLine(m) {
+  const refs = [...new Set([...Object.values(m.rec.refs || {}), m.rec.ref, ...(m.rec.pts || []).map(p => p && p.ref)].filter(Boolean))];
+  const wo = m.rec.wo && m.rec.woBy ? `　棄權由 ${esc(m.rec.woBy.by)} 於 ${fmtTime(m.rec.woBy.ts)} 登記` : m.rec.wo ? '　棄權登記者不明（更新前登記的）' : '';
+  const u = matchUpdatedAt(m.id);
+  return refs.length || wo || u ? `<p class="small muted" style="margin:4px 0">${refs.length ? `裁判：${refs.map(esc).join('、')}` : '裁判：未登記'}${wo}${u ? `　最後更新 ${fmtTime(u)}` : ''}</p>` : '';
+}
 function scoreModal(m) {
   const locked = false; // 不再鎖定：完賽後大會台仍可修改
   const dis = '';
@@ -481,6 +496,7 @@ function scoreModal(m) {
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}${m.status === 'playing' && m.tables.length ? `<span class="small muted">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${m.team ? esc(sideText(m.A, true)) : twoLine(sideText(m.A))}</div><div class="total" id="sc-total"></div><div class="n">${m.team ? esc(sideText(m.B, true)) : twoLine(sideText(m.B))}</div></div>
     ${!m.known && hasRec(m) ? `<div class="alertbox" style="margin:6px 0">對手還沒確定，但這場已經有比分紀錄（可能是前一輪的成績改過）。確認不是這兩位的比賽，可以清除這場紀錄。<div class="row" style="margin-top:6px"><span class="spacer"></span><button class="btn ghost sm danger" data-scwipe>清除這場紀錄</button></div></div>` : ''}
+    ${refLine(m)}
     ${refLogHtml(m.rec, fmtTime)}
     ${byBar}
     <div class="pts">${body}</div>
@@ -1511,7 +1527,8 @@ document.addEventListener('click', async ev => {
     });
     drawModal();
   }
-  else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) r.wo = d.wo; else delete r.wo; }); drawModal(); }
+  else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) { r.wo = d.wo; r.woBy = { by: deskName(), ts: Date.now() }; } else { delete r.wo; delete r.woBy; } }); drawModal(); }
+  else if (d.finish) { updateMatch(d.finish, r => { r.fin = Date.now(); r.end = Date.now(); r.finBy = deskName(); delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); toast('已完賽'); }
   else if ('confirm' in d) { updateMatch(modal.mid, r => { r.fin = Date.now(); r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); modal = null; drawModal(); toast('本場已結束'); }
   else if ('fillRank' in d) {
     update(s => { const se = s.events.find(x => x.name === curEv); const e = D.events.find(x => x.name === curEv); se.rank = se.rank || {};
@@ -1603,7 +1620,7 @@ document.addEventListener('input', ev => {
     else { o = r; games = r.g = r.g || []; }
     games[gi] = games[gi] || ['', ''];
     games[gi][side] = v === '' ? '' : Number(v);
-    o.gb = o.gb || []; o.gb[gi] = auth.nick ? `大會台(${auth.nick})` : '大會台'; for (let i = 0; i < o.gb.length; i++) if (o.gb[i] == null) o.gb[i] = '';
+    o.gb = o.gb || []; o.gb[gi] = deskName(); for (let i = 0; i < o.gb.length; i++) if (o.gb[i] == null) o.gb[i] = '';
     for (let i = 0; i < games.length; i++) if (!games[i]) games[i] = ['', ''];
   });
 });
