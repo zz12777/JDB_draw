@@ -45,7 +45,7 @@ function viewLive(s, key) {
 }
 
 /** 賽程時間表：每天一張表，列是時段、欄是項目 */
-const viewTime = s => timetableHtml(s);
+const viewTime = s => timetableHtml(s, { flat: true });
 
 /** 成績公告：大會公布前只列出空格 */
 /**
@@ -93,10 +93,10 @@ function viewSched() {
   const groups = e.team ? groupTables(e, shown) : '';
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
   const t = bracketSvg(ko, e.team, { pos: e.team });
-  const tree = t.svg ? `<div class="panel"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>
+  const tree = t.svg ? `<div class="panel flat"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>
       <button class="btn ghost sm" data-zoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-zoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div>
     <div class="treebox" style="margin-top:10px">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * zoom)}" height="${Math.round(t.height * zoom)}"`)}</div></div>` : '';
-  const pre = groups ? `<div class="panel"><h2>預賽</h2>${groups}</div>` : '';
+  const pre = groups ? `<div class="panel flat"><h2>預賽</h2>${groups}</div>` : '';
   // 決賽籤表公開後排到預賽上面
   const pub = e.team && (getState().events || []).some(x => x.name === e.name && x.finalPub);
   return `<div class="pills" style="margin-bottom:12px">${D.events.map(x => `<button class="${x.name === curEv ? 'on' : ''}" data-ev="${x.name}">${x.name}</button>`).join('')}</div>

@@ -125,7 +125,7 @@ function viewTimeDesk(s) {
   const info = buildNotices(s.sched.slots).filter(x => x.kind === 'info');
   const after = d => { const l = info.filter(x => x.d === d); return l.length ? `<div class="ttrules"><b>這天的叫場原則</b>${l.map(x => `<div><span class="tm">${x.t}</span>${esc(x.text)}</div>`).join('')}</div>` : ''; };
   return `<div class="desk"><div>
-    <div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg tdone"></span>已完賽</span><span><span class="lg tlive"></span>進行中</span><span><span class="lg tpart"></span>部分完賽</span><span><span class="tto">1</span>同一時段的叫場順序</span></div></div>
+    <div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg tdone"></span>已完賽</span><span><span class="lg tlive"></span>進行中</span><span><span class="lg tnext"></span>下一區塊</span><span><span class="tto">1</span>同一時段的叫場順序</span></div></div>
     ${timetableHtml(s, { D, after })}</div>
     <div class="side">${queuePanel(s)}
       <div class="panel"><h2>叫場原則</h2><ul class="small" style="margin:0;padding-left:18px">
@@ -581,7 +581,6 @@ function drawModal() {
     const rows = modal.busy.map(b => `<li>${esc(b.text)}${b.ref ? '，請先安排替換裁判' : ''}</li>`).join('');
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(480px,100%)"><h2>派桌前提醒</h2>
       <ul style="margin:8px 0 0;padding-left:20px;line-height:1.8">${rows}</ul>
-      <p class="small muted">確認不會撞場再派桌，例如上一場其實已經打完、只是還沒記錄。</p>
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn" data-busyok>仍要派桌</button></div></div></div>`;
     return;
   }
@@ -613,6 +612,7 @@ function syncHistory() {
 // ---------------- 籤表 ----------------
 // 各項目籤表（和即時賽程同步），點場次可以看、改比分。不顯示桌次與排點。
 let recEv = null;
+let recZoom = 1;
 function viewRec(s) {
   if (!recEv || !D.events.some(e => e.name === recEv)) recEv = D.events.length ? byPill(D.events)[0].name : null;
   const e = D.events.find(x => x.name === recEv);
@@ -623,7 +623,7 @@ function viewRec(s) {
   return e ? `<div class="panel"><div class="pills" style="margin-bottom:10px">${byPill(D.events).map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
       ${e.team ? '<div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span></div>' : ''}
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
-      ${t.svg ? `<h3 class="rech">${e.team ? '決賽' : '籤表'}</h3><div class="treebox rectree">${t.svg}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
+      ${t.svg ? `<div class="row" style="margin-top:10px"><h3 class="rech" style="margin:0">${e.team ? '決賽' : '籤表'}</h3><span class="spacer"></span><button class="btn ghost sm" data-reczoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-reczoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div><div class="treebox rectree">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * recZoom)}" height="${Math.round(t.height * recZoom)}"`)}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
 }
 
 // ---------------- 場控提醒 ----------------
@@ -1477,6 +1477,7 @@ document.addEventListener('click', async ev => {
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
+  if (d.reczoom) { recZoom = Math.min(1.6, Math.max(0.4, recZoom + 0.2 * Number(d.reczoom))); render(); return; }
   if (d.goev) { curEv = d.goev; tab = 'ctrl'; render(); window.scrollTo(0, 0); return; }
   if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; const r = { ...(st.receipt || {}) }; delete r[d.parkdel]; st.receipt = r; }); return; }
   if (d.rnote) { modal = { kind: 'rnote', unit: d.rnote }; drawModal(); return; }
