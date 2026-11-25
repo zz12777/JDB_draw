@@ -195,9 +195,8 @@ function queuePanel(s) {
 function queueNote(s) {
   const N = refBuf(s), q = callQueue(D);
   if (!q.length) return '';
-  const head = q.slice(0, N), runs = queueRuns(head);
-  return `<div class="alertbox info" style="margin-bottom:12px"><b>個人賽接下來 ${head.length} 場：</b>${runs.map(r => esc(runText(r))).join('、')}<br>
-    <span class="small muted">這些場次的選手列在「暫不可擔任」；後面才會叫到的選手列在「人手不足時可支援」。${q.length > N ? `之後接著是 ${esc(runText(queueRuns(q.slice(N))[0]))}。` : ''}</span></div>`;
+  const runs = queueRuns(q.slice(0, N));
+  return `<div class="alertbox info" style="margin-bottom:12px">${N} 場內會叫到的【${runs.map(r => esc(runText(r))).join('、')}】暫不可擔任</div>`;
 }
 /** 大會判棄權：記下誰判的、這場結束並空出球桌，裁判手機會收到通知 */
 function walkover(mid, winner) {
@@ -443,8 +442,10 @@ function setTables(mid, text, force = false, busyOk = false) {
       const dl = (st.dlu || {})[mid] || {};
       ['a', 'b'].forEach(k => {
         if (rec.lineup && rec.lineup[k]) return;
-        const v = dl[k] || (onlineLu(st, m, k) || {}).lu;
+        const ol = onlineLu(st, m, k), v = dl[k] || (ol || {}).lu;
         if (v) { rec.lineup = rec.lineup || {}; rec.lineup[k] = v; }
+        // 記下這邊的點單來自隊伍線上送出：之後大會台不能直接改
+        if (!dl[k] && ol) { rec.luSrc = { ...(rec.luSrc || {}), [k]: ol.ts || Date.now() }; }
       });
       if (st.dlu && st.dlu[mid]) delete st.dlu[mid];
     }
@@ -462,20 +463,42 @@ function setTables(mid, text, force = false, busyOk = false) {
 }
 
 // ---------------- 排點 ----------------
+// 排點紀錄：隊伍的線上紀錄（信箱）＋大會台的代填紀錄（暱稱），平常收合
+const luUnlock = {}, luLogOpen = {};
+function luLogHtml(m, k, S) {
+  const s = getState();
+  const o = ((s.olu || {})[m.id] || {})[teamKey(m.ev, S.name)];
+  const team = ((o && o.log) || []).map(x => ({ ts: x.ts, by: x.by, a: x.a === '暫存' ? '編輯' : x.a }));
+  const desk = ((((s.notices || {}).lulog || {})[m.id] || {})[k] || []);
+  const all = [...team, ...desk].sort((a, b) => b.ts - a.ts);
+  if (!all.length) return '';
+  const key = `${m.id}|${k}`;
+  return `<div class="small" style="margin:0 0 6px"><button class="btn plain sm" data-lulog="${esc(key)}">${icon(luLogOpen[key] ? 'chevup' : 'chevdown')}紀錄（${all.length}）</button>
+    ${luLogOpen[key] ? `<div class="lulog">${all.map(x => `<div>${fmtTime(x.ts)}　${esc(x.by)}　${esc(x.a)}</div>`).join('')}</div>` : ''}</div>`;
+}
+const luLog = (mid, k, a) => update(st => { st.notices = st.notices || {}; const L = st.notices.lulog = st.notices.lulog || {}; L[mid] = L[mid] || {}; L[mid][k] = (L[mid][k] || []).concat({ ts: Date.now(), by: deskName(), a }).slice(-30); });
 function lineupModal(m) {
   const e = getState().events.find(x => x.name === m.ev);
   const col = (k, S) => {
     const roster = (e.rosters && e.rosters[S.name]) || [];
     const l = draft[k] || (m.rec.lineup && m.rec.lineup[k]) || [];
+    // 隊伍線上送出的點單大會台不能改（要改就退回讓隊伍改）；其他情況要先按「代填點單」才能填，紙本隊伍直接可以填
+    const online = !!((m.rec.olSrc && m.rec.olSrc[k]) || (m.rec.luSrc && m.rec.luSrc[k]));
+    const paper = paperSet.has(`${m.ev}|${S.name}`);
+    const deskHas = !!(((getState().dlu || {})[m.id] || {})[k] || (m.rec.lineup && m.rec.lineup[k] && !online));
+    const open = !online && (paper || deskHas || luUnlock[`${m.id}|${k}`]);
+    const dis = open ? '' : 'disabled';
     const inp = (i, j, v) => (roster.length
-      ? `<select data-lu="${k}|${i}|${j}" style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
-      : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" style="width:${j == null ? 100 : 48}%">`);
+      ? `<select data-lu="${k}|${i}|${j}" ${dis} style="width:${j == null ? 100 : 48}%"><option value=""></option>${roster.map(n => `<option ${n === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}${v && !roster.includes(v) ? `<option selected>${esc(v)}</option>` : ''}<option value="__other">其他（手動輸入）</option></select>`
+      : `<input type="text" data-lu="${k}|${i}|${j}" value="${esc(v || '')}" ${dis} style="width:${j == null ? 100 : 48}%">`);
     return `<div style="flex:1;min-width:260px"><h3>${esc(S.name)} ${m.rec.olSrc && m.rec.olSrc[k] ? `<span class="chip playing">線上點單 ${fmtTime(m.rec.olSrc[k].ts)} 送出</span>` : m.lineupOk[k] ? '<span class="chip playing">已收點單</span>' : draftLu(getState(), m, k) ? `<span class="chip warn">線上編輯中</span>` : '<span class="chip">尚未輸入</span>'}</h3>
       ${m.rec.olSrc && m.rec.olSrc[k] && !m.rec.start ? `<div class="small muted" style="margin:-4px 0 6px">${esc(m.rec.olSrc[k].by || '')} 送出　<button class="btn plain sm" data-lureturn="${esc(m.id)}|${k}">退回讓隊伍修改</button></div>` : ''}
       ${POINTS.map((p, i) => `<div class="row" style="margin-bottom:6px;flex-wrap:nowrap"><span class="nowrap small muted" style="width:76px">第${'一二三四五'[i]}點 ${p.dbl ? '雙' : '單'}</span>
         <span style="flex:1;display:flex;gap:4px">${p.dbl ? inp(i, 0, (l[i] || [])[0]) + inp(i, 1, (l[i] || [])[1]) : inp(i, null, l[i])}</span></div>`).join('')}
       <div class="small" data-lu-warn="${k}" style="color:var(--red);min-height:20px"></div>
-      <div class="row"><button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>
+      ${online ? '<div class="small muted" style="margin-bottom:6px">隊伍已線上送出，大會台不能修改；需要更改請按「退回讓隊伍修改」。</div>' : ''}
+      ${luLogHtml(m, k, S)}
+      <div class="row">${open ? `<button class="btn sm" data-lu-save="${k}">${icon('check')}儲存排點</button><button class="btn ghost sm" data-lu-clear="${k}">清除</button>` : online ? '' : `<button class="btn ghost sm" data-luunlock="${esc(m.id)}|${k}">${icon('edit')}代填點單</button>`}
         ${(() => { const mails = teamMails(getState(), m.ev, S.name); if (m.lineupOk[k] || !mails.length || m.rec.start) return ''; const x = { m, k, team: S.name, opp: ((k === 'a' ? m.B : m.A) || {}).name || '待定', mails, slot: slotOf(getState().sched, m) }; return `<a class="btn ghost sm" href="${esc(lineupMail(getState(), x))}" target="_blank" rel="noopener" data-mailed="${esc(m.id)}|${k}">${icon('edit')}信件催繳</a><button class="btn ghost sm" data-nudge="${esc(m.id)}|${k}">${icon('bell')}頁面通知</button>`; })()}
         ${roster.length ? '' : '<span class="small muted">尚未匯入此隊名單，請直接輸入姓名</span>'}</div></div>`;
   };
@@ -1575,10 +1598,13 @@ document.addEventListener('click', async ev => {
     const started = !!(getState().m[modal.mid] || {}).start;
     if (started) updateMatch(modal.mid, r => { r.lineup = r.lineup || {}; r.lineup[d.luSave] = l; });
     else update(st => { st.dlu = st.dlu || {}; st.dlu[modal.mid] = { ...(st.dlu[modal.mid] || {}), [d.luSave]: l }; });
+    luLog(modal.mid, d.luSave, '代填');
     drawModal();
     $(`[data-lu-warn="${d.luSave}"]`).textContent = w;
     toast('排點已儲存');
   } else if (d.luClear) {
+    if (!confirm('清除這一隊的排點？')) return;
+    luLog(modal.mid, d.luClear, '清除');
     delete draft[d.luClear];
     update(st => {
       const r = st.m[modal.mid]; if (r && r.lineup) { delete r.lineup[d.luClear]; if (!Object.keys(r.lineup).length) delete r.lineup; }
@@ -1586,6 +1612,12 @@ document.addEventListener('click', async ev => {
     });
     drawModal();
   }
+  else if (d.luunlock) {
+    const i = d.luunlock.lastIndexOf('|'), mid = d.luunlock.slice(0, i), k = d.luunlock.slice(i + 1), m = D.byId.get(mid), S = k === 'a' ? m.A : m.B;
+    if (draftLu(getState(), m, k) && !confirm(`${S.name} 正在線上編輯點單，確定由大會代填？`)) return;
+    luUnlock[d.luunlock] = true; drawModal();
+  }
+  else if (d.lulog) { luLogOpen[d.lulog] = !luLogOpen[d.lulog]; drawModal(); }
   else if ('wo' in d) { if (d.wo) walkover(modal.mid, d.wo); else updateMatch(modal.mid, r => { delete r.wo; delete r.woBy; }); drawModal(); }
   else if (d.wojudge) {
     const i = d.wojudge.lastIndexOf('|'), mid = d.wojudge.slice(0, i), k = d.wojudge.slice(i + 1); const m = D.byId.get(mid); if (!m) return;

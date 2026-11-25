@@ -65,23 +65,28 @@ function render() {
       <p class="small muted">送出點單後就不能再修改，請謹慎填寫，若有任何問題請洽大會。</p></div>
     ${ms.length ? ms.map(m => matchCard(m, info)).join('') : '<div class="panel"><p class="muted">目前沒有需要填寫點單的場次。</p></div>'}
     ${editorsPanel(owner)}`;
-  showNudge(ms);
+  // 開打通知：這個帳號所有隊伍都檢查，不在該隊頁面也會通知
+  const starts = teams.flatMap(k => { const x = teamInfo(k); return [...D.byId.values()].filter(m => m.team && m.ev === x.ev && ((m.A && m.A.name === x.team) || (m.B && m.B.name === x.team))
+    && m.rec.start && tablesOf(m).length && m.status !== 'done' && m.status !== 'reported' && !ackedStart(k, m)).map(m => ({ k, x, m })); });
+  if (teams.length > 1) teams.forEach(k => { const n = starts.filter(y => y.k === k).length; const b = main.querySelector(`[data-team="${CSS.escape(k)}"]`); if (b && n) b.insertAdjacentHTML('beforeend', `<span class="badge" title="${n} 則開打通知">${n}</span>`); });
+  showNudge(ms, starts[0]);
 }
 // 頁面通知：還沒送出點單的場次有新通知時跳出視窗，按「收到」才關閉（這台裝置記住已讀）
 const ackKey = (mid, x) => `jdb-nudge|${cur}|${mid}|${x.ts}`;
 const acked = (mid, x) => { try { return !!localStorage.getItem(ackKey(mid, x)); } catch (e) { return false; } };
 const tablesOf = m => (Array.isArray(m.rec.tables) ? m.rec.tables : []).filter(Boolean);
-const startKey = m => `jdb-start|${cur}|${m.id}|${m.rec.start}`;
-const ackedStart = m => { try { return !!localStorage.getItem(startKey(m)); } catch (e) { return false; } };
-function showNudge(ms) {
+const startKey = (k, m) => `jdb-start|${k}|${m.id}|${m.rec.start}`;
+const ackedStart = (k, m) => { try { return !!localStorage.getItem(startKey(k, m)); } catch (e) { return false; } };
+function showNudge(ms, sp) {
   let host = $('#nudge-dlg');
   if (!host) { host = document.createElement('div'); host.id = 'nudge-dlg'; document.body.append(host); }
   // 開打通知優先：大會派桌後告訴隊伍第幾桌、幾點開打
-  const st = ms.find(x => x.rec.start && tablesOf(x).length && x.status !== 'done' && x.status !== 'reported' && !ackedStart(x));
-  if (st) {
+  if (sp) {
+    const st = sp.m;
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2 style="margin:0 0 8px">${icon('bell')} 開打通知</h2>
-      <p class="small muted" style="margin:0 0 6px">${esc(st.ev)} ${esc(st.no)}　大會 ${fmtTime(st.rec.start)} 派桌</p><p style="font-size:19px;margin:0 0 14px;font-weight:700">請到第 ${tablesOf(st).join('、')} 桌比賽</p>
-      <div class="row" style="justify-content:flex-end"><button class="btn" data-ackstart="${esc(startKey(st))}">收到</button></div></div></div>`;
+      <p style="margin:0 0 6px;font-weight:700"><span class="evtag ev-${esc(sp.x.ev)}">${esc(sp.x.ev)}</span> ${esc(sp.x.team)}　${esc(st.no)}</p>
+      <p class="small muted" style="margin:0 0 6px">${fmtTime(st.rec.start)}</p><p style="font-size:19px;margin:0 0 14px;font-weight:700">請到第 ${tablesOf(st).join('、')} 桌比賽</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" data-ackstart="${esc(startKey(sp.k, st))}">收到</button></div></div></div>`;
     return;
   }
   const m = ms.find(x => nudge[x.id] && !x.rec.start && !fin0(olu[x.id]) && !acked(x.id, nudge[x.id]));
@@ -104,10 +109,10 @@ function matchCard(m, info) {
     <div class="mvs"><b>${esc(sideText(me0, true))}</b><span class="muted">vs</span><span>${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</span></div>`;
   const fin = sub && sub.final;
   const ng = !locked && !fin0(sub) && nudge[m.id] ? `<div class="nudgetag">${icon('bell')}大會通知：${esc(nudge[m.id].text)}</div>` : '';
-  const status = locked ? `<span class="chip playing">${icon('lock')}${tablesOf(m).length ? `第 ${tablesOf(m).join('、')} 桌（${fmtTime(m.rec.start)} 派桌）` : '已鎖定'}</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
+  const status = locked ? `<span class="chip playing">${icon('lock')}${tablesOf(m).length ? `第 ${tablesOf(m).join('、')} 桌（${fmtTime(m.rec.start)} 開始）` : '已鎖定'}</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
   if (locked || fin) {
     const l = official || (sub && sub.lu);
-    return `<div class="panel">${head}${ng}<div class="row">${status}${locked ? '<span class="small muted">大會已派桌，點單以大會登錄為準。</span>' : ''}</div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
+    return `<div class="panel">${head}${ng}<div class="row">${status}</div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
   }
   if (open !== m.id) {
     return `<div class="panel">${head}${ng}<div class="row">${status}<span class="spacer"></span><button class="btn ${sub ? 'ghost' : ''} sm" data-open="${esc(m.id)}">${icon('edit')}${sub ? '繼續編輯' : '填寫點單'}</button></div>
