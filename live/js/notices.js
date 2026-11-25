@@ -34,6 +34,8 @@ export function buildNotices(raw) {
     const first = toMin(starts[0]);
     add(d, day, first - 10, 'prep', '清場，準備叫第一輪');
     add(d, day, first - 5, 'call', '開始叫第一輪');
+    // 比賽期間定時看 Firebase 用量（免費方案超過上限整個系統會停）
+    add(d, day, first - 30, 'prep', '查看 Firebase 用量（連線、下載量），之後每 1～2 小時看一次');
 
     // 每個時段開始：廣播這個時段的場次
     starts.forEach(st => {
@@ -121,6 +123,7 @@ export const RULES = [
   '團賽同一循環的兩場盡量一起叫。',
   '每個時段開始時廣播目前要進行的場次。',
   '進度落後時間表超過 1 小時，可以先請各隊派代表到大會台協調。',
+  '比賽期間每 1～2 小時查看 Firebase 用量（連線、下載量），超過要注意的數字時請關掉不用的大會台分頁並聯絡系統負責人。',
   '各隊應於預定比賽時間前 1 小時到場。',
 ];
 
