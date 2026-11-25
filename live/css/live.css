@@ -300,7 +300,7 @@ table.tt th, table.tt td { border: 1px solid var(--line); padding: 6px 8px; text
 table.tt th { background: var(--blue-soft); font-weight: 700; }
 table.tt td.tm { color: var(--muted); font-variant-numeric: tabular-nums; }
 table.tt td.dr { background: var(--yellow-soft); }
-svg.tree .nm.mu { fill: #9aa3b2; }
+svg.tree .nm.mu { fill: #c5cbd6; }
 
 /* 預賽表格：每列同高，斜線角度一致；手機上欄位只寫編號、隊名不換行 */
 table.grp td { height: 34px; }
