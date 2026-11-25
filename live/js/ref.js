@@ -77,8 +77,8 @@ function viewMatch() {
     <div class="row"><h2 style="margin:0">${m.team ? `第${'一二三四五'[point]}點` : '各局比分'}</h2><span class="spacer"></span>${m.team ? '<button class="btn ghost sm" data-points>選擇其他點</button>' : ''}</div>
     <div class="gamerow small muted" style="margin-top:8px"><span></span><span style="text-align:center">${two(pa)}</span><span style="text-align:center">${two(pb)}</span><span></span></div>
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gamerow"><span class="small">第${'一二三四五'[gi]}局</span>
-      <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${(games[gi] || [])[0] ?? ''}">
-      <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${(games[gi] || [])[1] ?? ''}"><span data-ok="${gi}"></span></div>`).join('')}
+      <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${esc((games[gi] || [])[0] ?? '')}">
+      <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${esc((games[gi] || [])[1] ?? '')}"><span data-ok="${gi}"></span></div>`).join('')}
     <p id="msg" class="small"></p>
     <button class="btn yellow" data-done style="width:100%;justify-content:center;padding:10px">${icon('check')}${m.team ? '本點結束' : '本場結束'}</button></div>${absentPanel(m.team ? point : null)}${swapPanel}`;
 }

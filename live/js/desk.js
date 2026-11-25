@@ -86,7 +86,7 @@ function viewCtrl(s) {
       ${swapPanel()}
       ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(({ m, ab }) => {
         const tb = ab.table || m.tables.join('、');
-        return `<div class="alertbox"><div class="small ameta">第 ${tb} 桌　${fmtTime(ab.ts)} 回報　裁判 ${esc(ab.by || '')}</div>
+        return `<div class="alertbox"><div class="small ameta">第 ${esc(tb)} 桌　${fmtTime(ab.ts)} 回報　裁判 ${esc(ab.by || '')}</div>
           <div>${esc(recallText(m, ab))}</div>
           <div class="row" style="margin-top:4px">${ab.called ? `<span class="small" style="color:var(--green)">${fmtTime(ab.called)} 已廣播</span>` : ''}<span class="spacer"></span>
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
@@ -412,7 +412,7 @@ function scoreModal(m) {
   const locked = false; // 不再鎖定：完賽後大會台仍可修改
   const dis = '';
   const lu = m.rec.lineup || {};
-  const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${v ?? ''}" ${dis}${byCol(pi, gi) ? ` style="background:${byCol(pi, gi)}"` : ''}>`;
+  const gin = (pi, gi, side, v) => `<input class="g" type="text" inputmode="numeric" maxlength="2" data-g="${pi}|${gi}|${side}" value="${esc(v ?? '')}" ${dis}${byCol(pi, gi) ? ` style="background:${byCol(pi, gi)}"` : ''}>`;
   // 每局是誰記的：按「紀錄者」才顯示色塊
   const srcs = m.team ? (m.rec.pts || []).map(x => (x || {}).gb || []) : [m.rec.gb || []];
   const who = [...new Set(srcs.flat().filter(Boolean))];
@@ -929,7 +929,7 @@ function staffEditor(s, where) {
   };
   return sec('裁判密碼', `<p class="small muted">設定後，裁判要輸入密碼才能記分。密碼外流時按「更換」，所有裁判都要重新輸入。</p>
     <div class="row">${rc ? `<span>目前密碼 <b style="font-size:20px;letter-spacing:2px">${esc(rc)}</b></span>` : '<span class="small" style="color:var(--red)">尚未設定，任何拿到連結的人都能記分</span>'}
-      <input type="text" inputmode="numeric" id="rc-new" placeholder="自訂（可留空）" maxlength="12" style="width:130px">
+      <input type="text" inputmode="numeric" id="rc-new" placeholder="自訂，留空自動產生 6 位數" maxlength="12" style="width:220px">
       <button class="btn sm" data-refcode>${icon('shuffle')}${rc ? '更換' : '設定'}</button>
       ${rc ? `<button class="btn ghost sm" data-refcode-off>取消密碼</button>` : ''}</div>`, true)
     + sec('自己人裁判名單', `<p class="small muted">用【交大】【陽明】【香山】【體資】【大會】當標題，標題下面接姓名，一行一位。</p>
@@ -1390,7 +1390,7 @@ document.addEventListener('click', async ev => {
     return;
   }
   if ('refcode' in d) {
-    const v = ($('#rc-new').value || '').trim().replace(/\s/g, '') || String(Math.floor(1000 + Math.random() * 9000));
+    const v = ($('#rc-new').value || '').trim().replace(/\s/g, '') || String(Math.floor(100000 + Math.random() * 900000));
     if (getState().refcode && !confirm(`更換成 ${v}？所有裁判都要重新輸入密碼。`)) return;
     setRefCode(v).then(() => toast(`裁判密碼：${v}`)).catch(err => toast(`設定失敗：${err.message || err}`)); return;
   }

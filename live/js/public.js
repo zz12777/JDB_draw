@@ -143,7 +143,7 @@ function drawDetail() {
   const host = $('#modal');
   const m = detail && D.byId.get(detail);
   if (!m) { host.hidden = true; host.innerHTML = ''; return; }
-  const games = g => (g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null).map(x => `${x[0]}:${x[1]}`).join('　');
+  const games = g => (g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null).map(x => `${esc(x[0])}:${esc(x[1])}`).join('　');
   const wo = m.rec.wo; // 'a'：A 勝（B 棄權）
   const block = (title, an, bn, r, gs) => `<div class="drow ${r.a + r.b || r.winner || wo ? '' : 'idle'}"><div class="dn r ${r.winner === 'a' ? 'w' : ''}">${an}</div>
     <div class="dc"><div class="small muted">${title}</div><div class="ds">${r.a + r.b || r.winner ? `${r.a} : ${r.b}` : wo ? '' : '<span class="small muted">未進行</span>'}</div></div>
@@ -157,7 +157,7 @@ function drawDetail() {
   } else {
     // 個人賽：各局由上往下排列，同記分時的樣子
     const gs = wo ? [] : (m.rec.g || []).filter(x => x && x[0] !== '' && x[0] != null && x[1] !== '' && x[1] != null);
-    body = gs.length ? `<table class="dgv">${gs.map((g, i) => { const w = gameWinner(g); return `<tr><td class="${w === 'a' ? 'w' : ''}">${g[0]}</td><td class="gl">:</td><td class="${w === 'b' ? 'w' : ''}">${g[1]}</td></tr>`; }).join('')}</table>` : '';
+    body = gs.length ? `<table class="dgv">${gs.map((g, i) => { const w = gameWinner(g); return `<tr><td class="${w === 'a' ? 'w' : ''}">${esc(g[0])}</td><td class="gl">:</td><td class="${w === 'b' ? 'w' : ''}">${esc(g[1])}</td></tr>`; }).join('')}</table>` : '';
   }
   const nm = k => { const x = k === 'a' ? m.A : m.B; const lost = wo && wo !== k; const t = String(sideText(x, m.team) || ''), sp = m.team ? -1 : t.indexOf(' ');
     // 個人賽：校名一行、姓名一行（雙打保留斜線）

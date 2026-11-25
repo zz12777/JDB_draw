@@ -55,7 +55,7 @@ export const shortEv = m => `${m.ev}${m.no}`;
 export function liveLine(m, pointIdx) {
   const cur = games => {
     const g = (games || []).filter(x => x && (x[0] !== '' && x[0] != null));
-    return g.map(x => `${x[0]}:${x[1]}`).join('　');
+    return g.map(x => `${esc(x[0])}:${esc(x[1])}`).join('　');
   };
   if (!m.team) return cur(m.rec.g);
   const lu = m.rec.lineup || {};
@@ -113,7 +113,7 @@ export function board(state, d, opt = {}) {
         line = `第${'一二三四五'[x.point]}點　${esc(lineName(lu.a, x.point))} ${r.a}:${r.b} ${esc(lineName(lu.b, x.point))}`;
       }
     } else {
-      line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${g[0]}:${g[1]}`).join('　');
+      line = (m.rec.g || []).filter(g => g && g[0] !== '' && g[0] != null && g[1] !== '' && g[1] != null).map(g => `${esc(g[0])}:${esc(g[1])}`).join('　');
     }
     const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '已打完' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">已打完</span>' : '');
     return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${opt.match && !opt.match(m, x.point) ? 'dim' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
@@ -220,5 +220,5 @@ export function refLogHtml(rec, fmt) {
   if (!log.length) return '';
   const by = new Map();
   log.forEach(x => { if (!by.has(x.t)) by.set(x.t, []); by.get(x.t).push(x); });
-  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([t, l]) => `<div class="reflog">第 ${t} 桌裁判：${l.map(x => `<span>${fmt(x.ts)} ${esc(x.n)}</span>`).join(' → ')}</div>`).join('');
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([t, l]) => `<div class="reflog">第 ${esc(t)} 桌裁判：${l.map(x => `<span>${fmt(x.ts)} ${esc(x.n)}</span>`).join(' → ')}</div>`).join('');
 }
