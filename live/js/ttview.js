@@ -77,7 +77,7 @@ export function timetableHtml(s, opt = {}) {
         const st = x === next ? 'next' : cellState(D, x, s), ms = cellMatches(D, x);
         const i = order.indexOf(x);
         const prog = ms.length ? `<span class="ttp">${ms.filter(m => m.status === 'done').length}/${ms.length}</span>` : '';
-        return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''} tts-${st || 'none'}"><button class="ttcell" data-goev="${esc(x.ev)}">${i >= 0 ? `<span class="tto" title="同時段第 ${i + 1} 個叫">${i + 1}</span>` : ''}${nums(x)}${prog}${x === next ? '<span class="ttnext">下一區塊</span>' : ''}</button></td>`;
+        return `<td rowspan="${span}" class="${x.draw ? 'dr' : ''} tts-${st || 'none'}"><button class="ttcell" data-goev="${esc(x.ev)}">${i >= 0 ? `<span class="tto" title="同時段第 ${i + 1} 個叫">${i + 1}</span>` : ''}${nums(x)}${prog}</button></td>`;
       }).join('')}</tr>`;
     }).join('');
     const table = `<div class="ttw"><table class="tt ${D ? 'ttdesk' : ''}"><thead><tr><th></th>${evs.map(ev => `<th>${ev}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
