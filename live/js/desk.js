@@ -5,7 +5,8 @@ import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
-import { buildNotices, noticesHtml, KIND_NAME } from './notices.js';
+import { timetableHtml } from './ttview.js';
+import { buildNotices, noticesHtml, KIND_NAME, RULES } from './notices.js';
 import { checkinSections, missingLineup } from './units.js';
 import { readWorkbookValues, readFormFile } from '../../js/reader.js';
 import { parseResponses, EVENTS } from '../../js/parse.js';
@@ -20,7 +21,7 @@ let modal = null; // { kind: 'score' | 'lineup', mid }
 let draft = {}; // 排點視窗內尚未儲存的內容：{ a: [...], b: [...] }，關閉視窗才清掉
 let D = null;
 
-const TABS = [['ctrl', '賽程控制'], ['rec', '籤表'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
+const TABS = [['ctrl', '賽程控制'], ['rec', '籤表'], ['time', '時間表'], ['notice', '場控提醒'], ['tables', '球桌狀態'], ['refs', '裁判'], ['draw', '決賽抽籤'], ['ann', '成績公告'], ['setup', '資料設定']];
 const busyOpen = new Set();
 let paperSet = new Set();
 let parkOpen = false, staffSetOpen = false;
@@ -28,7 +29,7 @@ const roundOpen = new Set();
 let legendOpen = false;
 const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
 const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
-const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', notice: 'bell', tables: 'tables', refs: 'board', draw: 'shuffle', ann: 'trophy', setup: 'gear' };
+const TAB_ICON = { ctrl: 'bracket', rec: 'clipboard', time: 'clock', notice: 'bell', tables: 'tables', refs: 'board', draw: 'shuffle', ann: 'trophy', setup: 'gear' };
 let refTab = 'avail', staffOpen = null, staffFixed = false;
 let rosterMiss = [], rosterGuess = [];
 
@@ -44,7 +45,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events.length ? byPill(D.events)[0].name : null;
-  $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
+  $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'time' ? viewTimeDesk(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
 }
 
 function viewLogin() {
@@ -109,6 +110,24 @@ function roundTime(s, r) {
   const a = sl.reduce((x, y) => (`${y.d}${y.s}` < `${x.d}${x.s}` ? y : x)), b = sl.reduce((x, y) => (`${y.d}${y.e}` > `${x.d}${x.e}` ? y : x));
   return ` <span class="rt">${esc(dayLabel(getState(), a.d, a.day))} ${a.s}-${b.e}</span>`;
 }
+// ---------------- 時間表 ----------------
+function viewTimeDesk(s) {
+  if (!(s.sched && s.sched.slots && s.sched.slots.length)) return '<div class="panel"><h2>時間表</h2><p class="muted small">尚未匯入賽程時間表，請到「資料設定」匯入。</p></div>';
+  const info = buildNotices(s.sched.slots).filter(x => x.kind === 'info');
+  const after = d => { const l = info.filter(x => x.d === d); return l.length ? `<div class="ttrules"><b>這天的叫場原則</b>${l.map(x => `<div><span class="tm">${x.t}</span>${esc(x.text)}</div>`).join('')}</div>` : ''; };
+  return `<div class="desk"><div>
+    <div class="panel"><div class="legend" style="margin-top:0"><span><span class="lg tdone"></span>已完賽</span><span><span class="lg tlive"></span>進行中</span><span><span class="lg tready"></span>可開賽</span><span><span class="lg tpart"></span>部分完賽</span><span><span class="tto">①</span>同一時段的叫場順序</span></div>
+      <p class="small muted" style="margin:6px 0 0">格子右下角是已完賽／總場數，點格子會切到「賽程控制」的該項目。</p></div>
+    ${timetableHtml(s, { D, after })}</div>
+    <div class="side">${queuePanel(s)}
+      <div class="panel"><h2>叫場原則</h2><ul class="small" style="margin:0;padding-left:18px">
+        <li>個人賽與團體賽同時進行，叫場以個人賽為主。</li>
+        <li>個人賽同一輪依男單、女單、男雙、女雙的順序叫。</li>
+        <li>團體決賽與團體預賽（例如大專決賽和社會組預賽）同時進行，以決賽為主，有空桌再拆給預賽。</li>
+        <li>抽籤前最後一輪，男團、女團都在打時女團先叫，錯開抽籤。</li>
+        ${RULES.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div></div></div>`;
+}
+
 // ---------------- 個人賽叫場順序 ----------------
 const evTag = ev => `<span class="evtag ev-${esc(ev)}">${esc(ev)}</span>`;
 const runText = r => `${r.ev} ${r.list[0].no}${r.list.length > 1 ? `–${r.list[r.list.length - 1].no}` : ''}`;
@@ -130,6 +149,7 @@ function queueNote(s) {
   return `<div class="alertbox info" style="margin-bottom:12px"><b>個人賽接下來 ${head.length} 場：</b>${runs.map(r => esc(runText(r))).join('、')}<br>
     <span class="small muted">這些場次的選手列在「暫不可擔任」；後面才會叫到的選手列在「人手不足時可支援」。${q.length > N ? `之後接著是 ${esc(runText(queueRuns(q.slice(N))[0]))}。` : ''}</span></div>`;
 }
+const hasRec = m => !!(m.rec.start || m.rec.fin || (m.rec.g || []).some(g => g && (g[0] !== '' || g[1] !== '')) || (m.rec.pts || []).some(p => p && (p.g || []).some(g => g && (g[0] !== '' || g[1] !== ''))));
 const stageOrder = m => (m.stage === 'F' ? 1 : 0) * 100 + m.roundIdx;
 
 function card(m) {
@@ -157,7 +177,7 @@ function card(m) {
     <div class="ft">桌次 <input class="tb" type="text" inputmode="numeric" value="${m.tables.join('、')}" data-tb="${esc(m.id)}" ${locked || !m.known ? 'disabled' : ''} placeholder="${m.team ? '可填多桌' : ''}">
       <span class="spacer"></span>
       ${m.team ? `<button class="btn ghost sm" data-lineup="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('list')}排點</button>` : ''}
-      <button class="btn ghost sm" data-score="${esc(m.id)}" ${m.known ? '' : 'disabled'}>${icon('score')}成績</button></div>
+      <button class="btn ghost sm" data-score="${esc(m.id)}" ${m.known || hasRec(m) ? '' : 'disabled'}>${icon('score')}成績</button></div>
   </div>`;
 }
 
@@ -460,6 +480,7 @@ function scoreModal(m) {
   }
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}${m.status === 'playing' && m.tables.length ? `<span class="small muted">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${m.team ? esc(sideText(m.A, true)) : twoLine(sideText(m.A))}</div><div class="total" id="sc-total"></div><div class="n">${m.team ? esc(sideText(m.B, true)) : twoLine(sideText(m.B))}</div></div>
+    ${!m.known && hasRec(m) ? `<div class="alertbox" style="margin:6px 0">對手還沒確定，但這場已經有比分紀錄（可能是前一輪的成績改過）。確認不是這兩位的比賽，可以清除這場紀錄。<div class="row" style="margin-top:6px"><span class="spacer"></span><button class="btn ghost sm danger" data-scwipe>清除這場紀錄</button></div></div>` : ''}
     ${refLogHtml(m.rec, fmtTime)}
     ${byBar}
     <div class="pts">${body}</div>
@@ -1390,6 +1411,7 @@ document.addEventListener('click', async ev => {
   }
   if ('lgopen' in d) { legendOpen = !legendOpen; render(); return; }
   if (d.nudge) { const i = d.nudge.lastIndexOf('|'); modal = { kind: 'nudge', mid: d.nudge.slice(0, i), side: d.nudge.slice(i + 1) }; drawModal(); return; }
+  if ('scwipe' in d) { if (!confirm('清除這場的比分、桌次與裁判紀錄？')) return; const id = modal.mid; updateMatch(id, r => { Object.keys(r).forEach(k => delete r[k]); }); modal = null; drawModal(); toast('已清除這場紀錄'); return; }
   if ('showby' in d) { showBy = !showBy; drawModal(); return; }
   if ('nudgeDel' in d) {
     const m = D.byId.get(modal.mid), S = modal.side === 'a' ? m.A : m.B, tk = teamKey(m.ev, S.name), mid = modal.mid; modal = null; drawModal();
@@ -1439,6 +1461,7 @@ document.addEventListener('click', async ev => {
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
+  if (d.goev) { curEv = d.goev; tab = 'ctrl'; render(); window.scrollTo(0, 0); return; }
   if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; const r = { ...(st.receipt || {}) }; delete r[d.parkdel]; st.receipt = r; }); return; }
   if (d.rnote) { modal = { kind: 'rnote', unit: d.rnote }; drawModal(); return; }
   if ('rnoteOk' in d) { const v = $('#rnote-t').value.trim().slice(0, 200), u = modal.unit; modal = null; drawModal(); update(st => { st.receipt = { ...(st.receipt || {}) }; st.receipt[u] = { ...(st.receipt[u] || {}), note: v }; }); return; }
