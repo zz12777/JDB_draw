@@ -1709,3 +1709,9 @@ setInterval(() => { const a = document.activeElement; if (!modal && !(a && /INPU
 render();
 // 可收合區塊的標題列也能用鍵盤展開
 document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('phead')) { ev.preventDefault(); ev.target.click(); } });
+// 「人手不足時可支援」的下一場提示：平板沒有滑鼠，點一下姓名顯示，再點一下或點別處收起
+document.addEventListener('click', ev => {
+  const c = ev.target.closest && ev.target.closest('.tipcell');
+  document.querySelectorAll('.tipcell.tipon').forEach(x => { if (x !== c) x.classList.remove('tipon'); });
+  if (c) c.classList.toggle('tipon');
+});
