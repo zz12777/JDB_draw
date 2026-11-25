@@ -6,6 +6,7 @@ import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
 const NAME_KEY = 'jdb-ref-name';
 let name = localStorage.getItem(NAME_KEY) || '';
 let table = null, point = null, swapAsk = false;
+let curMid = null; // 正在記錄的場次：大會判棄權或完賽後，用來顯示通知
 let D = null;
 // 裁判密碼：輸入一次就記在這台手機，大會台更換密碼後才要重新輸入
 const PASS_KEY = 'jdb-ref-pass';
@@ -40,8 +41,16 @@ function viewTables(s) {
 function viewMatch() {
   const x = D.tables.get(table);
   const back = `<button class="btn ghost sm" data-back>返回球桌列表</button>`;
-  if (!x) return `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div><p class="muted">此桌目前沒有進行中的場次。</p></div>`;
+  if (!x) {
+    // 大會台判棄權或直接完賽：告訴裁判這場已經結束
+    const pm = curMid && D.byId.get(curMid);
+    if (pm && pm.rec.wo && pm.rec.woBy) { const lose = sideText(pm.rec.wo === 'a' ? pm.B : pm.A, pm.team), win = sideText(pm.rec.wo === 'a' ? pm.A : pm.B, pm.team);
+      return `<div class="panel"><h2>大會通知</h2><p style="font-size:17px">大會已判 ${esc(lose)} 棄權，${esc(win)} 晉級，本場結束。</p><div class="row"><span class="spacer"></span><button class="btn" data-back>收到</button></div></div>`; }
+    if (pm && pm.rec.fin && pm.rec.finBy) return `<div class="panel"><h2>大會通知</h2><p style="font-size:17px">大會台已將 ${esc(pm.no)} 完賽，本場結束。</p><div class="row"><span class="spacer"></span><button class="btn" data-back>收到</button></div></div>`;
+    return `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div><p class="muted">此桌目前沒有進行中的場次。</p></div>`;
+  }
   const m = x.m;
+  curMid = m.id;
   const lu = m.rec.lineup || {};
   const an = sideText(m.A, m.team), bn = sideText(m.B, m.team);
   const head = `<div class="panel"><div class="row"><h2 style="margin:0">第 ${table} 桌</h2><span class="spacer"></span>${back}</div>
@@ -138,7 +147,7 @@ document.addEventListener('click', ev => {
     });
     swapAsk = false; render(); toast(why ? '已通知大會台' : '已取消請求');
   }
-  else if ('back' in d) { table = null; point = null; render(); }
+  else if ('back' in d) { table = null; point = null; curMid = null; render(); }
   else if ('done' in d) {
     // 團體賽按「本點結束」回到這一桌的選點頁面，個人賽按「本場結束」回到球桌列表
     document.activeElement && document.activeElement.blur();

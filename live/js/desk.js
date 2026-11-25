@@ -88,9 +88,14 @@ function viewCtrl(s) {
       ${swapPanel()}
       ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(({ m, ab }) => {
         const tb = ab.table || m.tables.join('、');
-        return `<div class="alertbox"><div class="small ameta">第 ${esc(tb)} 桌　${fmtTime(ab.ts)} 回報　裁判 ${esc(ab.by || '')}</div>
+        const mins = t => Math.max(0, Math.floor((Date.now() - t) / 60000));
+        // 判棄權：個人賽與整隊未到才有；雙打一人沒到算整組未到
+        const woBtns = ab.key === 'm' ? ['a', 'b'].filter(k => ab[k]).map(k => `<button class="btn ghost sm danger" data-wojudge="${esc(m.id)}|${k}">判 ${esc(sideText(k === 'a' ? m.A : m.B, m.team))} 棄權</button>`).join('') : '';
+        return `<div class="alertbox"><div class="small ameta">第 ${esc(tb)} 桌　${fmtTime(ab.ts)} 回報（${mins(ab.ts) ? `${mins(ab.ts)} 分鐘前` : '剛剛'}）　裁判 ${esc(ab.by || '')}</div>
           <div>${esc(recallText(m, ab))}</div>
-          <div class="row" style="margin-top:4px">${ab.called ? `<span class="small" style="color:var(--green)">${fmtTime(ab.called)} 已廣播</span>` : ''}<span class="spacer"></span>
+          ${ab.called ? `<div class="small" style="color:var(--green);margin-top:2px">${fmtTime(ab.called)} 已廣播，已過 ${mins(ab.called)} 分鐘</div>` : ''}
+          ${woBtns ? `<div class="row" style="margin-top:4px;justify-content:flex-end">${woBtns}</div>` : ''}
+          <div class="row" style="margin-top:4px"><span class="spacer"></span>
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
@@ -151,6 +156,10 @@ function queueNote(s) {
   const head = q.slice(0, N), runs = queueRuns(head);
   return `<div class="alertbox info" style="margin-bottom:12px"><b>個人賽接下來 ${head.length} 場：</b>${runs.map(r => esc(runText(r))).join('、')}<br>
     <span class="small muted">這些場次的選手列在「暫不可擔任」；後面才會叫到的選手列在「人手不足時可支援」。${q.length > N ? `之後接著是 ${esc(runText(queueRuns(q.slice(N))[0]))}。` : ''}</span></div>`;
+}
+/** 大會判棄權：記下誰判的、這場結束並空出球桌，裁判手機會收到通知 */
+function walkover(mid, winner) {
+  updateMatch(mid, r => { r.wo = winner; r.woBy = { by: deskName(), ts: Date.now() }; r.fin = Date.now(); r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); });
 }
 const deskName = () => (auth.nick ? `大會台(${auth.nick})` : '大會台');
 // 裁判打完沒按結束：超過 15 分鐘沒有更新，大會台可以直接完賽
@@ -467,8 +476,7 @@ function refLine(m, byBtn) {
   const who = byT.size ? [...byT].map(([t, l]) => `${byT.size > 1 ? `${esc(t)} 桌 ` : ''}${l.map(x => `${fmtTime(x.ts)} ${esc(x.n)}`).join(' → ')}`).join('；')
     : refs.length ? refs.map(esc).join('、') : '未登記';
   const wo = m.rec.wo ? (m.rec.woBy ? `棄權 ${esc(m.rec.woBy.by)} ${fmtTime(m.rec.woBy.ts)}` : '棄權登記者不明') : '';
-  const u = matchUpdatedAt(m.id);
-  return `<div class="refline small muted"><span>裁判 ${who}</span>${wo ? `<span>${wo}</span>` : ''}${u ? `<span>更新 ${fmtTime(u)}</span>` : ''}${byBtn || ''}</div>`;
+  return `<div class="refline small muted"><span>裁判 ${who}</span>${wo ? `<span>${wo}</span>` : ''}${byBtn || ''}</div>`;
 }
 function scoreModal(m) {
   const locked = false; // 不再鎖定：完賽後大會台仍可修改
@@ -1532,7 +1540,13 @@ document.addEventListener('click', async ev => {
     });
     drawModal();
   }
-  else if ('wo' in d) { updateMatch(modal.mid, r => { if (d.wo) { r.wo = d.wo; r.woBy = { by: deskName(), ts: Date.now() }; } else { delete r.wo; delete r.woBy; } }); drawModal(); }
+  else if ('wo' in d) { if (d.wo) walkover(modal.mid, d.wo); else updateMatch(modal.mid, r => { delete r.wo; delete r.woBy; }); drawModal(); }
+  else if (d.wojudge) {
+    const i = d.wojudge.lastIndexOf('|'), mid = d.wojudge.slice(0, i), k = d.wojudge.slice(i + 1); const m = D.byId.get(mid); if (!m) return;
+    const loser = sideText(k === 'a' ? m.A : m.B, m.team), winner = sideText(k === 'a' ? m.B : m.A, m.team);
+    if (!confirm(`判 ${loser} 棄權，${winner} 晉級？這場會結束、球桌空出來。`)) return;
+    walkover(mid, k === 'a' ? 'b' : 'a'); toast(`已判 ${loser} 棄權`);
+  }
   else if (d.finish) { updateMatch(d.finish, r => { r.fin = Date.now(); r.end = Date.now(); r.finBy = deskName(); delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); toast('已完賽'); }
   else if ('confirm' in d) { updateMatch(modal.mid, r => { r.fin = Date.now(); r.end = Date.now(); r.tables = []; delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); }); modal = null; drawModal(); toast('本場已結束'); }
   else if ('fillRank' in d) {
