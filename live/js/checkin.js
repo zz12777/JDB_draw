@@ -3,6 +3,7 @@ import { fmtTime } from './model.js';
 import { getState, subscribe, onAuth, auth, setCheckin, writePaths, teamKey, mailKey, parseMails, ownerUpdates, editorUpdates } from './store.js';
 import { esc, $, icon, header, toast } from './ui.js';
 import { checkinSections, signinWord, signinTitle } from './units.js';
+import { lineupSheetsHtml } from './luprint.js';
 
 let q = '', onlyTodo = false, pending = false;
 let dlg = null; // 彈出視窗：{ kind: 'lu' | 'note', key, ev, names, team }
@@ -44,9 +45,29 @@ function render() {
   $('#main').innerHTML = `<div class="panel"><div class="row"><label class="sbox" style="flex:1;min-width:200px">${icon('search')}<input id="q" class="search" type="search" placeholder="學校或隊名" value="${esc(q)}"></label>
       <div class="pills"><button class="${onlyTodo ? '' : 'on'}" data-todo="0">全部</button><button class="${onlyTodo ? 'on' : ''}" data-todo="1">未簽到</button></div>
       <span class="small muted">已簽到 ${done} / ${all.length}</span>
-      <button class="btn ghost sm" data-dlsign>${icon('download')}下載簽到表 Word</button></div>
+      <button class="btn ghost sm" data-dlsign>${icon('download')}下載簽到表 Word</button>
+      <button class="btn ghost sm" data-luprint>${icon('print')}列印線上點單說明（全部隊伍）</button></div>
       <ul class="small muted" style="margin:8px 0 0;padding-left:20px"><li>資料以大會台匯入的各項目完成籤表為基準。大會台重新匯入後，簽到名單與簽到表會自動更新。</li><li>可以按 Ctrl+F（Mac 為 ⌘+F）搜尋學校。</li></ul></div>
     ${body || '<div class="panel"><p class="small muted" style="text-align:center">沒有符合的名單。</p></div>'}`;
+}
+
+// ---------------- 線上點單說明單 ----------------
+/** 一隊的說明單資料：項目、隊名、聯絡人與共同編輯 */
+function sheetOf(s, ev, team) {
+  const acl = (s.teamacl || {})[teamKey(ev, team)] || {};
+  const list = role => Object.entries(acl).filter(([, v]) => v === role).map(([k]) => k.replace(/,/g, '.'));
+  return { ev, team, owner: list('owner')[0] || '', editors: [...list('owner').slice(1), ...list('editor')] };
+}
+function printSheets(list) {
+  if (!list.length) { toast('沒有團體賽隊伍'); return; }
+  const w = window.open('', '_blank');
+  if (!w) { toast('瀏覽器擋住了新視窗，請允許彈出視窗後再按一次'); return; }
+  w.document.write('<p style="font-family:sans-serif;padding:20px">產生中…</p>');
+  // QR code 直接嵌入頁面，列印時不會因為圖片還沒載入而空白
+  fetch('img/lineup-qr.svg').then(r => r.text()).then(svg => {
+    w.document.open(); w.document.write(lineupSheetsHtml(list, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`)); w.document.close();
+    setTimeout(() => w.print(), 500);
+  }).catch(() => { w.close(); toast('QR code 載入失敗，請再試一次'); });
 }
 
 // ---------------- 彈出視窗 ----------------
@@ -75,6 +96,7 @@ function drawDlg() {
     <table class="list"><tbody>
       <tr><td class="nowrap muted small">聯絡人</td><td>${own.length ? own.map(esc).join('<br>') : '<span class="muted">未設定</span>'}</td></tr>
       <tr><td class="nowrap muted small">共同編輯</td><td>${eds.length ? eds.map(esc).join('<br>') : '<span class="muted">無</span>'}</td></tr></tbody></table>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost sm" data-luprint1>${icon('print')}列印這隊的點單說明</button></div>
     <p style="margin:12px 0 6px"><b>聯絡人今天會在場負責填點單嗎？</b></p>
     <div class="dform"><label class="small" for="downer">更新聯絡人（取代原本的聯絡人，可以新增其他帳號一起編輯點單）</label>
       <div class="row"><input type="email" id="downer" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn sm" data-downer>取代聯絡人</button></div></div>
@@ -103,12 +125,14 @@ onAuth(refresh);
 
 document.addEventListener('click', ev => {
   if (ev.target.classList && ev.target.classList.contains('modal-bg')) { dlg = null; drawDlg(); return; }
-  const b = ev.target.closest('[data-ck],[data-todo],[data-dlsign],[data-signin],[data-signout],[data-luopen],[data-noteopen],[data-dclose],[data-dnote],[data-dteam],[data-downer],[data-deditor]');
+  const b = ev.target.closest('[data-luprint],[data-luprint1],[data-ck],[data-todo],[data-dlsign],[data-signin],[data-signout],[data-luopen],[data-noteopen],[data-dclose],[data-dnote],[data-dteam],[data-downer],[data-deditor]');
   if (!b) return;
   const d = b.dataset;
   if (d.signin !== undefined) { auth.signIn && auth.signIn(); return; }
   if (d.signout !== undefined) { ev.preventDefault(); auth.signOut && auth.signOut(); return; }
   const rowOf = key => checkinSections(getState()).flatMap(x => x.rows.map(r => ({ ...r, ev: x.code }))).find(r => r.key === key);
+  if (d.luprint !== undefined) { const s = getState(); printSheets(checkinSections(s).filter(x => x.team).flatMap(sec => sec.rows.flatMap(r => (r.names || [r.label]).map(n => sheetOf(s, sec.code, n))))); return; }
+  if (d.luprint1 !== undefined) { printSheets([sheetOf(getState(), dlg.ev, dlg.team)]); return; }
   if (d.luopen) { const r = rowOf(d.luopen); const names = r.names || [r.label]; dlg = { kind: 'lu', key: r.key, ev: r.ev, names, team: names[0], label: r.label }; drawDlg(); return; }
   if (d.noteopen) { const r = rowOf(d.noteopen); dlg = { kind: 'note', key: r.key, label: r.label }; drawDlg(); return; }
   if (d.dclose !== undefined) { dlg = null; drawDlg(); refresh(); return; }
