@@ -29,7 +29,7 @@ td { border-bottom: 1px solid #000; padding: 2.6mm 2mm; height: 11mm; vertical-a
 td.role { width: 28mm; font-weight: 700; white-space: nowrap; }
 td.no { width: 9mm; text-align: center; }
 .note { margin-top: 2.5mm; font-size: 10.5pt; line-height: 1.6; }
-.foot { margin-top: auto; padding-top: 5mm; font-size: 10pt; display: flex; justify-content: space-between; border-top: 1px solid #000; }
+.foot { margin-top: auto; padding-top: 5mm; font-size: 12pt; text-align: center; border-top: 1px solid #000; }
 @media screen { body { background: #e5e7eb; padding: 10mm 0; } .sheet { background: #fff; padding: 14mm 16mm; width: 210mm; min-height: 297mm; margin-bottom: 8mm; box-shadow: 0 2px 10px rgba(0,0,0,.15); } }
 `;
 
@@ -60,8 +60,8 @@ export function lineupSheetsHtml(list, qrSrc, opt = {}) {
     ${mails.map((r, i) => `<tr><td class="no">${i + 1}</td><td class="role">${r[0]}</td><td>${esc(r[1])}</td></tr>`).join('')}
     ${Array.from({ length: free }, (_, i) => `<tr><td class="no">${mails.length + i + 1}</td><td class="role"></td><td></td></tr>`).join('')}
   </tbody></table>
-  <p class="note">需要新增信箱：聯絡人登入後可在「新增點單填寫權限」自行加入（最多 3 個共同編輯），或寫在上方空格交給簽到處登記。</p>
-  <div class="foot"><span>交大盃</span><span>有任何問題請洽大會</span></div>
+  <p class="note">「聯絡人」有權限新增共同編輯的帳號。若需要大會協助，請洽大會。</p>
+  <div class="foot"><span>祝比賽順利 : )</span></div>
 </section>`;
   };
   return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>線上點單說明</title><style>${CSS}</style></head><body>${list.map(page).join('')}</body></html>`;
