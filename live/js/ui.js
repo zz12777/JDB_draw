@@ -78,8 +78,18 @@ export function lineName(l, i) {
  * 球桌地圖：大會台在下方，左排為前半桌號、右排為後半桌號，1 號桌靠近大會台。
  * opt.tag: 'button' 可點；opt.alerts: Set(桌號) 標紅
  */
+/**
+ * 球桌排成三排：1–8、9–16、17–24（每排由下往上，靠大會台的是 1、9、17）。
+ * 桌數不是 24 時，平均分成三排。
+ */
+export const TABLE_COLS = 3;
+export const perCol = n => Math.ceil(n / TABLE_COLS);
+function tableCols(n, cell) {
+  const per = perCol(n);
+  return Array.from({ length: TABLE_COLS }, (_, c) => { const from = c * per + 1, to = Math.min(n, from + per - 1); return `<div class="col">${Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => cell(from + i)).join('')}</div>`; }).join('');
+}
 export function tableMap(state, d, opt = {}) {
-  const n = state.tables || 24, half = Math.ceil(n / 2);
+  const n = state.tables || 24;
   const cell = t => {
     const x = d.tables.get(t);
     const tag = opt.tag || 'div';
@@ -88,19 +98,20 @@ export function tableMap(state, d, opt = {}) {
     const al = opt.alerts && opt.alerts.has(m.id);
     return `<${tag} class="tcell busy ${al ? 'alert' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <span class="t">${t}</span>
-      <span class="who"><span class="ev">${esc(shortEv(m))}</span>${x.point != null ? ` 第${'一二三四五'[x.point]}點` : ''}<br>${names(m)}${opt.refs ? `<br><span class="muted">裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : ''}</span>
-      <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><br>${m.status === 'reported' ? '已打完' : fmtTime(m.rec.start)}</span></${tag}>`;
+      <span class="who"><span class="ev">${esc(shortEv(m))}</span>${x.point != null ? `<span class="pt"> 第${'一二三四五'[x.point]}點</span>` : ''}<span class="nms"><br>${names(m)}${opt.refs ? `<br><span class="muted">裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : ''}</span></span>
+      <span class="mins"><span class="big">${m.score[0]}:${m.score[1]}</span><span class="tm"><br>${m.status === 'reported' ? '已打完' : fmtTime(m.rec.start)}</span></span></${tag}>`;
   };
-  const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
-  return `<div class="map ${opt.refs ? 'tall' : ''}">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
+  return `<div class="map ${opt.refs ? 'tall' : ''}">${tableCols(n, cell)}<div class="deskbar">大會台</div></div>`;
 }
 
 /**
  * 大張的球桌看板：位置同球桌地圖，每桌顯示項目場次、對戰雙方與比分、目前進行的點或各局比分。
  * opt.tag: 'button' 可點；opt.desk: 顯示裁判與已進行時間；opt.alerts: Set(場次 id) 標紅
  */
+// 看板上的一方：校名與姓名分開，手機上校名放小字一行
+const bsName = (x, team) => (team || !(x && x.school) ? `<span class="nm">${esc(sideText(x, team))}</span>` : `<span class="nm"><span class="sch">${esc(x.school)} </span><span class="pn">${esc(x.name || '')}</span></span>`);
 export function board(state, d, opt = {}) {
-  const n = state.tables || 24, half = Math.ceil(n / 2);
+  const n = state.tables || 24;
   const tag = opt.tag || 'div';
   const cell = t => {
     const x = d.tables.get(t);
@@ -118,25 +129,24 @@ export function board(state, d, opt = {}) {
     const extra = opt.desk ? `<span class="bx">${m.status === 'reported' ? '已打完' : `${fmtTime(m.rec.start)} 開賽`}　裁判 ${esc(refOf(m, t)) || '未登記'}</span>` : (m.status === 'reported' ? '<span class="bx">已打完</span>' : '');
     return `<${tag} class="bcell busy ${opt.alerts && opt.alerts.has(m.id) ? 'alert' : ''} ${opt.match && !opt.match(m, x.point) ? 'dim' : ''}" data-table="${t}" data-mid="${esc(m.id)}">
       <div class="bt"><span class="bn">${t}</span><span class="be">${esc(shortEv(m))}</span>${extra}</div>
-      <div class="bs"><span class="nm">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]}</b></div>
-      <div class="bs"><span class="nm">${esc(sideText(m.B, m.team))}</span><b>${m.score[1]}</b></div>
+      <div class="bs">${bsName(m.A, m.team)}<b>${m.score[0]}</b></div>
+      <div class="bs">${bsName(m.B, m.team)}<b>${m.score[1]}</b></div>
       <div class="bduel"><span class="nm r">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]} : ${m.score[1]}</b><span class="nm">${esc(sideText(m.B, m.team))}</span></div>
       <div class="bp">${line}</div></${tag}>`;
   };
-  const col = (from, to) => `<div class="col">${Array.from({ length: to - from + 1 }, (_, i) => cell(from + i)).join('')}</div>`;
-  return `<div class="board">${col(1, half)}${col(half + 1, n)}<div class="deskbar">大會台</div></div>`;
+  return `<div class="board">${tableCols(n, cell)}<div class="deskbar">大會台</div></div>`;
 }
 
 /**
- * 大會台用的球桌看板。寬螢幕：大會台在左，上排為前半桌號、下排為後半桌號；
- * 窄螢幕：同球桌地圖（大會台在下、左右兩排）。細節點桌子看。
+ * 大會台用的球桌看板。寬螢幕：大會台在左，三列由上而下是 1–8、9–16、17–24；
+ * 窄螢幕：同球桌地圖（大會台在下、三排）。細節點桌子看。
  */
 export function deskBoard(state, d, opt = {}) {
-  const n = state.tables || 24, half = Math.ceil(n / 2);
+  const n = state.tables || 24, per = perCol(n);
   // 個人賽：校名一行、姓名一行；團體賽：隊名一行
   const side = x => `<span class="wn">${x && x.school ? `<span class="sch">${esc(x.school)}</span>` : ''}<span class="nm">${String((x && x.name) || '').split(/[\/／]/).map(esc).join('<br>')}</span></span>`;
   const cell = t => {
-    const r = t <= half ? 1 : 2, c = t <= half ? t : t - half;
+    const r = Math.ceil(t / per), c = t - (r - 1) * per;
     const pos = `style="--r:${r};--c:${c}"`;
     const x = d.tables.get(t);
     if (!x) return `<button class="wcell" ${pos} data-table="${t}"><span class="bn">${t}</span><span class="bempty">空桌</span></button>`;
@@ -146,7 +156,7 @@ export function deskBoard(state, d, opt = {}) {
       ${side(m.A)}${side(m.B)}<span class="wsc">${m.score[0]} : ${m.score[1]}</span>
       <span class="wx">${m.status === 'reported' ? '已打完' : x.idle ? '這桌的點已打完，可派其他場' : `${fmtTime(m.rec.start)} 開賽`}<br>裁判 ${esc(refOf(m, t)) || '未登記'}</span></button>`;
   };
-  return `<div class="wboard" style="--half:${half}"><div class="wdesk">大會台</div>${Array.from({ length: n }, (_, i) => cell(i + 1)).join('')}</div>`;
+  return `<div class="wboard" style="--half:${per}"><div class="wdesk">大會台</div>${Array.from({ length: n }, (_, i) => cell(i + 1)).join('')}</div>`;
 }
 
 /**

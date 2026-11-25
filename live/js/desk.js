@@ -1,5 +1,5 @@
 // 大會台
-import { derive, isTeam, matchTitle, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
+import { derive, isTeam, matchTitle, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel, callQueue, queueRuns } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory, writePaths, teamKey, mailKey, parseMails, ownerUpdates, setRefCode } from './store.js';
 import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml } from './ui.js';
@@ -82,6 +82,7 @@ function viewCtrl(s) {
       }).join('')}</div>
     </div></div>
     <div class="side">
+      ${queuePanel(s)}
       ${onlinePanel(s)}
       ${swapPanel()}
       ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(({ m, ab }) => {
@@ -107,6 +108,27 @@ function roundTime(s, r) {
   if (!sl.length) return '';
   const a = sl.reduce((x, y) => (`${y.d}${y.s}` < `${x.d}${x.s}` ? y : x)), b = sl.reduce((x, y) => (`${y.d}${y.e}` > `${x.d}${x.e}` ? y : x));
   return ` <span class="rt">${esc(dayLabel(getState(), a.d, a.day))} ${a.s}-${b.e}</span>`;
+}
+// ---------------- 個人賽叫場順序 ----------------
+const evTag = ev => `<span class="evtag ev-${esc(ev)}">${esc(ev)}</span>`;
+const runText = r => `${r.ev} ${r.list[0].no}${r.list.length > 1 ? `–${r.list[r.list.length - 1].no}` : ''}`;
+/** 賽程控制右側：接下來要叫的項目與場次 */
+function queuePanel(s) {
+  const q = callQueue(D);
+  if (!q.length) return '';
+  const runs = queueRuns(q).slice(0, 5);
+  return `<div class="panel"><h2>個人賽叫場順序</h2>
+    <p class="small muted" style="margin:0 0 6px">同一輪依男單、女單、男雙、女雙的順序叫。</p>
+    <table class="list qrun"><tbody>${runs.map((r, i) => { const rd = r.list.filter(m => m.status === 'ready').length; return `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
+      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.list.length} 場${rd ? `，可開賽 ${rd}` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
+/** 裁判分頁：接下來 N 場會叫到哪些場次（這些場次的選手列在暫不可擔任） */
+function queueNote(s) {
+  const N = refBuf(s), q = callQueue(D);
+  if (!q.length) return '';
+  const head = q.slice(0, N), runs = queueRuns(head);
+  return `<div class="alertbox info" style="margin-bottom:12px"><b>個人賽接下來 ${head.length} 場：</b>${runs.map(r => esc(runText(r))).join('、')}<br>
+    <span class="small muted">這些場次的選手列在「暫不可擔任」；後面才會叫到的選手列在「人手不足時可支援」。${q.length > N ? `之後接著是 ${esc(runText(queueRuns(q.slice(N))[0]))}。` : ''}</span></div>`;
 }
 const stageOrder = m => (m.stage === 'F' ? 1 : 0) * 100 + m.roundIdx;
 
@@ -830,10 +852,11 @@ function busyPeople(s) {
     const soonBySched = e.matches.some(m => { if (!undone(m)) return false; const sl = slotOf(s.sched, m); const at = sl ? dueAt(s, { d: sl.d, t: sl.s }) : null; return at && at - t0 <= 10 * 60000; });
     if ((started && st.some(x => x !== 'done')) || soonBySched) active.add(e.name);
   });
-  // 個人賽：接下來要叫的前 N 場算馬上要打（預設＝球桌數，大約是接下來 20～30 分鐘會叫到的場次）；同項目後面的場次算還沒輪到
+  // 個人賽：依叫場順序（輪次表），接下來的前 N 場算馬上要打（預設＝球桌數，大約是接下來 20～30 分鐘會叫到的場次），後面的算還沒輪到
   const N = refBuf(s);
-  const next3 = new Set();
-  D.events.filter(e => !e.team && active.has(e.name)).forEach(e => e.matches.filter(undone).sort((a, b) => a.num - b.num).slice(0, N).forEach(m => next3.add(m.id)));
+  const indOn = D.events.some(e => !e.team && active.has(e.name));
+  const next3 = new Set(indOn ? callQueue(D).slice(0, N).map(m => m.id) : []);
+  if (indOn) D.events.forEach(e => { if (!e.team) active.add(e.name); });
   const put = (map, n, m) => { const k = nm(n); if (!map.has(k)) map.set(k, m); };
   D.byId.forEach(m => {
     if (m.status === 'playing') { people(m).forEach(n => put(now, n, m)); return; }
@@ -971,7 +994,10 @@ function viewRefs(s) {
   const free = pool.filter(n => !why(n) && !backup(n) && !later.has(k(n))).sort(byCnt);
   // 人手不足時：所屬項目進行中、但自己的場次還沒輪到的人也可以支援
   const spare = pool.filter(n => !why(n) && (backup(n) || later.has(k(n)))).sort(byCnt);
-  const rest = pool.filter(n => why(n) && !spare.includes(n));
+  // 暫不可擔任：依項目、場次排序
+  const whyM = n => (onDuty.has(k(n)) ? onDuty.get(k(n)).m : now.get(k(n)) || soon.get(k(n)));
+  const mKey = m => (m ? PILL_ORDER.indexOf(m.ev) * 1e6 + stageOrder(m) * 1e3 + m.num : 9e9);
+  const rest = pool.filter(n => why(n) && !spare.includes(n)).sort((a, b) => mKey(whyM(a)) - mKey(whyM(b)));
   const groups = [...ORGS, ...new Set(staff.map(n => orgOf(s, n)).filter(g => !ORGS.includes(g)))];
   const plan = upcomingOf(s);
   const tip = n => { const l = plan.get(k(n)) || []; return l.length ? ` class="tipcell" tabindex="0" data-tip="${esc(l.map(x => x.text).join('\n'))}"` : ''; };
@@ -984,7 +1010,7 @@ function viewRefs(s) {
     const isXs = xs && t >= xs.from && t <= xs.to;
     return `<div class="rcell ${on ? (n ? 'on' : 'none') : 'idle'} ${sw ? 'swap' : ''} ${isXs ? 'xs' : ''}"><b>${t}${isXs ? '<span class="xst">香山</span>' : ''}</b>${on ? (n ? `<span>${staff.includes(n) ? orgTag(s, n) : ''}</span><span class="rn">${esc(n)}</span>` : '<span class="rn">未登記</span>') : '<span class="rn muted">空桌</span>'}${sw ? `<small>請求替換</small>` : ''}</div>`;
   }).join('')}</div></div>`;
-  return wrap(`${strip}${swapPanel()}
+  return wrap(`${strip}${swapPanel()}${queueNote(s)}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
     ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}

@@ -374,5 +374,22 @@ export function absences(m) {
   (r.pts || []).forEach((p, i) => { if (p && p.absent && (p.absent.a || p.absent.b)) out.push({ ...p.absent, point: i, key: `p${i}` }); });
   return out;
 }
+/**
+ * 個人賽叫場順序（輪次表）：先依籤表輪次，同一輪依男單、女單、男雙、女雙，同項目依場次。
+ * 第十二屆大會的個人賽輪次表就是這個順序；每屆匯入籤表後自動產生。
+ * 只列還沒開打、也還沒打完的場次（對手未定的也算，叫到時才會知道是誰）。
+ */
+export const IND_ORDER = ['男單', '女單', '男雙', '女雙'];
+export function callQueue(D) {
+  const out = [];
+  D.events.filter(e => !e.team).forEach(e => e.matches.forEach(m => { if (!m.rec.start && m.status !== 'done' && m.status !== 'reported') out.push(m); }));
+  return out.sort((a, b) => a.roundIdx - b.roundIdx || IND_ORDER.indexOf(a.ev) - IND_ORDER.indexOf(b.ev) || a.num - b.num);
+}
+/** 把叫場順序併成連續的段落：[{ ev, list: [m...] }] */
+export function queueRuns(list) {
+  const runs = [];
+  list.forEach(m => { const r = runs[runs.length - 1]; if (r && r.ev === m.ev) r.list.push(m); else runs.push({ ev: m.ev, list: [m] }); });
+  return runs;
+}
 export const fmtTime = ts => { if (!ts) return ''; const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 export const parseTables = text => [...new Set(String(text || '').split(/[^0-9]+/).filter(Boolean).map(Number))];
