@@ -1104,7 +1104,7 @@ function viewRefs(s) {
   return wrap(`${handPanel(s)}${strip}${swapPanel()}${queueNote(s)}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
-    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}
+    ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上（平板點一下姓名）可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}
     ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list restt"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
     ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }

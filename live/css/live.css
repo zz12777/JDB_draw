@@ -657,4 +657,4 @@ td.tts-next { background: #fff; box-shadow: inset 0 0 0 2px var(--yellow); }
 .recwrap { padding: 4px 0; }
 .rectree { max-height: 90vh; min-height: 60vh; }
 .tipcell.tipon::after { content: attr(data-tip); position: absolute; left: 0; top: 100%; z-index: 20; margin-top: 4px; white-space: pre; background: #0f2a5c; color: #fff; font-size: 13px; line-height: 1.6; padding: 6px 10px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
-.orgcols > div:last-child .tipcell::after { left: auto; right: 0; }
+.orgcols > div:last-child:not(:first-child) .tipcell::after { left: auto; right: 0; }
