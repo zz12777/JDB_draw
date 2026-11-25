@@ -13,6 +13,7 @@ body { margin: 0; font-family: "Noto Sans TC", "Noto Sans CJK TC", "PingFang TC"
 .top { border: 2.5px solid #000; border-radius: 4mm; padding: 6mm 8mm; display: flex; align-items: baseline; gap: 8mm; }
 .top .ev { font-size: 30pt; font-weight: 900; padding: 1mm 4mm; border: 2px solid #000; border-radius: 2mm; }
 .top .team { font-size: 34pt; font-weight: 900; line-height: 1.15; }
+.top .pos { margin-right: 4mm; }
 .sub { margin: 4mm 0 0; font-size: 13pt; letter-spacing: 1px; }
 .mid { display: flex; gap: 8mm; margin-top: 7mm; align-items: flex-start; }
 .qr { width: 58mm; flex: none; text-align: center; }
@@ -43,7 +44,7 @@ export function lineupSheetsHtml(list, qrSrc, opt = {}) {
     const mails = [x.owner ? ['聯絡人', x.owner] : null, ...(x.editors || []).map(m => ['共同編輯', m])].filter(Boolean);
     const free = Math.max(2, blanks - mails.length);
     return `<section class="sheet">
-  <div class="top"><span class="ev">${esc(x.ev)}</span><span class="team">${esc(x.team)}</span></div>
+  <div class="top"><span class="ev">${esc(x.ev)}</span><span class="team">${x.pos ? `<span class="pos">${esc(x.pos)}</span>` : ''}${esc(x.team)}</span></div>
   <p class="sub">交大盃　團體賽線上點單</p>
   <div class="mid">
     <div class="qr"><img src="${esc(qrSrc)}" alt="線上點單 QR code"><div class="url">${URL_TEXT}</div></div>

@@ -1,5 +1,5 @@
 // 簽到處：管理員登入後使用。各隊勾「已簽到」，有團體賽的隊伍同時領點單；備註寫給大會看。
-import { fmtTime } from './model.js';
+import { fmtTime, derive } from './model.js';
 import { getState, subscribe, onAuth, auth, setCheckin, writePaths, teamKey, mailKey, parseMails, ownerUpdates, editorUpdates } from './store.js';
 import { esc, $, icon, header, toast } from './ui.js';
 import { checkinSections, signinWord, signinTitle } from './units.js';
@@ -53,10 +53,16 @@ function render() {
 
 // ---------------- 線上點單說明單 ----------------
 /** 一隊的說明單資料：項目、隊名、聯絡人與共同編輯 */
+const sheetD = { s: null, d: null };
 function sheetOf(s, ev, team) {
   const acl = (s.teamacl || {})[teamKey(ev, team)] || {};
   const list = role => Object.entries(acl).filter(([, v]) => v === role).map(([k]) => k.replace(/,/g, '.'));
-  return { ev, team, owner: list('owner')[0] || '', editors: [...list('owner').slice(1), ...list('editor')] };
+  // 籤表上的組別與編號，例如 A-2
+  if (sheetD.s !== s) { sheetD.s = s; sheetD.d = derive(s); }
+  const e = sheetD.d.events.find(x => x.name === ev);
+  const g = e && (e.groups || []).find(x => x.teams.includes(team));
+  const pos = g ? `${g.letter}-${g.teams.indexOf(team) + 1}` : '';
+  return { ev, team, pos, owner: list('owner')[0] || '', editors: [...list('owner').slice(1), ...list('editor')] };
 }
 function printSheets(list) {
   if (!list.length) { toast('沒有團體賽隊伍'); return; }
