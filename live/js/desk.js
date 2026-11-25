@@ -459,11 +459,16 @@ const twoLine = t => { const x = String(t || '').trim(), i = x.indexOf(' '); ret
 const BY_COLORS = ['#dcfce7', '#fef3c7', '#dbeafe', '#fce7f3', '#ede9fe', '#ffedd5'];
 let showBy = false;
 /** 成績視窗上方：這場的裁判、棄權是誰登記的、最後更新時間 */
-function refLine(m) {
+function refLine(m, byBtn) {
+  // 有交接紀錄就照時間列出（第 5 桌 10:02 王小明 → 10:30 李大華），沒有就列裁判姓名
+  const log = (() => { try { return Array.isArray(m.rec.reflog) ? m.rec.reflog : JSON.parse(m.rec.reflog || '[]'); } catch (e) { return []; } })();
+  const byT = new Map(); log.forEach(x => { if (!byT.has(x.t)) byT.set(x.t, []); byT.get(x.t).push(x); });
   const refs = [...new Set([...Object.values(m.rec.refs || {}), m.rec.ref, ...(m.rec.pts || []).map(p => p && p.ref)].filter(Boolean))];
-  const wo = m.rec.wo && m.rec.woBy ? `　棄權由 ${esc(m.rec.woBy.by)} 於 ${fmtTime(m.rec.woBy.ts)} 登記` : m.rec.wo ? '　棄權登記者不明（更新前登記的）' : '';
+  const who = byT.size ? [...byT].map(([t, l]) => `${byT.size > 1 ? `${esc(t)} 桌 ` : ''}${l.map(x => `${fmtTime(x.ts)} ${esc(x.n)}`).join(' → ')}`).join('；')
+    : refs.length ? refs.map(esc).join('、') : '未登記';
+  const wo = m.rec.wo ? (m.rec.woBy ? `棄權 ${esc(m.rec.woBy.by)} ${fmtTime(m.rec.woBy.ts)}` : '棄權登記者不明') : '';
   const u = matchUpdatedAt(m.id);
-  return refs.length || wo || u ? `<p class="small muted" style="margin:4px 0">${refs.length ? `裁判：${refs.map(esc).join('、')}` : '裁判：未登記'}${wo}${u ? `　最後更新 ${fmtTime(u)}` : ''}</p>` : '';
+  return `<div class="refline small muted"><span>裁判 ${who}</span>${wo ? `<span>${wo}</span>` : ''}${u ? `<span>更新 ${fmtTime(u)}</span>` : ''}${byBtn || ''}</div>`;
 }
 function scoreModal(m) {
   const locked = false; // 不再鎖定：完賽後大會台仍可修改
@@ -476,7 +481,8 @@ function scoreModal(m) {
   const byOf = pi => (m.team ? ((m.rec.pts || [])[pi] || {}).gb : m.rec.gb) || [];
   const byCol = (pi, gi) => { if (!showBy) return ''; const i = who.indexOf(byOf(pi)[gi]); return i < 0 ? '' : BY_COLORS[i % BY_COLORS.length]; };
   const bg = (pi, gi) => { const c = byCol(pi, gi); return c ? ` title="${esc(byOf(pi)[gi])}"` : ''; };
-  const byBar = who.length ? `<div class="row small" style="margin:4px 0 6px"><button class="btn ghost sm" data-showby aria-pressed="${showBy}">${icon('list')}${showBy ? '隱藏紀錄者' : '紀錄者'}</button>${showBy ? who.map((n, i) => `<span style="background:${BY_COLORS[i % BY_COLORS.length]};padding:2px 8px;border-radius:6px">${esc(n)}</span>`).join('') : ''}</div>` : '';
+  const byBtn = who.length ? `<button class="btn ghost sm" data-showby aria-pressed="${showBy}">${icon('list')}${showBy ? '隱藏紀錄者' : '紀錄者'}</button>` : '';
+  const byLegend = who.length && showBy ? `<div class="row small" style="justify-content:flex-end;margin:0 0 6px">${who.map((n, i) => `<span style="background:${BY_COLORS[i % BY_COLORS.length]};padding:2px 8px;border-radius:6px">${esc(n)}</span>`).join('')}</div>` : '';
   const block = (pi, games, title, an, bn, meta, solo) => `<div class="pt ${solo ? 'solo' : ''}"><h4>${title}</h4>
     ${an || bn ? `<div class="pn"><span>${twoLine(an)}</span><span>${twoLine(bn)}</span></div>` : ''}
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gr"${bg(pi, gi)}>${gin(pi, gi, 0, (games[gi] || [])[0])}<span class="vs">:</span>${gin(pi, gi, 1, (games[gi] || [])[1])}</div>`).join('')}
@@ -491,14 +497,12 @@ function scoreModal(m) {
     }).join('');
   } else {
     // 個人賽：雙方姓名和總比數只在上方顯示一次，這裡只放各局比分
-    body = block('x', m.rec.g || [], '各局比分', '', '', m.rec.ref ? `裁判 ${esc(m.rec.ref)}` : '', true);
+    body = block('x', m.rec.g || [], '各局比分', '', '', '', true);
   }
   return `<div class="modal"><div class="row"><h2>${EVENT_FULL[m.ev]} ${esc(m.no)}　成績</h2>${chip(m)}${m.status === 'playing' && m.tables.length ? `<span class="small muted">第 ${m.tables.join('、')} 桌</span>` : ''}<span class="spacer"></span><button class="btn ghost sm" data-close aria-label="關閉" title="關閉">${icon('close')}</button></div>
     <div class="duel"><div class="n r">${m.team ? esc(sideText(m.A, true)) : twoLine(sideText(m.A))}</div><div class="total" id="sc-total"></div><div class="n">${m.team ? esc(sideText(m.B, true)) : twoLine(sideText(m.B))}</div></div>
     ${!m.known && hasRec(m) ? `<div class="alertbox" style="margin:6px 0">對手還沒確定，但這場已經有比分紀錄（可能是前一輪的成績改過）。確認不是這兩位的比賽，可以清除這場紀錄。<div class="row" style="margin-top:6px"><span class="spacer"></span><button class="btn ghost sm danger" data-scwipe>清除這場紀錄</button></div></div>` : ''}
-    ${refLine(m)}
-    ${refLogHtml(m.rec, fmtTime)}
-    ${byBar}
+    ${refLine(m, byBtn)}${byLegend}
     <div class="pts">${body}</div>
     <p class="small" id="sc-note" style="color:var(--red);min-height:18px"></p>
     <div class="row">

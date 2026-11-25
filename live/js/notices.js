@@ -36,6 +36,9 @@ export function buildNotices(raw) {
     add(d, day, first - 5, 'call', '開始叫第一輪');
     // 比賽期間定時看 Firebase 用量（免費方案超過上限整個系統會停）
     add(d, day, first - 30, 'prep', '查看 Firebase 用量（連線、下載量），之後每 1～2 小時看一次');
+    // 每天最後一個時段結束：下載備份檔
+    const lastEnd = Math.max(...ss.map(x => toMin(x.e)));
+    add(d, day, lastEnd, 'prep', '下載當日備份：資料設定 > 備份與還原 > 下載備份檔，存到大會電腦與雲端硬碟');
 
     // 每個時段開始：廣播這個時段的場次
     starts.forEach(st => {
