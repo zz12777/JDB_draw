@@ -70,9 +70,20 @@ function render() {
 // 頁面通知：還沒送出點單的場次有新通知時跳出視窗，按「收到」才關閉（這台裝置記住已讀）
 const ackKey = (mid, x) => `jdb-nudge|${cur}|${mid}|${x.ts}`;
 const acked = (mid, x) => { try { return !!localStorage.getItem(ackKey(mid, x)); } catch (e) { return false; } };
+const tablesOf = m => (Array.isArray(m.rec.tables) ? m.rec.tables : []).filter(Boolean);
+const startKey = m => `jdb-start|${cur}|${m.id}|${m.rec.start}`;
+const ackedStart = m => { try { return !!localStorage.getItem(startKey(m)); } catch (e) { return false; } };
 function showNudge(ms) {
   let host = $('#nudge-dlg');
   if (!host) { host = document.createElement('div'); host.id = 'nudge-dlg'; document.body.append(host); }
+  // 開打通知優先：大會派桌後告訴隊伍第幾桌、幾點開打
+  const st = ms.find(x => x.rec.start && tablesOf(x).length && x.status !== 'done' && x.status !== 'reported' && !ackedStart(x));
+  if (st) {
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2 style="margin:0 0 8px">${icon('bell')} 開打通知</h2>
+      <p class="small muted" style="margin:0 0 6px">${esc(st.ev)} ${esc(st.no)}</p><p style="font-size:19px;margin:0 0 14px;font-weight:700">請到第 ${tablesOf(st).join('、')} 桌，${fmtTime(st.rec.start)} 開打</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn" data-ackstart="${esc(startKey(st))}">收到</button></div></div></div>`;
+    return;
+  }
   const m = ms.find(x => nudge[x.id] && !x.rec.start && !fin0(olu[x.id]) && !acked(x.id, nudge[x.id]));
   if (!m) { host.innerHTML = ''; return; }
   const x = nudge[m.id];
@@ -93,7 +104,7 @@ function matchCard(m, info) {
     <div class="mvs"><b>${esc(sideText(me0, true))}</b><span class="muted">vs</span><span>${esc(sideText(opp, true)) || '<span class="muted">待定</span>'}</span></div>`;
   const fin = sub && sub.final;
   const ng = !locked && !fin0(sub) && nudge[m.id] ? `<div class="nudgetag">${icon('bell')}大會通知：${esc(nudge[m.id].text)}</div>` : '';
-  const status = locked ? `<span class="chip">${icon('lock')}已鎖定</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
+  const status = locked ? `<span class="chip playing">${icon('lock')}${tablesOf(m).length ? `第 ${tablesOf(m).join('、')} 桌　${fmtTime(m.rec.start)} 開打` : '已鎖定'}</span>` : fin ? `<span class="chip playing">${icon('check')}已送出 ${fmtTime(sub.ts)}</span>` : sub ? '<span class="chip warn">尚未送出</span>' : '<span class="chip">尚未填寫</span>';
   if (locked || fin) {
     const l = official || (sub && sub.lu);
     return `<div class="panel">${head}${ng}<div class="row">${status}${locked ? '<span class="small muted">大會已派桌，點單以大會登錄為準。</span>' : ''}</div>${l ? lineupView(l) : ''}${logView(sub)}</div>`;
@@ -193,6 +204,7 @@ onAuth(() => render());
 document.addEventListener('click', async ev => {
   const t = ev.target.closest('button, a[data-out]'); if (!t) return;
   const d = t.dataset;
+  if (d.ackstart) { try { localStorage.setItem(d.ackstart, '1'); } catch (e) { /* 無法記住也沒關係 */ } render(); return; }
   if (d.ack) { const x = nudge[d.ack]; if (x) { try { localStorage.setItem(ackKey(d.ack, x), '1'); } catch (e) { /* 無法記住也沒關係 */ } } render(); return; }
   if ('in' in d) signIn();
   else if ('out' in d) { ev.preventDefault(); signOut(); }
