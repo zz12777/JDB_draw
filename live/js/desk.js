@@ -99,7 +99,7 @@ function viewCtrl(s) {
             <button class="btn ghost sm" data-called="${esc(m.id)}|${ab.key}">${icon('speaker')}${ab.called ? '再次廣播' : '已廣播'}</button>
             <button class="btn ghost sm" data-clear-absent="${esc(m.id)}|${ab.key}">${icon('check')}已到場</button></div></div>`;
       }).join('')}</div>` : ''}
-      <div class="panel bc"><h2>廣播稿</h2>${calls.length ? callList(s.calls, D, { max: 5, undo: true }) : '<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p>'}</div>
+      ${bcPanel(s, calls)}
       ${rarePanel()}
     </div></div>`;
 }
@@ -141,13 +141,26 @@ function viewTimeDesk(s) {
 const evTag = ev => `<span class="evtag ev-${esc(ev)}">${esc(ev)}</span>`;
 const runText = r => `${r.ev} ${r.list[0].no}${r.list.length > 1 ? `–${r.list[r.list.length - 1].no}` : ''}`;
 /** 賽程控制右側：接下來要叫的項目與場次 */
+// 廣播稿：平常收合；有新廣播時自動展開並只顯示最新一則，其他按「前幾則」再看
+let bcOpen = false, bcMore = false, bcSeen = null;
+function bcPanel(s, calls) {
+  const latest = calls.length ? Math.max(...calls.map(c => c.ts)) : 0;
+  if (bcSeen == null) bcSeen = latest;
+  else if (latest > bcSeen) { bcSeen = latest; bcOpen = true; bcMore = false; }
+  const head = `<div class="row"><h2 style="margin:0">廣播稿</h2>${calls.length ? `<span class="small muted">${calls.length} 則</span>` : ''}<span class="spacer"></span>${calls.length ? `<button class="btn ghost sm" data-bcopen aria-expanded="${bcOpen}">${icon(bcOpen ? 'chevup' : 'chevdown')}${bcOpen ? '收合' : '展開'}</button>` : ''}</div>`;
+  if (!calls.length) return `<div class="panel bc">${head}<p class="small muted">輸入桌次後，廣播稿會顯示在這裡。</p></div>`;
+  if (!bcOpen) return `<div class="panel bc">${head}</div>`;
+  return `<div class="panel bc">${head}<div style="margin-top:8px">${callList(s.calls, D, { max: bcMore ? 5 : 1, undo: true })}</div>
+    ${calls.length > 1 ? `<button class="btn plain sm" data-bcmore>${bcMore ? '只看最新一則' : `前 ${Math.min(4, calls.length - 1)} 則`}</button>` : ''}</div>`;
+}
+let qOpen = false;
 function queuePanel(s) {
   const q = callQueue(D);
   if (!q.length) return '';
-  const runs = queueRuns(q).slice(0, 5);
+  const all = queueRuns(q), runs = all.slice(0, qOpen ? 5 : 2);
   return `<div class="panel"><h2>個人賽叫場順序</h2>
     <table class="list qrun"><tbody>${runs.map((r, i) => { const rd = r.list.filter(m => m.status === 'ready').length; return `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
-      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.list.length} 場</td></tr>`; }).join('')}</tbody></table></div>`;
+      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.list.length} 場</td></tr>`; }).join('')}</tbody></table>${all.length > 2 ? `<button class="btn plain sm" data-qopen style="margin-top:4px">${icon(qOpen ? 'chevup' : 'chevdown')}${qOpen ? '收合' : `其他 ${Math.min(5, all.length) - 2} 段`}</button>` : ''}</div>`;
 }
 /** 裁判分頁：接下來 N 場會叫到哪些場次（這些場次的選手列在暫不可擔任） */
 function queueNote(s) {
@@ -1489,6 +1502,9 @@ document.addEventListener('click', async ev => {
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
+  if ('bcopen' in d) { bcOpen = !bcOpen; render(); return; }
+  if ('bcmore' in d) { bcMore = !bcMore; render(); return; }
+  if ('qopen' in d) { qOpen = !qOpen; render(); return; }
   if (d.reczoom) { recZoom = Math.min(1.6, Math.max(0.4, recZoom + 0.2 * Number(d.reczoom))); render(); return; }
   if (d.goev) { curEv = d.goev; tab = 'ctrl'; render(); window.scrollTo(0, 0); return; }
   if (d.parkdel) { update(st => { const p = { ...(st.parking || {}) }; delete p[d.parkdel]; st.parking = p; const r = { ...(st.receipt || {}) }; delete r[d.parkdel]; st.receipt = r; }); return; }
