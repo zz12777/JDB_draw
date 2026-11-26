@@ -82,7 +82,7 @@ export function withParking(sections, parking = {}, receipt = {}) {
   const rused = new Set();
   sections.forEach(sec => sec.rows.forEach(r => {
     const hit = ridx.get(looseKey(r.unit));
-    if (hit && !rused.has(hit[0])) { r.rcpt = hit[1] ? `收據：${hit[1]}` : '收據'; rused.add(hit[0]); }
+    if (hit && !rused.has(hit[0])) { r.rcpt = hit[1] ? `要收據：${hit[1]}` : '要收據'; rused.add(hit[0]); }
   }));
   return { sections, unmatched: [...idx.values()].filter(([k]) => !used.has(k)) };
 }
