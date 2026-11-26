@@ -5,7 +5,7 @@ import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
 import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
-import { timetableHtml } from './ttview.js';
+import { timetableHtml, callOrder } from './ttview.js';
 import { buildNotices, noticesHtml, KIND_NAME } from './notices.js';
 import { checkinSections, missingLineup } from './units.js';
 import { readWorkbookValues, readFormFile } from '../../js/reader.js';
@@ -168,7 +168,7 @@ function viewTimeDesk(s) {
         ${CALL_RULES.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div></div></div>`;
 }
 
-// ---------------- 個人賽叫場順序 ----------------
+// ---------------- 叫場順序 ----------------
 const evTag = ev => `<span class="evtag ev-${esc(ev)}">${esc(ev)}</span>`;
 const runText = r => `${r.ev} ${r.list[0].no}${r.list.length > 1 ? `–${r.list[r.list.length - 1].no}` : ''}`;
 /** 賽程控制右側：接下來要叫的項目與場次 */
@@ -186,12 +186,13 @@ function bcPanel(s, calls) {
 }
 let qOpen = false;
 function queuePanel(s) {
-  const q = callQueue(D);
-  if (!q.length) return '';
-  const all = queueRuns(q), runs = all.slice(0, qOpen ? 5 : 2);
-  return `<div class="panel"><h2>個人賽叫場順序</h2>
-    <table class="list qrun"><tbody>${runs.map((r, i) => { const rd = r.list.filter(m => m.status === 'ready').length; return `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
-      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.list.length} 場</td></tr>`; }).join('')}</tbody></table>${all.length > 2 ? `<button class="btn plain sm" data-qopen style="margin-top:4px">${icon(qOpen ? 'chevup' : 'chevdown')}${qOpen ? '收合' : `其他 ${Math.min(5, all.length) - 2} 段`}</button>` : ''}</div>`;
+  const all = callOrder(s, D);
+  if (!all.length) return '';
+  const runs = all.slice(0, qOpen ? 6 : 2);
+  return `<div class="panel"><h2>叫場順序</h2>
+    <table class="list qrun"><tbody>${runs.map((r, i) => `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
+      <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.s ? `${esc(r.s)}　` : ''}${r.list.length} 場</td></tr>`).join('')}</tbody></table>${all.length > 2 ? `<button class="btn plain sm" data-qopen style="margin-top:4px">${icon(qOpen ? 'chevup' : 'chevdown')}${qOpen ? '收合' : `其他 ${Math.min(6, all.length) - 2} 段`}</button>` : ''}
+    <p class="small muted" style="margin:6px 0 0">個人賽照輪次表，團體賽照時間表；同一時間個人賽先叫，團體決賽先於預賽。</p></div>`;
 }
 /** 裁判分頁：接下來 N 場會叫到哪些場次（這些場次的選手列在暫不可擔任） */
 function queueNote(s) {
@@ -306,12 +307,17 @@ function onlineLu(s, m, k) {
   // 只有按了「送出」的才算；暫存中的不帶入
   return o && o.final ? o : null;
 }
+/** 大會台最後一次代填這隊點單的時間（排點紀錄） */
+function deskLuTs(s, mid, k) {
+  const l = ((((s.notices || {}).lulog || {})[mid] || {})[k] || []).filter(x => x.a === '代填');
+  return l.length ? l[l.length - 1].ts : 0;
+}
 function draftLu(s, m, k) { const S = k === 'a' ? m.A : m.B; if (!m.team || !S || !S.name) return null; const o = ((s.olu || {})[m.id] || {})[teamKey(m.ev, S.name)]; return o && !o.final ? o : null; }
 /** 大會台畫面用：線上點單先當作已收點單顯示，派桌時才寫進正式紀錄（避免對手提早在即時賽程看到） */
 function withOnline(s) {
   const dl = s.dlu || {};
   if ((!s.olu || !Object.keys(s.olu).length) && !Object.keys(dl).length) return s;
-  const m = { ...s.m };
+  const m0 = s.m || {}, m = { ...s.m };
   // 大會台輸入、還沒派桌的紙本點單（只存在大會台讀得到的地方）
   Object.entries(dl).forEach(([id, x]) => { if (!x) return; const rec = m[id] || {}; m[id] = { ...rec, lineup: { ...(rec.lineup || {}), ...x } }; });
   s = { ...s, m };
@@ -321,7 +327,12 @@ function withOnline(s) {
     const x = D0.byId.get(id); if (!x || !x.team) return;
     const rec = s.m[id] || {};
     const lu = { ...(rec.lineup || {}) }, src = {};
-    ['a', 'b'].forEach(k => { const o = onlineLu(s, x, k); if (o && !lu[k]) { lu[k] = o.lu; src[k] = o; } });
+    ['a', 'b'].forEach(k => {
+      const o = onlineLu(s, x, k); if (!o) return;
+      // 大會台代填、還沒派桌的點單和線上送出的點單都有時，以最後改的為主
+      const fromDl = !!((dl[id] || {})[k]) && !((m0[id] || {}).lineup || {})[k];
+      if (!lu[k] || (fromDl && (o.ts || 0) > deskLuTs(s, id, k))) { lu[k] = o.lu; src[k] = o; }
+    });
     if (Object.keys(src).length) m[id] = { ...rec, lineup: lu, olSrc: src };
   });
   return { ...s, m };
@@ -474,10 +485,12 @@ function setTables(mid, text, force = false, busyOk = false) {
       const dl = (st.dlu || {})[mid] || {};
       ['a', 'b'].forEach(k => {
         if (rec.lineup && rec.lineup[k]) return;
-        const ol = onlineLu(st, m, k), v = dl[k] || (ol || {}).lu;
+        // 大會台代填與線上送出都有時，以最後改的為主
+        const ol = onlineLu(st, m, k), useOl = !!ol && (!dl[k] || (ol.ts || 0) > deskLuTs(st, mid, k));
+        const v = useOl ? ol.lu : dl[k];
         if (v) { rec.lineup = rec.lineup || {}; rec.lineup[k] = v; }
         // 記下這邊的點單來自隊伍線上送出：之後大會台不能直接改
-        if (!dl[k] && ol) { rec.luSrc = { ...(rec.luSrc || {}), [k]: ol.ts || Date.now() }; }
+        if (useOl) { rec.luSrc = { ...(rec.luSrc || {}), [k]: ol.ts || Date.now() }; }
       });
       if (st.dlu && st.dlu[mid]) delete st.dlu[mid];
     }
