@@ -1598,6 +1598,7 @@ document.addEventListener('click', async ev => {
     update(st => { st.staff = [...new Set([...(st.staff || []), ...names])]; st.staffOrg = { ...(st.staffOrg || {}) }; names.forEach(n => { st.staffOrg[n] = '香山'; }); });
     toast(`已新增 ${names.length} 位香山裁判`); return;
   }
+  if (d.calldone) { const ts = Number(d.calldone); update(st => { const c = (st.calls || []).find(x => x.ts === ts); if (!c) return; if (c.done) { delete c.done; delete c.doneBy; } else { c.done = Date.now(); c.doneBy = deskName(); } }); return; }
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }
