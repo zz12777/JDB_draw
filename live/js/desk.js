@@ -251,6 +251,27 @@ function planned(m) {
 const RARE = { 貽: '宜', 亘: '宣', 晟: '成', 恂: '旬', 璿: '旋', 驊: '華', 潁: '影', 粘: '黏', 閎: '宏', 榞: '元', 宬: '成', 琮: '從', 岦: '立', 崴: '威', 昜: '陽', 旻: '民', 䧮: '憲', 浤: '宏', 丰: '風', 浡: '勃', 巽: '訊',
   伃: '于', 雰: '芬', 彣: '文', 苡: '以', 霈: '配', 歆: '欣', 錞: '純', 楹: '迎', 媗: '宣', 緁: '捷', 玗: '于', 倢: '捷', 珈: '家', 熏: '勳', 媞: '提', 淯: '育', 堻: '堅', 紓: '書', 芓: '子', 姸: '研', 扈: '戶', 蒨: '欠', 琬: '晚', 玠: '介', 葳: '威', 崨: '捷', 瀞: '靜' };
 let rareOpen = false;
+// 裁判分組定義：放在裁判分頁最下方，預設收合
+let refDefOpen = false;
+function refDefPanel() {
+  const head = `<div class="row phead" data-refdef role="button" tabindex="0" aria-expanded="${refDefOpen}"><h2 style="margin:0">裁判分組定義</h2><span class="spacer"></span>${icon(refDefOpen ? 'chevup' : 'chevdown')}</div>`;
+  if (!refDefOpen) return `<div class="panel">${head}</div>`;
+  return `<div class="panel refdef">${head}
+    <h3>一、可擔任裁判</h3>
+    <ul><li>今天已經沒有還沒打的場次：沒報名比賽、已經淘汰，或所有項目都打完。</li>
+      <li>依交大、陽明、香山分組，擔任次數少的排前面。</li></ul>
+    <h3>二、人手不足時可支援</h3>
+    <ul><li>還有比賽，但不是馬上要打的人：個人賽排在接下來 N 場以後；團體賽要等前面場次的結果，下一場還不能開打。</li>
+      <li>體資。</li>
+      <li>滑鼠移到姓名上（平板點一下姓名），可以看到他的下一場。</li></ul>
+    <h3>三、暫不可擔任（依項目、場次排序）</h3>
+    <ul><li>正在比賽：所在場次已派桌、還沒分出勝負。</li>
+      <li>正在擔任裁判：正在某桌記分。</li>
+      <li>個人賽馬上要打：依個人賽叫場順序，排在接下來 N 場內的選手。N 預設等於球桌數（24），大約是接下來 20～30 分鐘會叫到的場次，可在「裁判資料設定 &gt; 分類定義」調整。</li>
+      <li>團體賽下一場已經可以開打：前一輪都打完、對手確定。團體賽同一輪中誰的點單先到就先打，不照固定順序，所以只要隨時可能被叫，整隊都會被算在暫不可擔任。</li></ul>
+    <h3>團體賽進行時請注意</h3>
+    <p>團體賽哪一場先打，要看點單收齊的狀況和場控的安排。名單只能判斷「可不可能被叫」，判斷不出實際順序。<b>團體賽進行時可以與場控討論，盡量避免隊內隊伍同時打，無裁判可叫的情況。</b></p></div>`;
+}
 function rareList() {
   const out = [], seen = new Set();
   byPill(D.events).forEach(e => e.matches.slice().sort((a, b) => (a.stage === 'F') - (b.stage === 'F') || a.num - b.num).forEach(m => [m.A, m.B].forEach(S => {
@@ -1131,6 +1152,7 @@ function viewRefs(s) {
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
     ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上（平板點一下姓名）可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}
     ${rest.length ? `<div class="panel"><h2>暫不可擔任（${rest.length}）</h2><table class="list restt"><tbody>${rest.map(n => `<tr><td>${orgTag(s, n)}${esc(n)}</td><td class="muted">${why(n)}</td><td class="small muted" style="text-align:right">${cnt.get(n) || 0} 次</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${refDefPanel()}
     ${staffOpen ? `<div class="panel"><h2>當天新增香山裁判</h2><div class="row"><input type="text" id="xs-name" placeholder="姓名，多位用空白分隔" style="flex:1;min-width:180px"><button class="btn sm" data-addxs>${icon('plus')}新增</button></div></div>` : ''}`);
 }
 
@@ -1521,6 +1543,7 @@ document.addEventListener('click', async ev => {
     return;
   }
   if ('rareopen' in d) { rareOpen = !rareOpen; render(); return; }
+  if ('refdef' in d) { refDefOpen = !refDefOpen; render(); return; }
   if (d.round) { roundOpen.has(d.round) ? roundOpen.delete(d.round) : roundOpen.add(d.round); render(); return; }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
   if ('aclopen' in d) { aclOpen = !aclOpen; render(); return; }
