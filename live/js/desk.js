@@ -1147,7 +1147,7 @@ function viewRefs(s) {
     const isXs = xs && t >= xs.from && t <= xs.to;
     return `<div class="rcell ${on ? (n ? 'on' : 'none') : 'idle'} ${sw ? 'swap' : ''} ${isXs ? 'xs' : ''}"><b>${t}${isXs ? '<span class="xst">香山</span>' : ''}</b>${on ? (n ? `<span>${staff.includes(n) ? orgTag(s, n) : ''}</span><span class="rn">${esc(n)}</span>` : '<span class="rn">未登記</span>') : '<span class="rn muted">空桌</span>'}${sw ? `<small>請求替換</small>` : ''}</div>`;
   }).join('')}</div></div>`;
-  return wrap(`${handPanel(s)}${strip}${swapPanel()}${queueNote(s)}
+  return wrap(`${handPanel(s)}${strip}${swapPanel()}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
     ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上（平板點一下姓名）可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}
