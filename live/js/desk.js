@@ -638,6 +638,7 @@ function drawModal() {
       <p>籤表、參賽名單、時間表、排點、成績、廣播、場控提醒、簽到紀錄、停車證與收據、線上點單權限與線上點單都會刪除，且無法復原。建議先下載備份檔。</p>
       <p class="small muted">歷屆名次、管理員與首頁主視覺不會刪除。</p>
       <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="wipe-staff" checked>保留裁判名單</label>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="wipe-park" checked>保留停車證與收據</label>
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
     return;
   }
@@ -1640,9 +1641,9 @@ document.addEventListener('click', async ev => {
   } else if ('demo' in d) { if (!getState().events.length || t.dataset.sure) { replaceState(demoState()); tab = 'ctrl'; render(); toast('已載入示範資料'); } else { t.dataset.sure = 1; t.textContent = '再按一次以覆蓋現有資料'; } }
   else if ('wipe' in d) { modal = { kind: 'wipe' }; drawModal(); }
   else if ('wipeOk' in d) {
-    const keep = $('#wipe-staff') && $('#wipe-staff').checked, st0 = getState();
+    const keep = $('#wipe-staff') && $('#wipe-staff').checked, keepPark = $('#wipe-park') && $('#wipe-park').checked, st0 = getState();
     modal = null; drawModal();
-    replaceState({ ...emptyState(), ...(keep ? { staff: st0.staff || [], staffOrg: st0.staffOrg || {}, refOpt: st0.refOpt || {} } : {}) });
+    replaceState({ ...emptyState(), ...(keep ? { staff: st0.staff || [], staffOrg: st0.staffOrg || {}, refOpt: st0.refOpt || {} } : {}), ...(keepPark ? { parking: st0.parking || {}, receipt: st0.receipt || {} } : {}) });
     writePaths({ teamacl: null, myteams: null, olu: null, nudge: null }).catch(() => {});
     render(); toast('已清除全部資料');
   }

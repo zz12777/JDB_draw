@@ -29,7 +29,14 @@ function teamInfo(key) {
   return { ev: key.slice(0, i), team: key.slice(i + 1), roster: [] };
 }
 
+// 從 LINE 打開時提醒改用瀏覽器（LINE 內建瀏覽器不能用 Google 登入）
+const inLine = /\bLine\//i.test(navigator.userAgent);
 function render() {
+  render0();
+  const main = $('#main');
+  if (inLine && main && !main.querySelector('.linetip')) main.insertAdjacentHTML('afterbegin', '<div class="alertbox linetip" style="margin-bottom:10px">目前是 LINE 內建瀏覽器，請按右下角「⋯」→「以瀏覽器開啟」。</div>');
+}
+function render0() {
   const s = getState();
   $('#top').innerHTML = header(s, '線上點單', [['即時賽程', './']], { account: me.email ? `<a href="#" data-out title="${esc(me.email)}">登出</a>` : '' });
   const main = $('#main');

@@ -18,10 +18,10 @@ export function signinTitle(state) {
   const t = String(state.annTitle || '').replace(/成績公告$/, '').trim();
   return t || `${state.edition || ''}${state.title || '交大盃'}`;
 }
-export const signinWord = state => signinDocx(signinEvents(state), signinTitle(state), { parking: state.parking });
+export const signinWord = state => signinDocx(signinEvents(state), signinTitle(state), { parking: state.parking, receipt: state.receipt });
 export function checkinSections(state) {
   const ev = signinEvents(state);
-  const secs = withParking(signinSections(ev), state.parking).sections;
+  const secs = withParking(signinSections(ev), state.parking, state.receipt).sections;
   return secs.map(sec => ({ ...sec, rows: sec.rows.map(r => ({ ...r, key: checkinKey(`${sec.code}|${r.label}`) })) }));
 }
 /** 有團體賽但還沒勾「已簽到」的列 */

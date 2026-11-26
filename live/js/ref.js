@@ -126,7 +126,7 @@ document.addEventListener('click', ev => {
       .catch(() => { t.disabled = false; toast('裁判密碼錯誤，請向大會確認'); });
   }
   else if ('rename' in d) { name = ''; render(); }
-  else if (d.table) { table = Number(d.table); point = null; const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
+  else if (d.table) { table = Number(d.table); point = null; saveLast(); const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
     swapAsk = false;
     if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => {
       r.refs = r.refs || {}; r.refs[table] = name;
@@ -147,7 +147,7 @@ document.addEventListener('click', ev => {
     });
     swapAsk = false; render(); toast(why ? '已通知大會台' : '已取消請求');
   }
-  else if ('back' in d) { table = null; point = null; curMid = null; render(); }
+  else if ('back' in d) { table = null; point = null; curMid = null; saveLast(); render(); }
   else if ('done' in d) {
     // 團體賽按「本點結束」回到這一桌的選點頁面，個人賽按「本場結束」回到球桌列表
     document.activeElement && document.activeElement.blur();
@@ -155,7 +155,7 @@ document.addEventListener('click', ev => {
     // 比賽已分出勝負：記下完賽，這場離開球桌、晉級者自動帶到下一場
     const over = x && (x.m.team ? x.m.result.done : !!x.m.result.winner);
     if (over) updateMatch(x.m.id, r => { r.fin = Date.now(); delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); });
-    if (!(x && x.m.team) || over) table = null;
+    if (!(x && x.m.team) || over) { table = null; saveLast(); }
     point = null; render(); toast(over ? '比賽結束，紀錄已儲存' : '紀錄已儲存'); window.scrollTo(0, 0);
   }
   else if ('points' in d) { point = null; render(); }
@@ -198,4 +198,18 @@ subscribe((s, local) => {
   const a = document.activeElement;
   if (a && a.dataset && a.dataset.g) refresh(); else if (!(a && (a.id === 'rn' || a.id === 'rp'))) render();
 });
+// 手機的「上一頁」：留在裁判紀錄區，改成回到上一層（選點 → 球桌 → 球桌列表），避免直接跳出瀏覽器
+history.replaceState({ ref: 0 }, '');
+history.pushState({ ref: 1 }, '');
+window.addEventListener('popstate', () => {
+  if (point != null && D && D.tables.get(table) && D.tables.get(table).m.team) point = null;
+  else if (table != null) { table = null; point = null; curMid = null; saveLast(); }
+  else toast('要離開裁判紀錄區，請直接關閉分頁');
+  history.pushState({ ref: 1 }, '');
+  render();
+});
+// 記住正在記錄的球桌：頁面被關掉後重新點連結，會直接回到這一桌（3 小時內）
+const LAST_KEY = 'jdb-ref-last';
+function saveLast() { try { if (table != null) localStorage.setItem(LAST_KEY, JSON.stringify({ t: table, ts: Date.now() })); else localStorage.removeItem(LAST_KEY); } catch (e) { /* 略過 */ } }
+try { const x = JSON.parse(localStorage.getItem(LAST_KEY) || 'null'); if (x && Date.now() - x.ts < 3 * 3600000) table = x.t; } catch (e) { /* 略過 */ }
 render();

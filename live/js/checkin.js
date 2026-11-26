@@ -35,7 +35,7 @@ function render() {
       <div class="ckl">${rows.map(r => {
         const x = ci[r.key] || {};
         const paper = Object.keys(x.paper || {}).filter(n => x.paper[n]);
-        return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}${r.park ? `<span class="ckp" title="停車證張數">停車證 ${r.park} 張</span>` : ''}${paper.map(n => `<span class="ckpaper">${(r.names || []).length > 1 ? `${esc(n)} ` : ''}使用紙本點單</span>`).join('')}
+        return `<div class="ckr ${x.ok ? 'ok' : ''}"><div class="ckn">${esc(r.label)}${r.park ? `<span class="ckp" title="停車證張數">停車證 ${r.park} 張</span>` : ''}${r.rcpt ? `<span class="ckp rc">${esc(r.rcpt)}</span>` : ''}${paper.map(n => `<span class="ckpaper">${(r.names || []).length > 1 ? `${esc(n)} ` : ''}使用紙本點單</span>`).join('')}
             ${x.note ? `<div class="cknote">${esc(x.note)}</div>` : ''}</div>
           <div class="ckact"><button class="ckb" data-ck="${esc(r.key)}" aria-pressed="${x.ok ? 'true' : 'false'}"><span class="box">${x.ok ? icon('check') : ''}</span>已簽到${x.ok && x.t ? `<span class="ckt">${fmtTime(x.t)}</span>` : ''}</button>
             ${sec.team ? `<button class="btn ghost sm" data-luopen="${esc(r.key)}" data-ev="${esc(sec.code)}">${icon('list')}點單權限</button>` : ''}
