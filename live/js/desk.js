@@ -141,7 +141,7 @@ function handovers(s) {
 function handPanel(s) {
   const l = handovers(s);
   if (!l.length) return '';
-  return `<div class="panel handp"><h2 style="color:var(--red)">${icon('whistle')}裁判更換確認（${l.length}）</h2>
+  return `<div class="panel handp"><h2 style="color:var(--red)">裁判更換確認（${l.length}）</h2>
     <p class="small muted" style="margin:0 0 6px">請確認接手的是大會派去的裁判。不是的話請馬上到該桌確認，並在「裁判資料設定」更換裁判密碼。</p>
     ${l.map(x => `<div class="handrow"><span>第 ${esc(x.t)} 桌　${esc(x.m.ev)} ${esc(x.m.no)}　${fmtTime(x.ts)} 由 <b>${esc(x.from)}</b> 換成 <b>${esc(x.to)}</b></span><button class="btn sm" data-handok="${esc(x.key)}">${icon('check')}確認</button></div>`).join('')}</div>`;
 }
@@ -1598,7 +1598,7 @@ document.addEventListener('click', async ev => {
     update(st => { st.staff = [...new Set([...(st.staff || []), ...names])]; st.staffOrg = { ...(st.staffOrg || {}) }; names.forEach(n => { st.staffOrg[n] = '香山'; }); });
     toast(`已新增 ${names.length} 位香山裁判`); return;
   }
-  if (d.calldone) { const ts = Number(d.calldone); update(st => { const c = (st.calls || []).find(x => x.ts === ts); if (!c) return; if (c.done) { delete c.done; delete c.doneBy; } else { c.done = Date.now(); c.doneBy = deskName(); } }); return; }
+  if (d.calldone) { const ts = Number(d.calldone); update(st => { const c = (st.calls || []).find(x => x.ts === ts); if (c && !c.done) { c.done = Date.now(); c.doneBy = deskName(); } }); return; }
   if (d.uncall) { const ts = Number(d.uncall); update(st => { st.calls = (st.calls || []).filter(c => c.ts !== ts); }); toast('已收回這則廣播'); return; }
   if (d.recev) { recEv = d.recev; render(); return; }
   if (tab === 'rec' && d.mid && t.tagName !== 'BUTTON') { openModal('score', d.mid); return; }

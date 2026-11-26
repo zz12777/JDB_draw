@@ -461,14 +461,12 @@ table.grp td.live { background: #e3f3e7; color: #1f6b3a; box-shadow: inset 0 0 0
 .bci.new { background: var(--yellow-soft); margin: 0 -12px; padding: 10px 12px; border-radius: 8px; border-bottom: 0; }
 .bch { display: flex; align-items: center; gap: 8px; }
 .bct { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; color: #fff; background: var(--blue); border-radius: 999px; padding: 1px 8px; line-height: 1.5; }
-.bci.done .bct { background: var(--muted); }
+.bci.todo { background: var(--yellow-soft); margin: 0 -12px 6px; padding: 10px 12px; border-radius: 8px; border-bottom: 0; opacity: 1; }
+.bci.done { opacity: 1; }
+.bcok { color: var(--green); margin-left: auto; white-space: nowrap; }
 .bcv.bcact { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.bcv.bcact .bcdone { margin-left: auto; }
+.bcv.bcact > .btn { margin-left: auto; }
 .bch .btn { white-space: nowrap; }
-.bcdone { background: #fff; border: 1px solid var(--yellow); color: var(--yellow-ink); white-space: nowrap; }
-.bcdone.on { background: var(--green); border-color: var(--green); color: #fff; }
-.bci.new.done { background: #e8f3ec; }
-.bci.done:not(.new) { background: #f3f8f5; margin: 0 -12px; padding: 10px 12px; border-radius: 8px; }
 .bcm { font-weight: 700; }
 .bctb { margin-left: auto; white-space: nowrap; color: var(--blue); line-height: 1; }
 .bctb b { font-size: 22px; }

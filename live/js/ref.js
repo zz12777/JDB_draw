@@ -72,6 +72,14 @@ function viewMatch() {
     ? `<div class="alertbox">${fmtTime(sw.ts)} 已請求其他裁判支援替換（${esc(sw.why)}）${sw.sent ? `<br><b>大會台 ${fmtTime(sw.sent)} 已派出替換裁判</b>，請在原地等候交接。` : '<br>等待大會台派出替換裁判。'}</div><button class="btn plain" data-swapcancel>取消請求</button>`
     : swapAsk ? `<p class="small muted">選擇原因，大會台會派其他裁判來替換。</p><div class="swapbtns">${['要去廁所', '輪到我比賽', '有急事'].map(w => `<button class="btn ghost" data-swap="${w}">${w}</button>`).join('')}</div><button class="btn plain" data-swapno style="margin-top:8px">取消</button>`
     : `<button class="btn ghost" data-swapask>請求支援</button>`}</div>`;
+  const other = otherRef(m);
+  if (other) {
+    const was = (m.rec.reflog || []).some(e => Number(e.t) === table && e.n === name);
+    return `${head}<div class="panel"><h2>${was ? `本桌已由 ${esc(other)} 接手` : `本桌目前由 ${esc(other)} 記錄`}</h2>
+      <p>${was ? '你已經不能修改這一桌的比分。如果是誤按，請找大會台確認。' : '只是來看一下的話，請按「返回球桌列表」，不會影響原本的紀錄。'}</p>
+      <p class="small muted">${was ? `大會請你接回時才按「我要接回」，按下後 ${esc(other)} 就不能再修改比分` : '你是大會派來替換的裁判，才按「我是接手裁判」。按下後原裁判就不能再修改比分'}，大會台也會收到裁判更換通知。</p>
+      <div class="row"><button class="btn ghost" data-back>返回球桌列表</button><span class="spacer"></span><button class="btn" data-takeover>${was ? '我要接回' : '我是接手裁判'}</button></div></div>`;
+  }
   if (m.team && point == null) {
     const def = x.point;
     return `${head}<div class="panel"><h2>請選擇要記錄的點</h2>
@@ -127,13 +135,9 @@ document.addEventListener('click', ev => {
   }
   else if ('rename' in d) { name = ''; render(); }
   else if (d.table) { table = Number(d.table); point = null; saveLast(); const x = D.tables.get(table); if (x && x.m.team && x.point != null) point = x.point;
-    swapAsk = false;
-    if (x && (x.m.rec.refs || {})[table] !== name) updateMatch(x.m.id, r => {
-      r.refs = r.refs || {}; r.refs[table] = name;
-      // 裁判交接：記下何時換成誰；新裁判接手後，原本的替換請求就結束
-      r.reflog = (r.reflog || []).concat({ t: table, n: name, ts: Date.now() }).slice(-40);
-      if (r.swap && r.swap[table] && r.swap[table].by !== name) { delete r.swap[table]; if (!Object.keys(r.swap).length) delete r.swap; }
-    }); else render(); }
+    // 只是點進來看不會登記；第一次記錄（輸入比分、回報、請求支援、結束）或按「我是接手裁判」才登記為本桌裁判
+    swapAsk = false; render(); }
+  else if ('takeover' in d) { const x = D.tables.get(table); if (x) updateMatch(x.m.id, r => claim(r)); toast('已接手本桌，大會台會收到裁判更換通知'); }
   else if ('swapask' in d) { swapAsk = true; render(); }
   else if ('swapno' in d) { swapAsk = false; render(); }
   else if (d.swap || 'swapcancel' in d) {
@@ -141,7 +145,7 @@ document.addEventListener('click', ev => {
     const why = d.swap;
     updateMatch(x.m.id, r => {
       r.swap = r.swap || {};
-      if (why) r.swap[table] = { by: name, why, ts: Date.now() };
+      if (why) { claim(r); r.swap[table] = { by: name, why, ts: Date.now() }; }
       else { delete r.swap[table]; }
       if (!Object.keys(r.swap).length) delete r.swap;
     });
@@ -154,6 +158,7 @@ document.addEventListener('click', ev => {
     const x = D.tables.get(table);
     // 比賽已分出勝負：記下完賽，這場離開球桌、晉級者自動帶到下一場
     const over = x && (x.m.team ? x.m.result.done : !!x.m.result.winner);
+    if (x && !otherRef(x.m)) updateMatch(x.m.id, r => claim(r));
     if (over) updateMatch(x.m.id, r => { r.fin = Date.now(); delete r.absent; (r.pts || []).forEach(p => { if (p) delete p.absent; }); });
     if (!(x && x.m.team) || over) { table = null; saveLast(); }
     point = null; render(); toast(over ? '比賽結束，紀錄已儲存' : '紀錄已儲存'); window.scrollTo(0, 0);
@@ -163,7 +168,9 @@ document.addEventListener('click', ev => {
   else if (d.absent) {
     const x = D.tables.get(table); if (!x) return;
     const [kind, key] = d.absent.split('|');
+    if (otherRef(x.m)) { render(); return; }
     updateMatch(x.m.id, r => {
+      claim(r);
       let hold = r;
       if (key !== 'm') { r.pts = r.pts || []; r.pts[key] = r.pts[key] || {}; hold = r.pts[key]; }
       if (kind === 'none') delete hold.absent;
@@ -178,7 +185,10 @@ document.addEventListener('input', ev => {
   const [gi, side] = t.dataset.g.split('|');
   const v = t.value.replace(/\D/g, ''); if (v !== t.value) t.value = v;
   const m = x.m, pi = point;
+  // 本桌已由別人接手：不能再改，畫面換成接手說明
+  if (otherRef(m)) { t.blur(); render(); toast(`本桌已由 ${otherRef(m)} 記錄`); return; }
   updateMatch(m.id, r => {
+    claim(r);
     let games;
     let o;
     if (m.team) { r.pts = r.pts || []; o = r.pts[pi] = r.pts[pi] || {}; games = o.g = o.g || []; o.ref = name; if (!o.table) o.table = table; }
@@ -196,7 +206,8 @@ onAuth(a => { if (a.error) toast(a.error); });
 subscribe((s, local) => {
   D = derive(s);
   const a = document.activeElement;
-  if (a && a.dataset && a.dataset.g) refresh(); else if (!(a && (a.id === 'rn' || a.id === 'rp'))) render();
+  const x = table != null ? D.tables.get(table) : null;
+  if (a && a.dataset && a.dataset.g && !(x && otherRef(x.m))) refresh(); else if (!(a && (a.id === 'rn' || a.id === 'rp'))) render();
 });
 // 手機的「上一頁」：留在裁判紀錄區，改成回到上一層（選點 → 球桌 → 球桌列表），避免直接跳出瀏覽器
 history.replaceState({ ref: 0 }, '');
@@ -210,6 +221,15 @@ window.addEventListener('popstate', () => {
 });
 // 記住正在記錄的球桌：頁面被關掉後重新點連結，會直接回到這一桌（3 小時內）
 const LAST_KEY = 'jdb-ref-last';
+/** 登記自己是這一桌的裁判；換人時記下交接（大會台會收到裁判更換確認），原本的替換請求就結束 */
+function claim(r) {
+  if ((r.refs || {})[table] === name) return;
+  r.refs = r.refs || {}; r.refs[table] = name;
+  r.reflog = (r.reflog || []).concat({ t: table, n: name, ts: Date.now() }).slice(-40);
+  if (r.swap && r.swap[table] && r.swap[table].by !== name) { delete r.swap[table]; if (!Object.keys(r.swap).length) delete r.swap; }
+}
+/** 這一桌目前由別人記錄（自己不是本桌裁判） */
+const otherRef = m => { const h = (m.rec.refs || {})[table]; return h && h !== name ? h : ''; };
 function saveLast() { try { if (table != null) localStorage.setItem(LAST_KEY, JSON.stringify({ t: table, ts: Date.now() })); else localStorage.removeItem(LAST_KEY); } catch (e) { /* 略過 */ } }
 try { const x = JSON.parse(localStorage.getItem(LAST_KEY) || 'null'); if (x && Date.now() - x.ts < 3 * 3600000) table = x.t; } catch (e) { /* 略過 */ }
 render();

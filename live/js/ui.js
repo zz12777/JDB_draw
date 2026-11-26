@@ -197,12 +197,11 @@ export function callList(calls, D, opt = {}) {
   return list.map(({ c, m }, i) => {
     const tb = (c.tables && c.tables.length ? c.tables : m ? m.tables : []) || [];
     // 第一行：時間、項目、場次、桌次；第二行：對戰雙方（手機與電腦同一種排法）
-    // 大會台：廣播講完按「已廣播」，卡片變色並記下廣播時間
-    const done = opt.undo && c.done;
-    const doneBtn = !opt.undo ? '' : done
-      ? `<button class="btn sm bcdone on" data-calldone="${c.ts}" title="${esc(c.doneBy || '')} 廣播，再按一次取消">${icon('check')}已廣播 ${fmtTime(c.done)}</button>`
-      : `<button class="btn sm bcdone" data-calldone="${c.ts}" title="廣播講完按這裡">${icon('check')}已廣播</button>`;
-    return `<div class="bci ${i ? '' : 'new'} ${done ? 'done' : ''}"><div class="bch"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span><span class="bcm">${esc(m.no)}</span>` : ''}
+    // 大會台：廣播講完按「已廣播」，按鈕消失、卡片變白並顯示廣播時間；還沒廣播的卡片都是黃色
+    const desk = !!opt.undo, done = desk && c.done;
+    const doneBtn = !desk ? '' : done ? `<div class="small bcok">${fmtTime(c.done)} 已廣播</div>`
+      : `<button class="btn ghost sm" data-calldone="${c.ts}">${icon('speaker')}已廣播</button>`;
+    return `<div class="bci ${desk ? (done ? 'done' : 'todo') : i ? '' : 'new'}"><div class="bch"><span class="bct">${fmtTime(c.ts)}</span>${m ? `<span class="evtag ev-${esc(m.ev)}">${esc(m.ev)}</span><span class="bcm">${esc(m.no)}</span>` : ''}
       <span class="bctb">${tb.length ? `第 <b>${tb.join('、')}</b> 桌` : ''}</span>${opt.undo ? `<button class="btn ghost sm" data-uncall="${c.ts}" title="收回這則廣播">收回</button>` : ''}</div>
       <div class="bcv${doneBtn ? ' bcact' : ''}"><span>${m ? `<span class="bcs">${esc(sideText(m.A, m.team))}</span><span class="vs">vs</span><span class="bcs">${esc(sideText(m.B, m.team))}</span>` : esc(c.text)}</span>${doneBtn}</div></div>`;
   }).join('');
