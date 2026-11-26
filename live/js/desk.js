@@ -407,34 +407,44 @@ function peopleOf(m) {
 /** 這場的隊伍或選手，現在在哪些別的球桌上比賽；回傳一行一則的簡短提醒 */
 function busyOf(m) {
   const mine = new Map(peopleOf(m).map(x => [x.key, x]));
+  const mineN = new Map(peopleOf(m).filter(x => x.p).map(x => [nm(x.p), x]));
   const out = [];
   const at = o => `第 ${o.tables.join('、')} 桌`;
   D.byId.forEach(o => {
     if (o.id === m.id || o.status !== 'playing') return;
-    const hits = peopleOf(o).map(x => ({ x, me: mine.get(x.key) })).filter(h => h.me);
+    // 社會組的隊伍不一定用學校名：跟社會組比對時改用姓名比對（同名可能不是同一人，提醒裡會註明）
+    const cross = (m.ev === '社團') !== (o.ev === '社團');
+    const hits = peopleOf(o).map(x => { const me = mine.get(x.key) || (cross && x.p ? mineN.get(nm(x.p)) : null); return { x, me, nameOnly: !!me && !mine.get(x.key) }; }).filter(h => h.me);
     if (!hits.length) return;
+    const same = hits.some(h => h.nameOnly) ? '（同名，請確認是否同一人）' : '';
     const teamHit = hits.find(h => h.x.team);
     if (teamHit) { out.push({ o, text: `${teamHit.me.side} ${o.ev}正在${at(o)}比賽` }); return; }
     if (m.team) {
       // 這隊的成員在別場比賽：同一隊成員合併成一行
       const bySide = new Map();
       hits.forEach(h => { if (!bySide.has(h.me.side)) bySide.set(h.me.side, new Set()); bySide.get(h.me.side).add(h.me.p); });
-      bySide.forEach((ps, side) => out.push({ o, roster: hits.some(h => h.me.roster), text: `${side} ${m.ev}成員 ${[...ps].join('、')} 正在${at(o)}比賽（${o.ev}）` }));
+      bySide.forEach((ps, side) => out.push({ o, roster: hits.some(h => h.me.roster), text: `${side} ${m.ev}成員 ${[...ps].join('、')} 正在${at(o)}比賽（${o.ev}）${same}` }));
     } else if (o.team) {
       const sides = new Map();
       hits.forEach(h => { if (!sides.has(h.x.side)) sides.set(h.x.side, new Set()); sides.get(h.x.side).add(h.me.p); });
-      sides.forEach((ps, side) => out.push({ o, roster: hits.some(h => h.x.roster), text: `${side} ${o.ev}正在${at(o)}比賽（${[...ps].join('、')} 在該隊${hits.some(h => h.x.roster) ? '名單' : '點單'}）` }));
+      sides.forEach((ps, side) => out.push({ o, roster: hits.some(h => h.x.roster), text: `${side} ${o.ev}正在${at(o)}比賽（${[...ps].join('、')} 在該隊${hits.some(h => h.x.roster) ? '名單' : '點單'}）${same}` }));
     } else {
       out.push({ o, text: `${[...new Set(hits.map(h => h.me.p))].join('、')} 正在${at(o)}比賽（${o.ev}）` });
     }
   });
-  // 個人賽的選手、團體賽第一點的選手，現在正在別桌擔任裁判
-  const first = m.team ? ['a', 'b'].flatMap(k => String(lineName((m.rec.lineup || {})[k], 0) || '').split(/[\/／]/)) : [m.A, m.B].flatMap(x => String((x && x.name) || '').split(/[\/／]/));
-  const want = new Set(first.map(nm).filter(Boolean));
+  // 這場會上場的人正在別桌擔任裁判：個人賽的選手；團體賽已排點看所有點的選手，還沒排點看整隊名單
+  const want = new Map();
+  if (m.team) {
+    const se = (getState().events || []).find(x => x.name === m.ev);
+    ['a', 'b'].forEach(k => { const S = k === 'a' ? m.A : m.B; if (!S || !S.name) return;
+      const lu = (((m.rec.lineup || {})[k]) || []).flat().filter(Boolean);
+      const list = lu.length ? lu : (((se && se.rosters) || {})[S.name] || []).flat().filter(Boolean);
+      list.forEach(p => want.set(nm(p), `${S.name} ${lu.length ? '點單' : '名單'}`)); });
+  } else [m.A, m.B].flatMap(x => String((x && x.name) || '').split(/[\/／]/)).forEach(p => { if (nm(p)) want.set(nm(p), ''); });
   D.tables.forEach((x, t) => {
     if (x.m.id === m.id || x.m.status !== 'playing') return;
     const r = (x.m.rec.refs || {})[t];
-    if (r && want.has(nm(r))) out.push({ ref: true, o: x.m, text: `${r} 正在第 ${t} 桌擔任裁判` });
+    if (r && want.has(nm(r))) out.push({ ref: true, o: x.m, text: `${r} 正在第 ${t} 桌擔任裁判${want.get(nm(r)) ? `（在${want.get(nm(r))}）` : ''}` });
   });
   return out;
 }
