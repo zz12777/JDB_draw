@@ -108,7 +108,7 @@ function drawDlg() {
       <div class="row"><input type="email" id="downer" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn sm" data-downer>取代聯絡人</button></div></div>
     <div class="dform"><label class="small" for="deditor">加入共同編輯（可以填點單，不能新增其他帳號）</label>
       <div class="row"><input type="email" id="deditor" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn ghost sm" data-deditor>${icon('plus')}加入</button></div></div>
-    ${many ? `<label class="dall"><input type="checkbox" id="dall" ${dlg.all ? 'checked' : ''}>套用到同單位全部 ${dlg.names.length} 隊（勾選時會把這隊目前的信箱也加到其他隊）</label>` : ''}
+    ${many ? `<label class="dall"><input type="checkbox" id="dall" ${dlg.all ? 'checked' : ''}>套用到同單位全部 ${dlg.names.length} 隊</label>` : ''}
     <div class="dpaper"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dpaper" ${paper ? 'checked' : ''}><b>使用紙本點單</b></label></div>
   </div></div>`;
 }
