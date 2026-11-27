@@ -9,12 +9,12 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 let follows = load(KEY, {}); // { key: 開始追蹤的時間 }
 let seen = load(SEEN, []);   // 已經跳過通知的廣播 ts
 
-/** 一邊的追蹤對象：團體賽是隊伍；個人賽是每一位選手（雙打拆成兩人） */
+/** 一邊的追蹤對象：團體賽是隊伍，單打是選手，雙打是整組 */
 export function sideTargets(m, x) {
   if (!x || !x.name) return [];
   if (m.team) return [{ key: `t|${m.ev}|${x.name}`, label: `${m.ev} ${x.name}` }];
-  const ns = String(x.name).split('/'), ss = String(x.school || '').split('/');
-  return ns.map((n, i) => { const sc = ss[i] || ss[0] || ''; return { key: `p|${sc}|${n.trim()}`, label: `${sc} ${n.trim()}`.trim() }; });
+  const sc = String(x.school || '');
+  return [{ key: `p|${sc}|${x.name}`, label: `${sc} ${x.name}`.trim() }];
 }
 const matchKeys = m => [m.A, m.B].flatMap(x => sideTargets(m, x).map(t => t.key));
 export const isFollowed = k => !!follows[k];

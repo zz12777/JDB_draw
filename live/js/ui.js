@@ -242,3 +242,15 @@ export function refLogHtml(rec, fmt) {
   log.forEach(x => { if (!by.has(x.t)) by.set(x.t, []); by.get(x.t).push(x); });
   return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([t, l]) => `<div class="reflog">第 ${esc(t)} 桌裁判：${l.map(x => `<span>${fmt(x.ts)} ${esc(x.n)}</span>`).join(' → ')}</div>`).join('');
 }
+
+/**
+ * 資料更新時的重畫：手指或滑鼠按下到放開之間先不重畫，放開後再補畫。
+ * 不然按鈕在按下時被換掉，這一下點擊會失效（觸控板按壓時間較長，特別明顯）。
+ */
+let pressing = false;
+const owed = new Map(); // 同一個重畫函式只補畫一次
+document.addEventListener('pointerdown', () => { pressing = true; }, true);
+const release = () => { if (!pressing) return; pressing = false; setTimeout(() => { if (pressing) return; const l = [...owed]; owed.clear(); l.forEach(([fn, a]) => fn(...a)); }, 60); };
+document.addEventListener('pointerup', release, true);
+document.addEventListener('pointercancel', release, true);
+export const whenFree = fn => (...a) => { if (pressing) owed.set(fn, a); else fn(...a); };

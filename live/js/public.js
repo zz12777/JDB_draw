@@ -3,7 +3,7 @@ import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner,
 import { slotOf } from './timetable.js';
 import { toCn } from '../../js/util.js';
 import { getState, subscribe, auth, onAuth, loadHistory } from './store.js';
-import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables, callList } from './ui.js';
+import { esc, $, chip, board, header, names, lineName, icon, STATUS_TEXT, groupTables, callList, whenFree } from './ui.js';
 import { bracketSvg } from './tree.js';
 import { timetableHtml } from './ttview.js';
 
@@ -161,7 +161,7 @@ function viewSearch(s, key) {
   const when = m => { const x = slotOf(s.sched, m); return x ? `${esc(dayLabel(s, x.d, x.day))} ${x.s}-${x.e}` : ''; };
   // 搜尋到的隊伍與選手，可以按追蹤
   const tg = new Map();
-  list.forEach(m => [m.A, m.B].forEach(x => { if (x && ((x.name || '').includes(key) || (x.school || '').includes(key))) sideTargets(m, x).forEach(t => { if (t.label.includes(key) || (x.school || '').includes(key)) tg.set(t.key, t); }); }));
+  list.forEach(m => [m.A, m.B].forEach(x => { if (x && ((x.name || '').includes(key) || (x.school || '').includes(key))) sideTargets(m, x).forEach(t => tg.set(t.key, t)); }));
   const fol = tg.size ? `<div class="fwrap" style="margin-bottom:12px"><span class="small muted">追蹤</span>${[...tg.values()].map(followBtn).join('')}</div>` : '';
   return `${fol}<div class="panel"><h2>「${esc(key)}」的場次（${list.length}）</h2>
     ${list.length ? `<table class="list"><tbody>${list.map(m => `<tr class="click" data-mid="${esc(m.id)}"><td class="nowrap"><b>${m.ev}</b>${esc(m.no)}</td><td>${names(m)}</td>
@@ -219,7 +219,8 @@ document.addEventListener('compositionstart', ev => { if (ev.target.id === 'q') 
 document.addEventListener('compositionend', ev => { if (ev.target.id === 'q') { composing = false; q = ev.target.value; render(); } });
 document.addEventListener('input', ev => { if (ev.target.id === 'q' && !composing && !ev.isComposing) { q = ev.target.value; render(); } });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && detail) { detail = null; drawDetail(); } });
-subscribe(render);
-onAuth(render);
-setInterval(render, 30000);
+const bg = whenFree(() => render());
+subscribe(bg);
+onAuth(bg);
+setInterval(bg, 30000);
 render();

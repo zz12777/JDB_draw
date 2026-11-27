@@ -2,7 +2,7 @@
 import { derive, isTeam, matchTitle, POINTS, callText, recallText, absences, fmtTime, parseTables, sideText, gameInvalid, EVENT_ORDER, EVENT_FULL, emptyState, podium, ANN_ORDER, ANN_NAME, dayLabel, callQueue, queueRuns } from './model.js';
 import { getState, subscribe, update, updateMatch, replaceState, auth, onAuth, LOCAL, saveHistory, loadHistory, writePaths, teamKey, mailKey, parseMails, ownerUpdates, setRefCode, matchUpdatedAt } from './store.js';
 import { histKey, entryFromState, mergeHistory, HISTORY } from './history.js';
-import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml } from './ui.js';
+import { esc, $, $$, icon, toast, chip, deskBoard, header, names, shortEv, lineName, groupTables, callList, refLogHtml, whenFree } from './ui.js';
 import { parseTimetable, slotOf } from './timetable.js';
 import { demoState } from './demo.js';
 import { timetableHtml, callOrder } from './ttview.js';
@@ -1803,18 +1803,19 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' && ev.target.dataset && ev.target.dataset.tb) ev.target.blur();
 });
 
+const bgRender = whenFree(() => render());
 subscribe((s, local) => {
   const active = document.activeElement;
   const typing = active && active.tagName === 'INPUT' && active.type === 'text' && !active.closest('#modal');
   D = derive(withOnline(s));
-  if (!typing) render();
+  if (!typing) bgRender();
   if (modal) {
     const inModal = active && active.closest && active.closest('#modal');
     if (local || inModal) refreshScore(); else drawModal();
   }
 });
-onAuth(a => { if (a.error && (a.isAdmin || !a.cloud)) toast(a.error); render(); });
-setInterval(() => { const a = document.activeElement; if (!modal && !(a && /INPUT|SELECT/.test(a.tagName))) render(); }, 30000);
+onAuth(a => { if (a.error && (a.isAdmin || !a.cloud)) toast(a.error); bgRender(); });
+setInterval(() => { const a = document.activeElement; if (!modal && !(a && /INPUT|SELECT/.test(a.tagName))) bgRender(); }, 30000);
 render();
 // 可收合區塊的標題列也能用鍵盤展開
 document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('phead')) { ev.preventDefault(); ev.target.click(); } });

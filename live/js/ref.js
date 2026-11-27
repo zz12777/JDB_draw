@@ -1,7 +1,7 @@
 // 裁判頁：輸入姓名、選球桌、記錄每局比分、回報未到
 import { derive, sideText, EVENT_FULL, POINTS, gameInvalid, gameWinner, fmtTime } from './model.js';
 import { getState, subscribe, updateMatch, onAuth, refUnlock, LOCAL } from './store.js';
-import { esc, $, $$, icon, toast, tableMap, header, lineName } from './ui.js';
+import { esc, $, $$, icon, toast, tableMap, header, lineName, whenFree } from './ui.js';
 
 const NAME_KEY = 'jdb-ref-name';
 let name = localStorage.getItem(NAME_KEY) || '';
@@ -203,12 +203,12 @@ document.addEventListener('input', ev => {
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'rn') $('[data-setname]').click(); if (ev.key === 'Enter' && ev.target.id === 'rp') $('#rn').focus(); });
 
 onAuth(a => { if (a.error) toast(a.error); });
-subscribe((s, local) => {
+subscribe(whenFree((s, local) => {
   D = derive(s);
   const a = document.activeElement;
   const x = table != null ? D.tables.get(table) : null;
   if (a && a.dataset && a.dataset.g && !(x && otherRef(x.m))) refresh(); else if (!(a && (a.id === 'rn' || a.id === 'rp'))) render();
-});
+}));
 // 手機的「上一頁」：留在裁判紀錄區，改成回到上一層（選點 → 球桌 → 球桌列表），避免直接跳出瀏覽器
 history.replaceState({ ref: 0 }, '');
 history.pushState({ ref: 1 }, '');

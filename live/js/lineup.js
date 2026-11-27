@@ -3,7 +3,7 @@
 // 聯絡人可以再加最多 3 個信箱一起填。對手看不到；大會台派桌時才帶入正式排點。
 import { derive as derive0, EVENT_FULL, POINTS, fmtTime, sideText } from './model.js';
 import { getState, subscribe, onAuth, auth, teamKey, mailKey } from './store.js';
-import { esc, $, $$, icon, toast, header, lineName } from './ui.js';
+import { esc, $, $$, icon, toast, header, lineName, whenFree } from './ui.js';
 import { me, onMe, signIn, signOut, watch, write, myKey } from './teamcloud.js';
 
 const MAX_EDITORS = 3;
@@ -203,7 +203,7 @@ onMe(() => {
 });
 const editing = () => { const a = document.activeElement; return !!(a && a.matches && a.matches('[data-lu], #ed-new')); };
 let lastSig = '';
-subscribe(() => {
+subscribe(whenFree(() => {
   // 籤表更新（例如晉級決賽）時，重新讀這隊的場次
   const D = derive(getState());
   const sig = [...D.byId.values()].filter(m => m.team).map(m => `${m.id}:${m.A && m.A.name}:${m.B && m.B.name}`).join(',');
@@ -212,7 +212,7 @@ subscribe(() => {
   const a = document.activeElement;
   if (a && a.matches && a.matches('[data-lu], #ed-new')) return;
   render();
-});
+}));
 onAuth(() => render());
 
 document.addEventListener('click', async ev => {

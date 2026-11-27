@@ -1,7 +1,7 @@
 // 簽到處：管理員登入後使用。各隊勾「已簽到」，有團體賽的隊伍同時領點單；備註寫給大會看。
 import { fmtTime, derive } from './model.js';
 import { getState, subscribe, onAuth, auth, setCheckin, writePaths, teamKey, mailKey, parseMails, ownerUpdates, editorUpdates } from './store.js';
-import { esc, $, icon, header, toast } from './ui.js';
+import { esc, $, icon, header, toast, whenFree } from './ui.js';
 import { checkinSections, signinWord, signinTitle } from './units.js';
 import { lineupSheetsHtml } from './luprint.js';
 
@@ -146,8 +146,9 @@ function copyAcl() {
 // 有人在打備註時先不重畫，離開輸入框後再更新
 const typing = () => { const a = document.activeElement; return a && a.matches && a.matches('#q, #dlg input[type=email], #dlg textarea'); };
 function refresh() { if (typing()) { pending = true; return; } pending = false; render(); if (dlg) drawDlg(); }
-subscribe(refresh);
-onAuth(refresh);
+const bg = whenFree(() => refresh());
+subscribe(bg);
+onAuth(bg);
 
 document.addEventListener('click', ev => {
   if (ev.target.classList && ev.target.classList.contains('modal-bg')) { dlg = null; drawDlg(); return; }
