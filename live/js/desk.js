@@ -676,6 +676,13 @@ function drawModal() {
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-aclwipe-ok>確認清除</button></div></div></div>`;
     return;
   }
+  if (modal.kind === 'reset') {
+    host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(440px,100%)"><h2>清除比賽紀錄</h2>
+      <p>桌次、開打紀錄、比分、裁判紀錄、點單（線上與大會台代填）、廣播、場控提醒處理紀錄、簽到、決賽抽籤與成績公告都會清除，無法復原。建議先下載備份檔。</p>
+      <p class="small muted">保留：籤表、參賽名單、時間表、點單權限、裁判資料設定、停車證與收據、自訂的場控提醒。</p>
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-reset-ok>確認清除</button></div></div></div>`;
+    return;
+  }
   if (modal.kind === 'wipe') {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>清除全部資料</h2>
       <p>籤表、參賽名單、時間表、排點、成績、廣播、場控提醒、簽到紀錄、停車證與收據、線上點單權限與線上點單都會刪除，且無法復原。建議先下載備份檔。</p>
@@ -1308,10 +1315,12 @@ function viewSetup(s) {
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
       ${LOCAL || !s.events.length ? '<button class="btn ghost" data-demo>載入示範資料</button>' : ''}
+      <button class="btn ghost danger" data-reset>清除比賽紀錄</button>
       <button class="btn ghost danger" data-wipe>清除全部資料</button></div>
       <ul class="small muted" style="margin:10px 0 0;padding-left:20px;line-height:1.8">
         <li>下載備份檔：存下目前全部資料，每天賽程結束各下載一份</li>
         <li>還原備份檔：用備份檔覆蓋目前全部資料</li>
+        <li>清除比賽紀錄：彩排後使用，清掉桌次、比分、點單、廣播、簽到、決賽抽籤與成績；籤表、名單、時間表、點單權限、裁判資料設定、停車證與收據都保留</li>
         <li>清除全部資料：可勾選保留裁判資料設定、停車證與收據；歷屆名次、管理員、首頁主視覺不會刪除</li></ul></div>`;
 }
 
@@ -1396,7 +1405,7 @@ function parkPanel(s) {
   const head = `<div class="row"><h2 style="margin:0">停車證與收據</h2><span class="spacer"></span><span class="small muted">停車證 ${total} 張${need ? `，收據 ${need} 份` : ''}</span><button class="btn ghost sm" data-parkopen aria-expanded="${parkOpen}">${icon('list')}${parkOpen ? '收合' : '展開'}</button></div>`;
   if (!parkOpen) return `<div class="panel">${head}</div>`;
   return `<div class="panel">${head}
-    <p class="small muted">匯入繳費表單回應，帶入各單位的停車證張數（有「收據」欄位時一併帶入）。帶入後請核對標題旁的總張數；賽前透過粉專追加停車證的單位，直接在表格增減張數。要不要收據、收據抬頭等要求也可以直接修改。簽到處會依校名自動帶入停車證張數。</p>
+    <p class="small muted">匯入繳費表單回應，帶入各單位的停車證張數。賽前透過粉專追加停車證的單位、要收據的單位，可直接在表格增減與填寫。會依校名自動帶入簽到處。</p>
     <div class="row" style="margin-bottom:8px"><label class="btn ghost sm">${icon('upload')}匯入繳費表單<input type="file" accept=".xlsx,.csv" hidden data-payimp></label></div>
     <table class="list"><thead><tr><th>單位</th><th style="width:100px">停車證</th><th style="width:70px">收據</th><th>備註</th><th style="width:50px"></th></tr></thead><tbody>
     ${units.map(u => { const r = rc[u] || {}; return `<tr><td>${esc(u)}</td><td><input type="number" min="0" style="width:70px" data-parkn="${esc(u)}" value="${Number(park[u]) || 0}"></td>
@@ -1689,6 +1698,18 @@ document.addEventListener('click', async ev => {
     a.href = URL.createObjectURL(new Blob([JSON.stringify(getState())], { type: 'application/json' }));
     a.download = `交大盃當日備份_${fmtTime(Date.now()).replace(':', '')}.json`; a.click();
   } else if ('demo' in d) { if (!getState().events.length || t.dataset.sure) { replaceState(demoState()); tab = 'ctrl'; render(); toast('已載入示範資料'); } else { t.dataset.sure = 1; t.textContent = '再按一次以覆蓋現有資料'; } }
+  else if ('reset' in d) { modal = { kind: 'reset' }; drawModal(); }
+  else if ('resetOk' in d) {
+    // 彩排後回到賽前：只清比賽過程產生的紀錄，設定與匯入的資料都保留
+    const st0 = getState(), n = st0.notices || {};
+    const events = (st0.events || []).map(e => { const x = { ...e }; ['finalPos', 'roll', 'finalPub', 'finalDone'].forEach(k => delete x[k]); return x; });
+    modal = null; drawModal();
+    replaceState({ ...st0, events, m: {}, dlu: {}, calls: [], podium: {}, checkin: {},
+      notices: Object.fromEntries(Object.entries({ add: n.add, edit: n.edit, del: n.del }).filter(([, v]) => v)) });
+    writePaths({ olu: null, nudge: null }).catch(() => {});
+    syncHistory();
+    render(); toast('已清除比賽紀錄');
+  }
   else if ('wipe' in d) { modal = { kind: 'wipe' }; drawModal(); }
   else if ('wipeOk' in d) {
     const keep = $('#wipe-staff') && $('#wipe-staff').checked, keepPark = $('#wipe-park') && $('#wipe-park').checked, st0 = getState();
