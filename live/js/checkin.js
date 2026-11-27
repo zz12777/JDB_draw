@@ -108,7 +108,7 @@ function drawDlg() {
       <div class="row"><input type="email" id="downer" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn sm" data-downer>取代聯絡人</button></div></div>
     <div class="dform"><label class="small" for="deditor">加入共同編輯（可以填點單，不能新增其他帳號）</label>
       <div class="row"><input type="email" id="deditor" placeholder="Google 帳號" style="flex:1;min-width:200px"><button class="btn ghost sm" data-deditor>${icon('plus')}加入</button></div></div>
-    ${many ? `<label class="dall"><input type="checkbox" id="dall" ${dlg.all ? 'checked' : ''}>套用到同單位全部 ${dlg.names.length} 隊</label>` : ''}
+    ${many ? `<label class="dall"><input type="checkbox" id="dall" ${dlg.all ? 'checked' : ''}>套用到同單位全部 ${dlg.names.length} 隊（勾選時會把這隊目前的信箱也加到其他隊）</label>` : ''}
     <div class="dpaper"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="dpaper" ${paper ? 'checked' : ''}><b>使用紙本點單</b></label></div>
   </div></div>`;
 }
@@ -121,6 +121,26 @@ function aclWrite(kind) {
   if (!Object.keys(up).length) { toast('這個信箱已經可以填寫'); return; }
   const typed = inp.value; inp.value = '';
   writePaths(up).then(() => { toast(kind === 'owner' ? '已更新聯絡人' : '已加入共同編輯'); drawDlg(); }).catch(err => { const el = $(kind === 'owner' ? '#downer' : '#deditor'); if (el) el.value = typed; toast(`更新失敗：${err.message || err}`); });
+}
+
+/**
+ * 勾「套用到同單位全部隊伍」時，把目前這隊已經輸入的信箱複製到同單位其他隊：
+ * 其他隊沒有聯絡人就設成同一位聯絡人，已經有別的聯絡人就加成共同編輯；共同編輯照樣加入。
+ */
+function copyAcl() {
+  const acl = getState().teamacl || {}, cur = acl[teamKey(dlg.ev, dlg.team)] || {};
+  const mails = role => Object.entries(cur).filter(([, v]) => v === role).map(([k]) => k.replace(/,/g, '.'));
+  const own = mails('owner'), eds = mails('editor');
+  if (!own.length && !eds.length) return;
+  const up = {};
+  dlg.names.filter(n => n !== dlg.team).forEach(n => {
+    const key = teamKey(dlg.ev, n), o = acl[key] || {};
+    const hasOwner = Object.values(o).includes('owner');
+    if (own.length && !hasOwner) Object.assign(up, ownerUpdates(acl, key, own));
+    Object.assign(up, editorUpdates(acl, key, (own.length && hasOwner ? own : []).concat(eds)));
+  });
+  if (!Object.keys(up).length) return;
+  writePaths(up).then(() => { toast(`已把 ${dlg.team} 的信箱套用到同單位其他隊`); drawDlg(); }).catch(err => toast(`更新失敗：${err.message || err}`));
 }
 
 // 有人在打備註時先不重畫，離開輸入框後再更新
@@ -165,19 +185,22 @@ async function downloadSignin() {
   } catch (err) { toast(`簽到表產生失敗：${err.message || err}`); }
 }
 document.addEventListener('change', ev => {
-  if (ev.target.id === 'dall' && dlg) { dlg.all = ev.target.checked; return; }
+  if (ev.target.id === 'dall' && dlg) { dlg.all = ev.target.checked; if (dlg.all) copyAcl(); return; }
   if (ev.target.id !== 'dpaper' || !dlg) return;
   const x = (getState().checkin || {})[dlg.key] || {}, paper = { ...(x.paper || {}) };
   dlgTeams().forEach(n => { if (ev.target.checked) paper[n] = true; else delete paper[n]; });
   setCheckin(dlg.key, { ...x, paper });
   toast(ev.target.checked ? '已註記使用紙本點單' : '已取消紙本點單');
 });
-document.addEventListener('input', ev => {
-  if (ev.target.id !== 'q') return;
+// 注音、拼音選字中不重畫，選完字（compositionend）再搜尋，不然輸入框被換掉、字會送不出去
+document.addEventListener('compositionend', ev => { if (ev.target.id === 'q') search(ev.target); });
+document.addEventListener('input', ev => { if (ev.target.id === 'q' && !ev.isComposing) search(ev.target); });
+function search(el) {
+  const ev = { target: el };
   q = ev.target.value;
   const pos = ev.target.selectionStart;
   render();
   const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos);
-});
+}
 document.addEventListener('focusout', () => setTimeout(() => { if (pending && !typing()) refresh(); }));
 render();
