@@ -52,8 +52,15 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}${t}${badge(k)}</button>`).join('');
   if (!D.events.length && tab !== 'setup') tab = 'setup';
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events.length ? byPill(D.events)[0].name : null;
+  // 重畫時保留側欄、籤表、裁判列等自己的捲動位置，不然每次資料更新都跳回最上面
+  const keep = [...document.querySelectorAll(SCROLLERS)].map(e => [e.scrollTop, e.scrollLeft]);
+  const was = tab;
   $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'time' ? viewTimeDesk(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
+  if (was === lastTab) document.querySelectorAll(SCROLLERS).forEach((e, i) => { if (keep[i]) { e.scrollTop = keep[i][0]; e.scrollLeft = keep[i][1]; } });
+  lastTab = was;
 }
+const SCROLLERS = '.side, .refstrip, .treebox, .ttw, .recwrap';
+let lastTab = null;
 
 function viewLogin() {
   if (!auth.ready) return `<div class="panel"><p class="muted">${auth.error ? esc(auth.error) : '連線中。'}</p></div>`;
@@ -141,7 +148,7 @@ function handovers(s) {
 function handPanel(s) {
   const l = handovers(s);
   if (!l.length) return '';
-  return `<div class="panel handp"><h2 style="color:var(--red)">裁判更換確認（${l.length}）</h2>
+  return `<div class="panel handp"><h2 style="color:var(--red)">裁判更換確認</h2>
     <p class="small muted" style="margin:0 0 6px">請確認接手的是大會派去的裁判。不是的話請馬上到該桌確認，並在「裁判資料設定」更換裁判密碼。</p>
     ${l.map(x => `<div class="handrow"><span>第 ${esc(x.t)} 桌　${esc(x.m.ev)} ${esc(x.m.no)}　${fmtTime(x.ts)} 由 <b>${esc(x.from)}</b> 換成 <b>${esc(x.to)}</b></span><button class="btn sm" data-handok="${esc(x.key)}">${icon('check')}確認</button></div>`).join('')}</div>`;
 }
@@ -1046,11 +1053,9 @@ function swapList() {
 function swapPanel() {
   const l = swapList();
   if (!l.length) return '';
-  return `<div class="panel"><h2>裁判替換請求</h2>${l.map(({ m, t, sw }) => `<div class="alertbox"><div class="small ameta">${fmtTime(sw.ts)}</div>
-    <div><b>${t} 桌 ${esc(sw.by)}</b> 請求其他裁判支援替換（${esc(sw.why)}）</div>
-    <div class="row" style="margin-top:4px">${sw.sent ? `<span class="small" style="color:var(--green)">${fmtTime(sw.sent)} 已派出替換裁判</span>` : ''}<span class="spacer"></span>
-      ${sw.sent ? '' : `<button class="btn ghost sm" data-swapsent="${esc(m.id)}|${t}">${icon('check')}已派出替換裁判</button>`}
-      <button class="btn ghost sm" data-swapclear="${esc(m.id)}|${t}" title="移除這則請求">${icon('close')}</button></div></div>`).join('')}</div>`;
+  return `<div class="panel handp"><h2 style="color:var(--red)">裁判替換請求</h2>${l.map(({ m, t, sw }) => `<div class="handrow"><span>第 ${t} 桌　${esc(m.ev)} ${esc(m.no)}　${fmtTime(sw.ts)} <b>${esc(sw.by)}</b> 請求支援替換（${esc(sw.why)}）</span>
+      ${sw.sent ? `<span class="small" style="flex:none;color:var(--green)">${fmtTime(sw.sent)} 已派出替換裁判</span>` : `<button class="btn sm" data-swapsent="${esc(m.id)}|${t}">${icon('check')}已派出替換裁判</button>`}
+      <button class="btn ghost sm" data-swapclear="${esc(m.id)}|${t}" title="移除這則請求">${icon('close')}</button></div>`).join('')}</div>`;
 }
 const ORGS = ['交大', '陽明', '香山', '體資', '大會'];
 /** 不列入可擔任裁判：大會人員；陽明不當裁判時也排除陽明 */
@@ -1179,7 +1184,7 @@ function viewRefs(s) {
     const isXs = xs && t >= xs.from && t <= xs.to;
     return `<div class="rcell ${on ? (n ? 'on' : 'none') : 'idle'} ${sw ? 'swap' : ''} ${isXs ? 'xs' : ''}"><b>${t}${isXs ? '<span class="xst">香山</span>' : ''}</b>${on ? (n ? `<span>${staff.includes(n) ? orgTag(s, n) : ''}</span><span class="rn">${esc(n)}</span>` : '<span class="rn">未登記</span>') : '<span class="rn muted">空桌</span>'}${sw ? `<small>請求替換</small>` : ''}</div>`;
   }).join('')}</div></div>`;
-  return wrap(`${handPanel(s)}${strip}${swapPanel()}
+  return wrap(`${handPanel(s)}${swapPanel()}${strip}
     <div class="panel"><h2>可擔任裁判（${free.length}）</h2>
       ${staff.length ? (free.length ? cols(free) : '<p class="small muted">目前沒有空閒的裁判。</p>') : '<p class="muted small">請先按「裁判資料設定」輸入自己人裁判名單，香山裁判也在那裡新增。</p>'}</div>
     ${spare.length ? `<div class="panel"><h2>人手不足時可支援（${spare.length}）</h2><p class="small muted">還沒要打的人和體資。滑鼠移到姓名上（平板點一下姓名）可以看到他的下一場。</p>${cols(spare, true)}</div>` : ''}

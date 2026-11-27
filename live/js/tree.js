@@ -35,10 +35,13 @@ export function bracketSvg(matches, team, opt = {}) {
       const d = `M${k.x} ${k.y}H${x}V${p.y}`;
       const win = m.winner === (i ? 'b' : 'a');
       (win ? thick : svg).push(`<path d="${d}" class="${win ? 'w' : 'l'}"/>`);
-      if (show) svg.push(`<text x="${x - 8}" y="${k.y - 5}" class="sc ${win ? 'b' : ''}" text-anchor="end">${m.score[i]}</text>`);
+      // 比數放在晉級線的右邊，上方的人在線上、下方的人在線下
+      if (show) svg.push(`<text x="${x + 6}" y="${i ? p.y + 15 : p.y - 5}" class="sc ${win ? 'b' : ''}">${m.score[i]}</text>`);
     });
-    svg.push(`<text x="${x + 5}" y="${p.y - 5}" class="no ${m.status === 'playing' ? 'live' : ''}" data-mid="${esc(m.id)}">${esc(m.no)}</text>`);
-    if (!opt.noTables && m.status === 'playing' && m.tables.length) svg.push(`<text x="${x + 5}" y="${p.y + 13}" class="tb">第 ${m.tables.join('、')} 桌</text>`);
+    // 場次與桌次放在兩條籤中間的空位
+    const tb = !opt.noTables && m.status === 'playing' && m.tables.length;
+    svg.push(`<text x="${x - 6}" y="${tb ? p.y - 1 : p.y + 5}" text-anchor="end" class="no ${m.status === 'playing' ? 'live' : ''}" data-mid="${esc(m.id)}">${esc(m.no)}</text>`);
+    if (tb) svg.push(`<text x="${x - 6}" y="${p.y + 13}" text-anchor="end" class="tb">第 ${m.tables.join('、')} 桌</text>`);
   });
   const rp = pos.get(root.num), rx = X(root);
   const champ = root.winner ? sideText(root.winner === 'a' ? root.A : root.B, team) : '';

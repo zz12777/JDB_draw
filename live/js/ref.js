@@ -76,8 +76,6 @@ function viewMatch() {
   if (other) {
     const was = (m.rec.reflog || []).some(e => Number(e.t) === table && e.n === name);
     return `${head}<div class="panel"><h2>${was ? `本桌已由 ${esc(other)} 接手` : `本桌目前由 ${esc(other)} 記錄`}</h2>
-      <p>${was ? '你已經不能修改這一桌的比分。如果是誤按，請找大會台確認。' : '只是來看一下的話，請按「返回球桌列表」，不會影響原本的紀錄。'}</p>
-      <p class="small muted">${was ? `大會請你接回時才按「我要接回」，按下後 ${esc(other)} 就不能再修改比分` : '你是大會派來替換的裁判，才按「我是接手裁判」。按下後原裁判就不能再修改比分'}，大會台也會收到裁判更換通知。</p>
       <div class="row"><button class="btn ghost" data-back>返回球桌列表</button><span class="spacer"></span><button class="btn" data-takeover>${was ? '我要接回' : '我是接手裁判'}</button></div></div>`;
   }
   if (m.team && point == null) {

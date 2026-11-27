@@ -47,11 +47,12 @@ let howOpen = false;
 const howto = () => `<details class="panel flat howto" ${howOpen ? 'open' : ''}><summary>如何追蹤隊伍與選手賽程？</summary>
   <ol><li>搜尋隊伍與選手</li><li>按下追蹤按鈕</li><li>當廣播到你追蹤的隊伍與選手時，會跳出通知與桌次在你的「即時賽程」頁面上</li></ol>
   <p class="small muted">PS 不是手機通知唷，要開著這個頁面才會看到。</p></details>`;
-document.addEventListener('toggle', ev => { if (ev.target.classList && ev.target.classList.contains('howto')) howOpen = ev.target.open; }, true);
+document.addEventListener('toggle', ev => { const c = ev.target.classList; if (!c || !c.contains('howto')) return; if (c.contains('folw')) folOpen = ev.target.open; else howOpen = ev.target.open; }, true);
 /** 已追蹤的清單（賽程分頁上方） */
+let folOpen = false;
 function followed() {
   const l = followList();
-  return l.length ? `<div class="fwrap" style="margin-bottom:12px"><span class="small muted">追蹤中</span>${l.map(k => followBtn({ key: k, label: labelOf(k) })).join('')}</div>` : '';
+  return l.length ? `<details class="panel flat howto folw" ${folOpen ? 'open' : ''}><summary>追蹤中（${l.length}）</summary><div class="fwrap" style="margin-top:8px">${l.map(k => followBtn({ key: k, label: labelOf(k) })).join('')}</div></details>` : '';
 }
 /** 出賽通知：已廣播、追蹤中的隊伍或選手，一次跳一則 */
 function drawNotes() {
@@ -151,22 +152,33 @@ function viewSched() {
     ${pub ? tree + pre : pre + tree}`;
 }
 
-/** 這一場是否和關鍵字有關：學校、隊名、姓名，團體賽開賽後也找排點 */
+/** 搜尋：空白分開的每個詞都要出現（「陽明交大 綠」也找得到「陽明交大綠」）；學校、隊名、姓名，團體賽開賽後也找排點 */
+const terms = key => key.split(/\s+/).filter(Boolean);
+const sideHit = (x, ts) => !!x && ts.every(t => `${x.school || ''}${x.name || ''}`.replace(/\s/g, '').includes(t));
 function hit(m, key) {
-  return [m.A, m.B].some(x => x && ((x.name || '').includes(key) || (x.school || '').includes(key))) ||
-    (m.team && m.rec.lineup && (m.rec.start || shown(m)) && JSON.stringify(m.rec.lineup).includes(key));
+  const ts = terms(key);
+  return [m.A, m.B].some(x => sideHit(x, ts)) ||
+    (m.team && m.rec.lineup && (m.rec.start || shown(m)) && ts.every(t => JSON.stringify(m.rec.lineup).includes(t)));
 }
+let searchEv = null; // 搜尋結果只看某個項目；null 是全部
+/** 一邊的名字：團體賽隊名一行；個人賽校名、姓名分兩行 */
+const sideCell = (m, x) => { if (m.team || !x || !x.name) return `<span class="nw">${esc(sideText(x, m.team))}</span>`; return `<span class="sside"><span class="muted">${esc(x.school || '')}</span><span>${esc(x.name)}</span></span>`; };
 function viewSearch(s, key) {
-  const list = [...D.byId.values()].filter(m => hit(m, key));
-  const when = m => { const x = slotOf(s.sched, m); return x ? `${esc(dayLabel(s, x.d, x.day))} ${x.s}-${x.e}` : ''; };
+  const all = [...D.byId.values()].filter(m => hit(m, key));
+  const evs = byPill(D.events).filter(e => all.some(m => m.ev === e.name)).map(e => e.name);
+  if (searchEv && !evs.includes(searchEv)) searchEv = null;
+  const list = searchEv ? all.filter(m => m.ev === searchEv) : all;
+  const ts = terms(key);
+  const when = m => { const x = slotOf(s.sched, m); return x ? `${esc(dayLabel(s, x.d, x.day))}<br>${x.s}-${x.e}` : ''; };
   // 搜尋到的隊伍與選手，可以按追蹤
   const tg = new Map();
-  list.forEach(m => [m.A, m.B].forEach(x => { if (x && ((x.name || '').includes(key) || (x.school || '').includes(key))) sideTargets(m, x).forEach(t => tg.set(t.key, t)); }));
+  list.forEach(m => [m.A, m.B].forEach(x => { if (sideHit(x, ts)) sideTargets(m, x).forEach(t => tg.set(t.key, t)); }));
+  const pills = evs.length > 1 ? `<div class="pills" style="margin-bottom:10px"><button class="${searchEv ? '' : 'on'}" data-sev="">全部</button>${evs.map(e => `<button class="${e === searchEv ? 'on' : ''}" data-sev="${e}">${e}</button>`).join('')}</div>` : '';
   const fol = tg.size ? `<div class="fwrap" style="margin-bottom:12px"><span class="small muted">追蹤</span>${[...tg.values()].map(followBtn).join('')}</div>` : '';
-  return `${fol}<div class="panel"><h2>「${esc(key)}」的場次（${list.length}）</h2>
-    ${list.length ? `<table class="list"><tbody>${list.map(m => `<tr class="click" data-mid="${esc(m.id)}"><td class="nowrap"><b>${m.ev}</b>${esc(m.no)}</td><td>${names(m)}</td>
-      <td class="nowrap"><b>${shown(m) ? `${m.score[0]}:${m.score[1]}` : ''}</b></td>
-      <td class="small nowrap" style="text-align:right">${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : when(m)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">查無相關場次。</p>'}</div>`;
+  return `${pills}${fol}<div class="panel"><h2>「${esc(key)}」的場次（${list.length}）</h2>
+    ${list.length ? `<table class="list srch"><tbody>${list.map(m => `<tr class="click" data-mid="${esc(m.id)}"><td class="sev"><b>${m.ev}</b><span class="nw">${esc(m.no)}</span></td>
+      <td><div class="snm ${m.team ? 'st' : 'si'}">${sideCell(m, m.A)}<span class="vs">vs</span>${sideCell(m, m.B)}</div></td>
+      <td class="swh">${shown(m) ? `<b>${m.score[0]}:${m.score[1]}</b><br>` : ''}${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : `<span class="small">${when(m)}</span>`}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">查無相關場次。</p>'}</div>`;
 }
 
 /** 單場明細：個人賽各局比分；團體賽各點選手與比分（開賽後才顯示排點） */
@@ -202,6 +214,7 @@ document.addEventListener('click', ev => {
   const b = ev.target.closest('button');
   if (b) {
     if (b.dataset.follow) { toggleFollow(b.dataset.follow); render(); }
+    else if (b.dataset.sev !== undefined) { searchEv = b.dataset.sev || null; render(); }
     else if (b.dataset.fseen) { markSeen(Number(b.dataset.fseen)); drawNotes(); }
     else if (b.dataset.tab) { tab = b.dataset.tab; q = ''; render(); }
     else if (b.dataset.callsmore !== undefined) { callsOpen = !callsOpen; render(); }

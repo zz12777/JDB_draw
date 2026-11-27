@@ -250,7 +250,11 @@ export function refLogHtml(rec, fmt) {
 let pressing = false;
 const owed = new Map(); // 同一個重畫函式只補畫一次
 document.addEventListener('pointerdown', () => { pressing = true; }, true);
-const release = () => { if (!pressing) return; pressing = false; setTimeout(() => { if (pressing) return; const l = [...owed]; owed.clear(); l.forEach(([fn, a]) => fn(...a)); }, 60); };
+const release = () => { if (!pressing) return; pressing = false; setTimeout(() => { if (!pressing && !selecting()) flush(); }, 60); };
 document.addEventListener('pointerup', release, true);
 document.addEventListener('pointercancel', release, true);
-export const whenFree = fn => (...a) => { if (pressing) owed.set(fn, a); else fn(...a); };
+// 選取文字時也先不重畫（重畫會把選取清掉，複製不到），取消選取後再補畫
+const selecting = () => { try { const x = getSelection(); return !!x && !x.isCollapsed && String(x).trim() !== ''; } catch (e) { return false; } };
+const flush = () => { const l = [...owed]; owed.clear(); l.forEach(([fn, a]) => fn(...a)); };
+document.addEventListener('selectionchange', () => { if (!pressing && owed.size && !selecting()) setTimeout(() => { if (!pressing && !selecting()) flush(); }, 60); });
+export const whenFree = fn => (...a) => { if (pressing || selecting()) owed.set(fn, a); else fn(...a); };
