@@ -566,7 +566,7 @@ table.restt td:last-child { white-space: nowrap; }
 .mc.done .nm, .mc.done .no, .mc.done .sc { color: #6b7280; }
 .mc.done .sd.win .nm, .mc.done .sd.win .sc { color: #374151; }
 /* 賽程控制右側欄：內容比畫面高時，在右側欄裡自己捲動 */
-@media (min-width: 1101px) { .side { max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; } }
+
 .lgtoggle { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; margin: 4px 0; display: inline-flex; gap: 4px; align-items: center; }
 .lgtoggle .tri { font-size: 11px; width: 12px; }
 .luhead { margin: 4px 2px 14px; }
@@ -710,3 +710,10 @@ main.bookmode .sbox + div { display: none; }
 .srch .sside { display: inline-flex; flex-direction: column; line-height: 1.35; white-space: nowrap; }
 .srch .sside .muted { font-size: 12px; }
 .srch .swh { width: 1%; white-space: nowrap; text-align: right; line-height: 1.4; }
+
+/* 時間表、預賽表格底色白色 */
+table.tt:not(.ttdesk) td:not(.dr), table.grp td:not(.diag):not(.rep) { background: #fff; }
+/* 裁判記分：每局勝方的比數格黃底；勝方出來後姓名框起來 */
+.gamerow input.gw { background: var(--yellow-soft); border-color: var(--yellow); font-weight: 700; }
+.gname { text-align: center; border: 2px solid transparent; border-radius: 8px; padding: 2px 4px; }
+.gname.win { border-color: var(--yellow); background: var(--yellow-soft); color: var(--ink); font-weight: 700; }

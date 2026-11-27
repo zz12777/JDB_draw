@@ -137,7 +137,7 @@ export function board(state, d, opt = {}) {
       <div class="bs">${bsName(m.A, m.team)}<b>${m.score[0]}</b></div>
       <div class="bs">${bsName(m.B, m.team)}<b>${m.score[1]}</b></div>
       <div class="bduel"><span class="nm r">${esc(sideText(m.A, m.team))}</span><b>${m.score[0]} : ${m.score[1]}</b><span class="nm">${esc(sideText(m.B, m.team))}</span></div>
-      <div class="bp">${line}</div></${tag}>`;
+      ${m.status === 'reported' ? '' : `<div class="bp">${line}</div>`}</${tag}>`;
   };
   return `<div class="board">${tableCols(n, cell)}<div class="deskbar">大會台</div></div>`;
 }

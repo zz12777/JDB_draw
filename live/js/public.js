@@ -44,7 +44,7 @@ function render() {
 
 // ---------------- 追蹤隊伍與選手 ----------------
 let howOpen = false;
-const howto = () => `<details class="panel flat howto" ${howOpen ? 'open' : ''}><summary>如何追蹤隊伍與選手賽程？</summary>
+const howto = () => `<details class="panel flat howto" ${howOpen ? 'open' : ''}><summary>如何追蹤隊伍與選手的賽程？</summary>
   <ol><li>搜尋隊伍與選手</li><li>按下追蹤按鈕</li><li>當廣播到你追蹤的隊伍與選手時，會跳出通知與桌次在你的「即時賽程」頁面上</li></ol>
   <p class="small muted">PS 不是手機通知唷，要開著這個頁面才會看到。</p></details>`;
 document.addEventListener('toggle', ev => { const c = ev.target.classList; if (!c || !c.contains('howto')) return; if (c.contains('folw')) folOpen = ev.target.open; else howOpen = ev.target.open; }, true);

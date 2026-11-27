@@ -90,7 +90,7 @@ function viewMatch() {
   const pa = m.team ? lineName(lu.a, point) : an, pb = m.team ? lineName(lu.b, point) : bn;
   return `${head}<div class="panel">
     <div class="row"><h2 style="margin:0">${m.team ? `第${'一二三四五'[point]}點` : '各局比分'}</h2><span class="spacer"></span>${m.team ? '<button class="btn ghost sm" data-points>選擇其他點</button>' : ''}</div>
-    <div class="gamerow small muted" style="margin-top:8px"><span></span><span style="text-align:center">${two(pa)}</span><span style="text-align:center">${two(pb)}</span><span></span></div>
+    <div class="gamerow small muted" style="margin-top:8px"><span></span><span class="gname" data-gn="a">${two(pa)}</span><span class="gname" data-gn="b">${two(pb)}</span><span></span></div>
     ${[0, 1, 2, 3, 4].map(gi => `<div class="gamerow"><span class="small">第${'一二三四五'[gi]}局</span>
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|0" value="${esc((games[gi] || [])[0] ?? '')}">
       <input type="text" inputmode="numeric" maxlength="2" data-g="${gi}|1" value="${esc((games[gi] || [])[1] ?? '')}"><span data-ok="${gi}"></span></div>`).join('')}
@@ -109,9 +109,12 @@ function refresh() {
   [0, 1, 2, 3, 4].forEach(gi => {
     const ok = $(`[data-ok="${gi}"]`); if (!ok) return;
     ok.innerHTML = gameWinner(games[gi]) ? icon('check') : '';
-    $$(`[data-g^="${gi}|"]`).forEach(inp => inp.classList.toggle('bad', gameInvalid(games[gi])));
+    const w = gameWinner(games[gi]);
+    $$(`[data-g^="${gi}|"]`).forEach(inp => { inp.classList.toggle('bad', gameInvalid(games[gi])); inp.classList.toggle('gw', !!w && inp.dataset.g.endsWith(w === 'a' ? '|0' : '|1')); });
   });
   const r = m.team ? m.result.pts[point] : m.result;
+  // 勝方出來後，勝方姓名框起來
+  $$('[data-gn]').forEach(e => e.classList.toggle('win', r.winner === e.dataset.gn));
   const msg = $('#msg');
   if (msg) msg.innerHTML = r.winner ? `<b>${r.a}:${r.b}，${esc([sideText(r.winner === 'a' ? m.A : m.B, m.team), m.team ? lineName((m.rec.lineup || {})[r.winner], point) : ''].filter(Boolean).join(' '))} 獲勝。</b>`
     : '';

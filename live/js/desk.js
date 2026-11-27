@@ -58,7 +58,11 @@ function render() {
   $('#main').innerHTML = (tab === 'notice' ? noticeBanner(s) : '') + drawReminders(s) + (tab === 'ctrl' ? viewCtrl(s) : tab === 'notice' ? viewNotice(s) : tab === 'rec' ? viewRec(s) : tab === 'time' ? viewTimeDesk(s) : tab === 'tables' ? viewTables(s) : tab === 'draw' ? viewDraw(s) : tab === 'refs' ? viewRefs(s) : tab === 'ann' ? viewAnn(s) : viewSetup(s));
   if (was === lastTab) document.querySelectorAll(SCROLLERS).forEach((e, i) => { if (keep[i]) { e.scrollTop = keep[i][0]; e.scrollLeft = keep[i][1]; } });
   lastTab = was;
+  fitSide();
 }
+/** 右側欄跟著整頁捲動：比畫面高時，捲到底部才停住，不用在側欄裡另外捲 */
+function fitSide() { const e = document.querySelector('.side'); if (e) e.style.top = `${Math.min(8, innerHeight - e.offsetHeight - 8)}px`; }
+addEventListener('resize', fitSide);
 const SCROLLERS = '.side, .refstrip, .treebox, .ttw, .recwrap';
 let lastTab = null;
 
@@ -99,7 +103,6 @@ function viewCtrl(s) {
     <div class="side">
       ${queuePanel(s)}
       ${onlinePanel(s)}
-      ${swapPanel()}
       ${absent.length ? `<div class="panel"><h2>未到回報</h2>${absent.map(({ m, ab }) => {
         const tb = ab.table || m.tables.join('、');
         const mins = t => Math.max(0, Math.floor((Date.now() - t) / 60000));
@@ -196,7 +199,9 @@ function queuePanel(s) {
   const all = callOrder(s, D);
   if (!all.length) return '';
   const runs = all.slice(0, qOpen ? 6 : 2);
-  return `<div class="panel"><h2>叫場順序</h2>
+  const head = `<div class="row phead" data-qshow role="button" tabindex="0" aria-expanded="${qShow}"><h2 style="margin:0">叫場順序</h2><span class="spacer"></span>${icon(qShow ? 'chevup' : 'chevdown')}</div>`;
+  if (!qShow) return `<div class="panel">${head}</div>`;
+  return `<div class="panel">${head}<div style="height:8px"></div>
     <table class="list qrun"><tbody>${runs.map((r, i) => `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
       <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.s ? `${esc(r.s)}　` : ''}${r.list.length} 場</td></tr>`).join('')}</tbody></table>${all.length > 2 ? `<button class="btn plain sm" data-qopen style="margin-top:4px">${icon(qOpen ? 'chevup' : 'chevdown')}${qOpen ? '收合' : `其他 ${Math.min(6, all.length) - 2} 段`}</button>` : ''}
     <p class="small muted" style="margin:6px 0 0">同一時間個人賽先叫。大專團體決賽先於社團預賽。</p></div>`;
@@ -258,7 +263,7 @@ function planned(m) {
 // 只存「字 → 同音字」，名單從目前的籤表即時找出來（不把姓名寫進程式碼）
 const RARE = { 貽: '宜', 亘: '宣', 晟: '成', 恂: '旬', 璿: '旋', 驊: '華', 潁: '影', 粘: '黏', 閎: '宏', 榞: '元', 宬: '成', 琮: '從', 岦: '立', 崴: '威', 昜: '陽', 旻: '民', 䧮: '憲', 浤: '宏', 丰: '風', 浡: '勃', 巽: '訊',
   伃: '于', 雰: '芬', 彣: '文', 苡: '以', 霈: '配', 歆: '欣', 錞: '純', 楹: '迎', 媗: '宣', 緁: '捷', 玗: '于', 倢: '捷', 珈: '家', 熏: '勳', 媞: '提', 淯: '育', 堻: '堅', 紓: '書', 芓: '子', 姸: '研', 扈: '戶', 蒨: '欠', 琬: '晚', 玠: '介', 葳: '威', 崨: '捷', 瀞: '靜' };
-let rareOpen = false;
+let rareOpen = false, qShow = true;
 // 裁判分組定義：放在裁判分頁最下方，預設收合
 let refDefOpen = false;
 function refDefPanel() {
@@ -1586,6 +1591,7 @@ document.addEventListener('click', async ev => {
     return;
   }
   if ('rareopen' in d) { rareOpen = !rareOpen; render(); return; }
+  if ('qshow' in d) { qShow = !qShow; render(); return; }
   if ('refdef' in d) { refDefOpen = !refDefOpen; render(); return; }
   if (d.round) { roundOpen.has(d.round) ? roundOpen.delete(d.round) : roundOpen.add(d.round); render(); return; }
   if ('mailall' in d) { mailAll = !mailAll; render(); return; }
