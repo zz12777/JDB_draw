@@ -680,7 +680,7 @@ function drawModal() {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(420px,100%)"><h2>清除全部資料</h2>
       <p>籤表、參賽名單、時間表、排點、成績、廣播、場控提醒、簽到紀錄、停車證與收據、線上點單權限與線上點單都會刪除，且無法復原。建議先下載備份檔。</p>
       <p class="small muted">歷屆名次、管理員與首頁主視覺不會刪除。</p>
-      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="wipe-staff" checked>保留裁判名單</label>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="wipe-staff" checked>保留裁判資料設定</label>
       <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="wipe-park" checked>保留停車證與收據</label>
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-wipe-ok>確認清除</button></div></div></div>`;
     return;
@@ -1308,7 +1308,11 @@ function viewSetup(s) {
       <button class="btn ghost" data-backup>${icon('download')}下載備份檔</button>
       <label class="btn ghost">${icon('upload')}還原備份檔<input type="file" accept=".json" hidden data-restore></label>
       ${LOCAL || !s.events.length ? '<button class="btn ghost" data-demo>載入示範資料</button>' : ''}
-      <button class="btn ghost danger" data-wipe>清除全部資料</button></div></div>`;
+      <button class="btn ghost danger" data-wipe>清除全部資料</button></div>
+      <ul class="small muted" style="margin:10px 0 0;padding-left:20px;line-height:1.8">
+        <li>下載備份檔：存下目前全部資料，每天賽程結束各下載一份</li>
+        <li>還原備份檔：用備份檔覆蓋目前全部資料</li>
+        <li>清除全部資料：可勾選保留裁判資料設定、停車證與收據；歷屆名次、管理員、首頁主視覺不會刪除</li></ul></div>`;
 }
 
 // ---------------- 停車證 ----------------
@@ -1691,6 +1695,7 @@ document.addEventListener('click', async ev => {
     modal = null; drawModal();
     replaceState({ ...emptyState(), ...(keep ? { staff: st0.staff || [], staffOrg: st0.staffOrg || {}, refOpt: st0.refOpt || {} } : {}), ...(keepPark ? { parking: st0.parking || {}, receipt: st0.receipt || {} } : {}) });
     writePaths({ teamacl: null, myteams: null, olu: null, nudge: null }).catch(() => {});
+    if (!keep && st0.refcode) setRefCode(null).catch(() => {});
     render(); toast('已清除全部資料');
   }
 });
