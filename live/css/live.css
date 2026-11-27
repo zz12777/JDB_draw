@@ -681,3 +681,21 @@ main.bookmode { max-width: none; padding-left: 0; padding-right: 0; padding-top:
 .bkpages { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; background: #dfe3ea; }
 .bkpages img { display: block; width: min(100%, 1000px); height: auto; background: #fff; scroll-margin-top: 60px; }
 main.bookmode .sbox + div { display: none; }
+
+/* 追蹤隊伍與選手 */
+.howto { padding: 10px 16px; margin-bottom: 12px; }
+.howto summary { cursor: pointer; font-weight: 700; color: var(--blue); }
+.howto ol { margin: 8px 0 4px; padding-left: 22px; line-height: 1.8; }
+.howto p { margin: 0; }
+.fwrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fbtn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.fbtn .icon { width: 15px; height: 15px; color: var(--muted); }
+.fbtn.on { border-color: var(--yellow); background: var(--yellow-soft); }
+.fbtn.on .icon { color: var(--yellow-ink); }
+#fnote:empty { display: none; }
+.fnote { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 60; width: min(420px, calc(100vw - 32px)); background: #fff; border: 2px solid var(--yellow); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.2); padding: 14px 16px; }
+.fnh { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--yellow-ink); }
+.fnh .icon { width: 18px; height: 18px; }
+.fnt { margin: 6px 0 2px; line-height: 1.5; }
+.fnb { font-size: 22px; font-weight: 700; color: var(--blue); margin-bottom: 8px; }
+.fbtn.on .icon path { fill: currentColor; }

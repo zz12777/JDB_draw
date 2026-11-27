@@ -23,6 +23,8 @@ const ICONS = {
   zoomIn: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14M5 7h4M7 5v4" fill="none"/>',
   zoomOut: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14M5 7h4" fill="none"/>',
   speaker: '<path d="M3 6.5v3h2.5L9 12.5v-9L5.5 6.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9" fill="none"/>',
+  star: '<path d="M8 2l1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3 4.3 13.3l.8-4.1L2 6.3l4.2-.5z" fill="none" stroke-linejoin="round"/>',
+  starOn: '<path d="M8 2l1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3 4.3 13.3l.8-4.1L2 6.3l4.2-.5z" stroke-linejoin="round"/>',
   check: '<path d="M3 8.5l3.2 3.2L13 4.8" fill="none"/>',
   lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none"/>',
   edit: '<path d="M3 13l.6-3L10.8 2.8l2.4 2.4L6 12.4z" fill="none"/>',

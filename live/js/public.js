@@ -1,4 +1,4 @@
-// 公開頁：即時桌況、賽程與成績
+// 公開頁：桌況、賽程與成績
 import { derive, sideText, EVENT_FULL, EVENT_ORDER, fmtTime, POINTS, gameWinner, ANN_ORDER, ANN_NAME, dayLabel } from './model.js';
 import { slotOf } from './timetable.js';
 import { toCn } from '../../js/util.js';
@@ -12,10 +12,11 @@ const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', 
 const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
 import { mergeHistory } from './history.js';
 import { BOOK, bookHtml } from './book.js';
+import { sideTargets, followBtn, toggleFollow, followList, labelOf, pendingNotes, markSeen, noteHtml } from './follow.js';
 
 let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
-const TABS = [['sched', '賽程'], ['time', '時間表'], ['live', '即時桌況/廣播'], ['ann', '成績公告'], ['book', '秩序冊']];
+const TABS = [['sched', '賽程'], ['time', '時間表'], ['live', '桌況/廣播'], ['ann', '成績公告'], ['book', '秩序冊']];
 const TAB_ICON = { book: 'book', sched: 'bracket', time: 'clock', ann: 'trophy', live: 'tables', hist: 'medal' };
 
 function render() {
@@ -29,16 +30,39 @@ function render() {
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = `<label class="sbox">${icon('search')}<input id="q" class="search" type="search" placeholder="學校、隊名或姓名"></label><div style="height:12px"></div><div id="content"></div>`;
   if ($('#q').value !== q && !composing) $('#q').value = q;
-  // 搜尋只在賽程、成績公告、即時桌況出現，各自只找當頁的內容
+  // 搜尋只在賽程、成績公告、桌況出現，各自只找當頁的內容
   $('.sbox').style.display = tab === 'time' || tab === 'book' ? 'none' : '';
   // 秩序冊：整頁顯示每一頁的圖片，資料更新時不重畫
   $('#main').classList.toggle('bookmode', tab === 'book');
-  if (tab === 'book') { if (!$('.bkpages')) { $('#content').innerHTML = bookHtml(false); watchBook(); } drawDetail(); return; }
+  if (tab === 'book') { if (!$('.bkpages')) { $('#content').innerHTML = bookHtml(false); watchBook(); } drawDetail(); drawNotes(); return; }
   $('#q').placeholder = '學校、隊名或姓名';
   const key = tab === 'time' ? '' : q.trim();
   $('#content').innerHTML = tab === 'ann' ? viewAnn(s, key) : !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
-    : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : key ? viewSearch(s, key) : viewSched();
-  drawDetail();
+    : tab === 'live' ? viewLive(s, key) : tab === 'time' ? viewTime(s) : howto() + (key ? viewSearch(s, key) : followed() + viewSched());
+  drawDetail(); drawNotes();
+}
+
+// ---------------- 追蹤隊伍與選手 ----------------
+let howOpen = false;
+const howto = () => `<details class="panel flat howto" ${howOpen ? 'open' : ''}><summary>如何追蹤隊伍與選手賽程？</summary>
+  <ol><li>搜尋隊伍與選手</li><li>按下追蹤按鈕</li><li>當廣播到你追蹤的隊伍與選手時，會跳出通知與桌次在你的「即時賽程」頁面上</li></ol>
+  <p class="small muted">PS 不是手機通知唷，要開著這個頁面才會看到。</p></details>`;
+document.addEventListener('toggle', ev => { if (ev.target.classList && ev.target.classList.contains('howto')) howOpen = ev.target.open; }, true);
+/** 已追蹤的清單（賽程分頁上方） */
+function followed() {
+  const l = followList();
+  return l.length ? `<div class="fwrap" style="margin-bottom:12px"><span class="small muted">追蹤中</span>${l.map(k => followBtn({ key: k, label: labelOf(k) })).join('')}</div>` : '';
+}
+/** 出賽通知：已廣播、追蹤中的隊伍或選手，一次跳一則 */
+function drawNotes() {
+  let host = $('#fnote');
+  if (!host) { host = document.createElement('div'); host.id = 'fnote'; document.body.appendChild(host); }
+  const n = D ? pendingNotes(getState().pcalls, D)[0] : null;
+  const ts = n ? String(n.c.ts) : '';
+  if (host.dataset.ts === ts) return;
+  host.dataset.ts = ts;
+  host.innerHTML = n ? noteHtml(n) : '';
+  if (n) { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* 不支援震動 */ } }
 }
 
 /** 秩序冊：捲動時更新目前頁碼 */
@@ -135,7 +159,11 @@ function hit(m, key) {
 function viewSearch(s, key) {
   const list = [...D.byId.values()].filter(m => hit(m, key));
   const when = m => { const x = slotOf(s.sched, m); return x ? `${esc(dayLabel(s, x.d, x.day))} ${x.s}-${x.e}` : ''; };
-  return `<div class="panel"><h2>「${esc(key)}」的場次（${list.length}）</h2>
+  // 搜尋到的隊伍與選手，可以按追蹤
+  const tg = new Map();
+  list.forEach(m => [m.A, m.B].forEach(x => { if (x && ((x.name || '').includes(key) || (x.school || '').includes(key))) sideTargets(m, x).forEach(t => { if (t.label.includes(key) || (x.school || '').includes(key)) tg.set(t.key, t); }); }));
+  const fol = tg.size ? `<div class="fwrap" style="margin-bottom:12px"><span class="small muted">追蹤</span>${[...tg.values()].map(followBtn).join('')}</div>` : '';
+  return `${fol}<div class="panel"><h2>「${esc(key)}」的場次（${list.length}）</h2>
     ${list.length ? `<table class="list"><tbody>${list.map(m => `<tr class="click" data-mid="${esc(m.id)}"><td class="nowrap"><b>${m.ev}</b>${esc(m.no)}</td><td>${names(m)}</td>
       <td class="nowrap"><b>${shown(m) ? `${m.score[0]}:${m.score[1]}` : ''}</b></td>
       <td class="small nowrap" style="text-align:right">${m.status === 'playing' ? `<span class="tchip">第 ${m.tables.join('、')} 桌</span>` : when(m)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">查無相關場次。</p>'}</div>`;
@@ -173,7 +201,9 @@ function drawDetail() {
 document.addEventListener('click', ev => {
   const b = ev.target.closest('button');
   if (b) {
-    if (b.dataset.tab) { tab = b.dataset.tab; q = ''; render(); }
+    if (b.dataset.follow) { toggleFollow(b.dataset.follow); render(); }
+    else if (b.dataset.fseen) { markSeen(Number(b.dataset.fseen)); drawNotes(); }
+    else if (b.dataset.tab) { tab = b.dataset.tab; q = ''; render(); }
     else if (b.dataset.callsmore !== undefined) { callsOpen = !callsOpen; render(); }
     else if (b.dataset.hy) { hy = b.dataset.hy === 'cur' ? null : Number(b.dataset.hy); render(); }
     else if (b.dataset.ev) { curEv = b.dataset.ev; render(); }
