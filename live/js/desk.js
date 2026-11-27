@@ -262,13 +262,13 @@ function refDefPanel() {
     <ul><li>今天已經沒有還沒打的場次：沒報名比賽、已經淘汰，或所有項目都打完。</li>
       <li>依交大、陽明、香山分組，擔任次數少的排前面。</li></ul>
     <h3>二、人手不足時可支援</h3>
-    <ul><li>還有比賽，但不是馬上要打的人：個人賽排在接下來 N 場以後；團體賽要等前面場次的結果，下一場還不能開打。</li>
+    <ul><li>今天還有比賽，但不是馬上要打的人：排在接下來 N 場以後、對手還沒確定（例如種子、等前一場結果），或團體賽下一場還不能開打。</li>
       <li>體資。</li>
       <li>滑鼠移到姓名上（平板點一下姓名），可以看到他的下一場。</li></ul>
     <h3>三、暫不可擔任（依項目、場次排序）</h3>
     <ul><li>正在比賽：所在場次已派桌、還沒分出勝負。</li>
       <li>正在擔任裁判：正在某桌記分。</li>
-      <li>馬上要打：依叫場順序（所有項目），排在接下來 N 場內的選手；當天還沒開打時，就是一開始要叫的 N 場。N 預設等於球桌數（24），大約是接下來 20～30 分鐘會叫到的場次，可在「裁判資料設定 &gt; 分類定義」調整。</li>
+      <li>馬上要打：依叫場順序（所有項目），排在今天接下來 N 場內、對手已確定的選手；當天還沒開打時，就是一開始要叫的 N 場。N 預設等於球桌數（24），大約是接下來 20～30 分鐘會叫到的場次，可在「裁判資料設定 &gt; 分類定義」調整。</li>
       <li>團體賽下一場已經可以開打：前一輪都打完、對手確定。團體賽同一輪中誰的點單先到就先打，不照固定順序，所以只要隨時可能被叫，整隊都會被算在暫不可擔任。</li></ul>
     <h3>團體賽進行時請注意</h3>
     <p>團體賽哪一場先打，要看點單收齊的狀況和場控的安排。名單只能判斷「可不可能被叫」，判斷不出實際順序。<b>團體賽進行時可以與場控討論，盡量避免隊內隊伍同時打，無裁判可叫的情況。</b></p></div>`;
@@ -1010,32 +1010,32 @@ function busyPeople(s) {
     const e = s.events.find(x => x.name === m.ev);
     return [m.A, m.B].flatMap(x => ((e && e.rosters && e.rosters[x && x.name]) || []).flat());
   };
-  const undone = m => m.known && !m.rec.start && m.status !== 'done' && m.status !== 'reported';
-  // 進行中的項目：已有場次開打，或依時間表 10 分鐘內就要開始
-  const t0 = NOW().getTime(), active = new Set();
-  D.events.forEach(e => {
-    const st = e.matches.map(m => m.status);
-    const started = st.includes('playing') || st.some(x => x === 'done' || x === 'reported');
-    const soonBySched = e.matches.some(m => { if (!undone(m)) return false; const sl = slotOf(s.sched, m); const at = sl ? dueAt(s, { d: sl.d, t: sl.s }) : null; return at && at - t0 <= 10 * 60000; });
-    if ((started && st.some(x => x !== 'done')) || soonBySched) active.add(e.name);
-  });
-  // 個人賽：依叫場順序（輪次表），接下來的前 N 場算馬上要打（預設＝球桌數，大約是接下來 20～30 分鐘會叫到的場次），後面的算還沒輪到
-  // 所有項目依叫場順序，接下來前 N 場（對手已確定）的選手一律算馬上要打；當天還沒開打時也一樣
+  // 只看今天的賽程（依比賽日期；賽前算第一天、兩天之間算前一天）：今天沒有待打比賽的人才可擔任
+  const today = todayIdx(s);
+  const dayOf = m => { const sl = slotOf(s.sched, m); return sl ? Number(sl.d) : today; };
+  const undone = m => !m.rec.start && m.status !== 'done' && m.status !== 'reported' && dayOf(m) === today;
+  // 所有項目依叫場順序，今天接下來前 N 場（對手已確定）的選手算馬上要打；當天還沒開打時也一樣
   const N = refBuf(s);
-  const firstN = callOrder(s, D).flatMap(r => r.list).filter(m => m.known).slice(0, N);
-  const next3 = new Set(firstN.map(m => m.id));
-  firstN.forEach(m => active.add(m.ev));
-  if (D.events.some(e => !e.team && active.has(e.name))) D.events.forEach(e => { if (!e.team) active.add(e.name); });
+  const next3 = new Set(callOrder(s, D).flatMap(r => r.list).filter(m => m.known && undone(m)).slice(0, N).map(m => m.id));
   const put = (map, n, m) => { const k = nm(n); if (!map.has(k)) map.set(k, m); };
   D.byId.forEach(m => {
     if (m.status === 'playing') { people(m).forEach(n => put(now, n, m)); return; }
-    if (!active.has(m.ev) || !undone(m)) return;
+    if (!undone(m)) return;
+    // 對手還沒確定、或還沒輪到的場次：還有比賽，人手不足時可支援
     const urgent = next3.has(m.id) || (m.team && m.status === 'ready');
     people(m).forEach(n => put(urgent ? soon : later, n, m));
   });
   const onDuty = new Map();
   D.tables.forEach((x, t) => { if (x.m.status === 'playing') { const n = (x.m.rec.refs || {})[t]; if (n) onDuty.set(nm(n), { t, m: x.m }); } });
   return { now, soon, later, onDuty };
+}
+/** 今天是第幾天：比賽日期當天；賽前算第一天，兩天之間或賽後算最近一個已到的比賽日 */
+function todayIdx(s) {
+  const ds = (s.dates || []).filter(Boolean);
+  if (!ds.length) return 1;
+  const n = NOW(), iso = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  let k = 0; ds.forEach((d, i) => { if (d <= iso) k = i; });
+  return k + 1;
 }
 /** 進行中場次的裁判替換請求 */
 function swapList() {
@@ -1119,7 +1119,7 @@ function staffEditor(s, where) {
       ? `<div class="row" style="margin-bottom:6px"><label class="small" style="width:110px" for="lk-${k}">${label}</label><input type="url" id="lk-${k}" data-link="${k}" value="${esc(url)}" placeholder="Google 試算表網址" style="flex:1;min-width:200px">${url ? `<a class="btn ghost sm" href="${esc(url)}" target="_blank" rel="noopener">開啟</a>` : ''}</div>`
       : `<div class="reflink">${a}${url ? '' : '<span class="small muted">　尚未設定</span>'}</div>`;
   };
-  return sec('裁判密碼', `<p class="small muted">設定後，裁判要輸入密碼才能記分。密碼外流時按「更換」，所有裁判都要重新輸入。</p>
+  return sec('裁判密碼', `<p class="small muted">密碼外流時按「更換」，所有裁判都要重新輸入。</p>
     <div class="row">${rc ? `<span>目前密碼 <b style="font-size:20px;letter-spacing:2px">${esc(rc)}</b></span>` : '<span class="small" style="color:var(--red)">尚未設定，任何拿到連結的人都能記分</span>'}
       <input type="text" inputmode="numeric" id="rc-new" placeholder="自訂，留空自動產生 6 位數" maxlength="12" style="width:220px">
       <button class="btn sm" data-refcode>${icon('shuffle')}${rc ? '更換' : '設定'}</button>
@@ -1298,7 +1298,8 @@ function viewSetup(s) {
       <label>屆數 <input type="text" data-set="edition" value="${esc(s.edition)}" style="width:120px"></label>
       <label>球桌數 <input type="number" min="2" max="60" data-set="tables" value="${s.tables}" style="width:80px"></label>
       <label>第一天 <input type="date" data-date="0" value="${esc((s.dates || [])[0] || '')}"></label>
-      <label>第二天 <input type="date" data-date="1" value="${esc((s.dates || [])[1] || '')}"></label></div></div>
+      <label>第二天 <input type="date" data-date="1" value="${esc((s.dates || [])[1] || '')}"></label>
+      <label>秩序冊 <input type="url" data-set="book" value="${esc(s.book || '')}" placeholder="雲端硬碟分享連結" style="width:260px"></label></div></div>
     <div class="panel"><div class="row"><h2 style="margin:0">匯入最終籤表（Excel 檔）</h2><span class="spacer"></span><label class="btn sm">${icon('upload')}一次選擇多個檔案<input type="file" accept=".xlsx" multiple hidden data-impall></label></div>
       <table class="list"><thead><tr><th>項目</th><th>目前資料</th><th></th></tr></thead><tbody>
       ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` + (fileOf(ev) ? `<div class="muted">${esc(fileOf(ev))}</div>` : '') : '<span class="muted">尚未匯入</span>'}</td>
@@ -1705,7 +1706,7 @@ document.addEventListener('click', async ev => {
   else if ('resetOk' in d) {
     // 彩排後回到賽前：只清比賽過程產生的紀錄，設定與匯入的資料都保留
     const st0 = getState(), n = st0.notices || {};
-    const events = (st0.events || []).map(e => { const x = { ...e }; ['finalPos', 'roll', 'finalPub', 'finalDone'].forEach(k => delete x[k]); return x; });
+    const events = (st0.events || []).map(e => { const x = { ...e }; ['finalPos', 'roll', 'finalPub', 'finalDone', 'rank'].forEach(k => delete x[k]); return x; });
     modal = null; drawModal();
     replaceState({ ...st0, events, m: {}, dlu: {}, calls: [], podium: {}, checkin: {},
       notices: Object.fromEntries(Object.entries({ add: n.add, edit: n.edit, del: n.del }).filter(([, v]) => v)) });
@@ -1753,7 +1754,7 @@ document.addEventListener('change', async ev => {
   else if (d.set) update(s => {
     // 改屆數時，成績公告標題裡的舊屆數一起換掉
     if (d.set === 'edition' && s.edition && s.annTitle && s.annTitle.includes(s.edition)) s.annTitle = s.annTitle.split(s.edition).join(t.value);
-    s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : t.value;
+    s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : d.set === 'book' ? t.value.trim() : t.value;
   });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }

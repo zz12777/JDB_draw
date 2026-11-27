@@ -19,7 +19,7 @@ export const auth = { cloud: !LOCAL, ready: LOCAL, user: null, isAdmin: LOCAL, e
 // ---------------- 狀態 <-> 資料庫格式 ----------------
 const parse = (s, d) => { if (s == null) return d; try { const v = JSON.parse(s); return v == null ? d : v; } catch (e) { return d; } };
 const clone = x => JSON.parse(JSON.stringify(x));
-const META_KEYS = ['title', 'edition', 'tables', 'notice', 'rosterFile', 'rev', 'sched', 'annTitle', 'dates', 'podium'];
+const META_KEYS = ['title', 'edition', 'tables', 'notice', 'rosterFile', 'rev', 'sched', 'annTitle', 'dates', 'podium', 'book'];
 // 比分一律整理成 0–99 的整數或空白，避免奇怪的內容被顯示到頁面上
 const pt = v => { if (v === '' || v == null) return ''; const n = Number(v); return Number.isInteger(n) && n >= 0 && n < 100 ? n : ''; };
 const games = g => (Array.isArray(g) ? g.slice(0, 5).map(x => (Array.isArray(x) ? [pt(x[0]), pt(x[1])] : ['', ''])) : undefined);
@@ -163,7 +163,7 @@ export function setCheckin(key, rec) {
   remote.write({ [`checkin/${key}`]: JSON.stringify(rec) }).catch(err => { state = before; auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); emit(false); });
 }
 /** 即時賽程看得到的廣播：最近 20 則，只留時間、場次、桌次與廣播文字 */
-function pubCalls(calls) { return JSON.stringify((calls || []).slice(-20).map(c => ({ ts: c.ts, mid: c.mid, tables: c.tables, text: c.text }))); }
+function pubCalls(calls) { return JSON.stringify((calls || []).slice(-20).map(c => ({ ts: c.ts, mid: c.mid, tables: c.tables, text: c.text, ...(c.done ? { done: c.done } : {}) }))); }
 function receive(part, value) {
   raw[part] = part === 'm' ? (value || {}) : value;
   // 大會台：即時賽程的廣播和大會台不一致時補寫一次（例如規則更新前的廣播）

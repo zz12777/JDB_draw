@@ -16,6 +16,7 @@ const ICONS = {
   clock: '<circle cx="8" cy="8" r="6" fill="none"/><path d="M8 4.5V8l2.5 1.5" fill="none"/>',
   plus: '<path d="M8 3v10M3 8h10" fill="none"/>',
   medal: '<circle cx="8" cy="10" r="3.8" fill="none"/><path d="M5.6 7 3.5 1.8h3L8 5.2M10.4 7l2.1-5.2h-3L8 5.2" fill="none"/>',
+  book: '<path d="M8 4.5C6.5 3.3 4.5 3 2.5 3.2v9c2-.2 4 .1 5.5 1.3 1.5-1.2 3.5-1.5 5.5-1.3v-9C11.5 3 9.5 3.3 8 4.5zM8 4.5v9" fill="none"/>',
   trophy: '<path d="M5 2.5h6v3.5a3 3 0 0 1-6 0zM5 3.5H2.8v1a2.2 2.2 0 0 0 2.4 2.2M11 3.5h2.2v1a2.2 2.2 0 0 1-2.4 2.2M8 9v3M5.5 13.5h5" fill="none"/>',
   tables: '<rect x="2" y="2.5" width="5" height="4.5" rx="0.8" fill="none"/><rect x="9" y="2.5" width="5" height="4.5" rx="0.8" fill="none"/><rect x="2" y="9" width="5" height="4.5" rx="0.8" fill="none"/><rect x="9" y="9" width="5" height="4.5" rx="0.8" fill="none"/>',
   search: '<circle cx="7" cy="7" r="4.5" fill="none"/><path d="M10.4 10.4L14 14" fill="none"/>',

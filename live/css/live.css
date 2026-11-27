@@ -666,3 +666,5 @@ td.tts-next { background: #fff; box-shadow: inset 0 0 0 2px var(--yellow); }
 .orgcols > div:last-child:not(:first-child) .tipcell::after { left: auto; right: 0; }
 .ckp.rc { white-space: normal; }
 .refdef h3 { margin: 14px 0 4px; font-size: 15px; } .refdef ul { margin: 0; padding-left: 20px; line-height: 1.7; } .refdef p { margin: 4px 0 0; line-height: 1.7; }
+
+#book { display: block; width: 100%; height: calc(100dvh - 200px); min-height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }

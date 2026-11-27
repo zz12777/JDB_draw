@@ -74,7 +74,7 @@ function render0() {
     ${editorsPanel(owner)}`;
   // 開打通知：這個帳號所有隊伍都檢查，不在該隊頁面也會通知
   const starts = teams.flatMap(k => { const x = teamInfo(k); return [...D.byId.values()].filter(m => m.team && m.ev === x.ev && ((m.A && m.A.name === x.team) || (m.B && m.B.name === x.team))
-    && m.rec.start && tablesOf(m).length && m.status !== 'done' && m.status !== 'reported' && !ackedStart(k, m)).map(m => ({ k, x, m })); });
+    && m.rec.start && tablesOf(m).length && m.status !== 'done' && m.status !== 'reported' && called(m) && !ackedStart(k, m)).map(m => ({ k, x, m })); });
   if (teams.length > 1) teams.forEach(k => { const n = starts.filter(y => y.k === k).length; const b = main.querySelector(`[data-team="${CSS.escape(k)}"]`); if (b && n) b.insertAdjacentHTML('beforeend', `<span class="badge" title="${n} 則開打通知">${n}</span>`); });
   showNudge(ms, starts[0]);
 }
@@ -82,6 +82,8 @@ function render0() {
 const ackKey = (mid, x) => `jdb-nudge|${cur}|${mid}|${x.ts}`;
 const acked = (mid, x) => { try { return !!localStorage.getItem(ackKey(mid, x)); } catch (e) { return false; } };
 const tablesOf = m => (Array.isArray(m.rec.tables) ? m.rec.tables : []).filter(Boolean);
+// 開打通知要等廣播組按「已廣播」才跳出
+const called = m => (getState().pcalls || []).some(c => c.mid === m.id && c.done && c.done >= (m.rec.start || 0) - 60000);
 const startKey = (k, m) => `jdb-start|${k}|${m.id}|${m.rec.start}`;
 const ackedStart = (k, m) => { try { return !!localStorage.getItem(startKey(k, m)); } catch (e) { return false; } };
 function showNudge(ms, sp) {
