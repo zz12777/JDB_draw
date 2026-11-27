@@ -96,7 +96,7 @@ function viewSched() {
   const e = D.events.find(x => x.name === curEv);
   const groups = e.team ? groupTables(e, shown) : '';
   const ko = e.team ? e.matches.filter(m => m.stage === 'F') : e.matches;
-  const t = bracketSvg(ko, e.team, { pos: e.team });
+  const t = bracketSvg(ko, e.team, { pos: true });
   const tree = t.svg ? `<div class="panel flat"><div class="row"><h2 style="margin:0">${e.team ? '決賽' : '籤表'}</h2><span class="spacer"></span>
       <button class="btn ghost sm" data-zoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-zoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div>
     <div class="treebox" style="margin-top:10px">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * zoom)}" height="${Math.round(t.height * zoom)}"`)}</div></div>` : '';

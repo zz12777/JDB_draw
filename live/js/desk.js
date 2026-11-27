@@ -192,7 +192,7 @@ function queuePanel(s) {
   return `<div class="panel"><h2>叫場順序</h2>
     <table class="list qrun"><tbody>${runs.map((r, i) => `<tr class="${i ? '' : 'now'}"><td class="nowrap">${i ? '接著' : '現在'}</td>
       <td><button class="btn plain sm" data-ev="${esc(r.ev)}">${evTag(r.ev)}${esc(runText(r).slice(r.ev.length + 1))}</button></td><td class="small muted nowrap" style="text-align:right">${r.s ? `${esc(r.s)}　` : ''}${r.list.length} 場</td></tr>`).join('')}</tbody></table>${all.length > 2 ? `<button class="btn plain sm" data-qopen style="margin-top:4px">${icon(qOpen ? 'chevup' : 'chevdown')}${qOpen ? '收合' : `其他 ${Math.min(6, all.length) - 2} 段`}</button>` : ''}
-    <p class="small muted" style="margin:6px 0 0">個人賽照輪次表，團體賽照時間表；同一時間個人賽先叫，團體決賽先於預賽。</p></div>`;
+    <p class="small muted" style="margin:6px 0 0">同一時間個人賽先叫。大專團體決賽先於社團預賽。</p></div>`;
 }
 /** 裁判分頁：接下來 N 場會叫到哪些場次（這些場次的選手列在暫不可擔任） */
 function queueNote(s) {
@@ -268,7 +268,7 @@ function refDefPanel() {
     <h3>三、暫不可擔任（依項目、場次排序）</h3>
     <ul><li>正在比賽：所在場次已派桌、還沒分出勝負。</li>
       <li>正在擔任裁判：正在某桌記分。</li>
-      <li>個人賽馬上要打：依個人賽叫場順序，排在接下來 N 場內的選手。N 預設等於球桌數（24），大約是接下來 20～30 分鐘會叫到的場次，可在「裁判資料設定 &gt; 分類定義」調整。</li>
+      <li>馬上要打：依叫場順序（所有項目），排在接下來 N 場內的選手；當天還沒開打時，就是一開始要叫的 N 場。N 預設等於球桌數（24），大約是接下來 20～30 分鐘會叫到的場次，可在「裁判資料設定 &gt; 分類定義」調整。</li>
       <li>團體賽下一場已經可以開打：前一輪都打完、對手確定。團體賽同一輪中誰的點單先到就先打，不照固定順序，所以只要隨時可能被叫，整隊都會被算在暫不可擔任。</li></ul>
     <h3>團體賽進行時請注意</h3>
     <p>團體賽哪一場先打，要看點單收齊的狀況和場控的安排。名單只能判斷「可不可能被叫」，判斷不出實際順序。<b>團體賽進行時可以與場控討論，盡量避免隊內隊伍同時打，無裁判可叫的情況。</b></p></div>`;
@@ -678,8 +678,9 @@ function drawModal() {
   }
   if (modal.kind === 'reset') {
     host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(440px,100%)"><h2>清除比賽紀錄</h2>
-      <p>桌次、開打紀錄、比分、裁判紀錄、點單（線上與大會台代填）、廣播、場控提醒處理紀錄、簽到、決賽抽籤與成績公告都會清除，無法復原。建議先下載備份檔。</p>
-      <p class="small muted">保留：籤表、參賽名單、時間表、點單權限、裁判資料設定、停車證與收據、自訂的場控提醒。</p>
+      <ul style="padding-left:20px;line-height:1.8;margin:8px 0">
+        <li><b>會清除</b>桌次、開打紀錄、比分、裁判紀錄、點單紀錄、廣播、場控提醒處理紀錄、簽到、決賽抽籤與成績公告，無法復原。建議先下載備份檔。</li>
+        <li><b>會保留</b>籤表、參賽名單、時間表、點單權限、裁判資料設定、停車證與收據、自訂的場控提醒</li></ul>
       <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-close>取消</button><button class="btn danger-solid" data-reset-ok>確認清除</button></div></div></div>`;
     return;
   }
@@ -748,11 +749,11 @@ function viewRec(s) {
   const shown = m => m.status !== 'wait' && m.status !== 'ready';
   const mark = m => (m.status === 'reported' ? 'rep' : m.status === 'playing' ? 'live' : '');
   const ko = e ? (e.team ? e.matches.filter(m => m.stage === 'F') : e.matches) : [];
-  const t = e ? bracketSvg(ko, e.team, { pos: e.team, noTables: true }) : { svg: '' };
+  const t = e ? bracketSvg(ko, e.team, { pos: true, noTables: true }) : { svg: '' };
   return e ? `<div class="recwrap"><div class="pills" style="margin-bottom:10px">${byPill(D.events).map(x => `<button class="${x.name === recEv ? 'on' : ''}" data-recev="${x.name}">${x.name}</button>`).join('')}</div>
       ${e.team ? '<div class="legend" style="margin:0 0 8px"><span><span class="lg live"></span>進行中</span><span><span class="lg rep"></span>已打完、裁判尚未按結束</span></div>' : ''}
       ${e.team ? `<h3 class="rech">預賽</h3>${groupTables(e, shown, { mark })}` : ''}
-      ${t.svg ? `<div class="row" style="margin-top:10px"><h3 class="rech" style="margin:0">${e.team ? '決賽' : '籤表'}</h3><span class="spacer"></span><button class="btn ghost sm" data-reczoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-reczoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div><div class="treebox rectree">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * recZoom)}" height="${Math.round(t.height * recZoom)}"`)}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
+      ${t.svg ? `<div class="row" style="margin-top:10px">${e.team ? '<h3 class="rech" style="margin:0">決賽</h3>' : ''}<span class="spacer"></span><button class="btn ghost sm" data-reczoom="-1" aria-label="縮小" title="縮小">${icon('zoomOut')}</button><button class="btn ghost sm" data-reczoom="1" aria-label="放大" title="放大">${icon('zoomIn')}</button></div><div class="treebox rectree">${t.svg.replace(/width="[\d.]+" height="[\d.]+"/, `width="${Math.round(t.width * recZoom)}" height="${Math.round(t.height * recZoom)}"`)}</div>` : ''}</div>` : '<div class="panel"><p class="muted">尚未匯入籤表。</p></div>';
 }
 
 // ---------------- 場控提醒 ----------------
@@ -1019,15 +1020,17 @@ function busyPeople(s) {
     if ((started && st.some(x => x !== 'done')) || soonBySched) active.add(e.name);
   });
   // 個人賽：依叫場順序（輪次表），接下來的前 N 場算馬上要打（預設＝球桌數，大約是接下來 20～30 分鐘會叫到的場次），後面的算還沒輪到
+  // 所有項目依叫場順序，接下來前 N 場（對手已確定）的選手一律算馬上要打；當天還沒開打時也一樣
   const N = refBuf(s);
-  const indOn = D.events.some(e => !e.team && active.has(e.name));
-  const next3 = new Set(indOn ? callQueue(D).slice(0, N).map(m => m.id) : []);
-  if (indOn) D.events.forEach(e => { if (!e.team) active.add(e.name); });
+  const firstN = callOrder(s, D).flatMap(r => r.list).filter(m => m.known).slice(0, N);
+  const next3 = new Set(firstN.map(m => m.id));
+  firstN.forEach(m => active.add(m.ev));
+  if (D.events.some(e => !e.team && active.has(e.name))) D.events.forEach(e => { if (!e.team) active.add(e.name); });
   const put = (map, n, m) => { const k = nm(n); if (!map.has(k)) map.set(k, m); };
   D.byId.forEach(m => {
     if (m.status === 'playing') { people(m).forEach(n => put(now, n, m)); return; }
     if (!active.has(m.ev) || !undone(m)) return;
-    const urgent = m.team ? m.status === 'ready' : next3.has(m.id);
+    const urgent = next3.has(m.id) || (m.team && m.status === 'ready');
     people(m).forEach(n => put(urgent ? soon : later, n, m));
   });
   const onDuty = new Map();
@@ -1320,7 +1323,7 @@ function viewSetup(s) {
       <ul class="small muted" style="margin:10px 0 0;padding-left:20px;line-height:1.8">
         <li>下載備份檔：存下目前全部資料，每天賽程結束各下載一份</li>
         <li>還原備份檔：用備份檔覆蓋目前全部資料</li>
-        <li>清除比賽紀錄：彩排後使用，清掉桌次、比分、點單、廣播、簽到、決賽抽籤與成績；籤表、名單、時間表、點單權限、裁判資料設定、停車證與收據都保留</li>
+        <li>清除比賽紀錄：<b>會清除</b>桌次、比分、點單、廣播、簽到、決賽抽籤與成績；<b>不會清除</b>籤表、名單、時間表、點單權限、裁判資料設定、停車證與收據</li>
         <li>清除全部資料：可勾選保留裁判資料設定、停車證與收據；歷屆名次、管理員、首頁主視覺不會刪除</li></ul></div>`;
 }
 
