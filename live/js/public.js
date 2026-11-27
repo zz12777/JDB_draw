@@ -11,6 +11,7 @@ import { timetableHtml } from './ttview.js';
 const PILL_ORDER = ['男單', '女單', '男雙', '女雙', '男團', '女團', '社團'];
 const byPill = list => list.slice().sort((a, b) => PILL_ORDER.indexOf(a.name) - PILL_ORDER.indexOf(b.name));
 import { mergeHistory } from './history.js';
+import { BOOK, bookHtml } from './book.js';
 
 let tab = 'sched', curEv = null, hy = null, q = '', zoom = 1, detail = null, composing = false;
 let D = null;
@@ -22,16 +23,17 @@ function render() {
   // 決賽籤號要等大會台按「確定並公開」才顯示
   D = derive({ ...s, events: (s.events || []).map(e => (e.finalPub ? e : { ...e, finalPos: {} })) });
   $('#top').innerHTML = header(s, '即時賽程', [['線上點單', 'lineup.html']]);
-  if ((tab === 'time' && !s.sched) || (tab === 'book' && !s.book)) tab = 'sched';
-  $('#tabs').innerHTML = TABS.filter(([k]) => (k !== 'time' || s.sched) && (k !== 'book' || s.book)).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}<span>${t}</span></button>`).join('');
+  if (tab === 'time' && !s.sched) tab = 'sched';
+  $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'time' || s.sched).map(([k, t]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(TAB_ICON[k])}<span>${t}</span></button>`).join('');
   if (!curEv || !D.events.some(e => e.name === curEv)) curEv = D.events[0] ? byPill(D.events)[0].name : null;
   // 搜尋框只建立一次，之後只更新下方內容（重畫輸入框會打斷注音等輸入法）
   if (!$('#q')) $('#main').innerHTML = `<label class="sbox">${icon('search')}<input id="q" class="search" type="search" placeholder="學校、隊名或姓名"></label><div style="height:12px"></div><div id="content"></div>`;
   if ($('#q').value !== q && !composing) $('#q').value = q;
   // 搜尋只在賽程、成績公告、即時桌況出現，各自只找當頁的內容
   $('.sbox').style.display = tab === 'time' || tab === 'book' ? 'none' : '';
-  // 秩序冊：內嵌 PDF，資料更新時不重新載入
-  if (tab === 'book') { const u = bookUrl(s.book); if (!$('#book') || $('#book').dataset.src !== u) $('#content').innerHTML = `<iframe id="book" data-src="${esc(u)}" src="${esc(u)}" title="秩序冊" allow="fullscreen"></iframe>`; drawDetail(); return; }
+  // 秩序冊：整頁顯示每一頁的圖片，資料更新時不重畫
+  $('#main').classList.toggle('bookmode', tab === 'book');
+  if (tab === 'book') { if (!$('.bkpages')) { $('#content').innerHTML = bookHtml(false); watchBook(); } drawDetail(); return; }
   $('#q').placeholder = '學校、隊名或姓名';
   const key = tab === 'time' ? '' : q.trim();
   $('#content').innerHTML = tab === 'ann' ? viewAnn(s, key) : !D.events.length ? `<div class="panel"><p class="muted">${auth.loaded ? '賽程尚未公布。' : '讀取中。'}</p></div>`
@@ -39,11 +41,21 @@ function render() {
   drawDetail();
 }
 
-/** 雲端硬碟分享連結改成內嵌預覽（手機也能上下滑動看每一頁） */
-function bookUrl(u) {
-  const m = String(u || '').match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?.*?id=)([\w-]+)/);
-  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : String(u || '');
+/** 秩序冊：捲動時更新目前頁碼 */
+function watchBook() {
+  const cur = $('#bkcur');
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && cur) cur.textContent = `${e.target.dataset.pg} / ${BOOK.pages}`; }), { rootMargin: '-45% 0px -45% 0px' });
+  document.querySelectorAll('.bkpages img').forEach(x => io.observe(x));
 }
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-bkmenu],[data-bkgo]');
+  const nav = $('.bknav');
+  if (!b) { if (nav && !nav.hidden && !ev.target.closest('.bknav')) { nav.hidden = true; $('[data-bkmenu]').setAttribute('aria-expanded', 'false'); } return; }
+  if ('bkmenu' in b.dataset) { nav.hidden = !nav.hidden; b.setAttribute('aria-expanded', String(!nav.hidden)); return; }
+  const pg = document.getElementById(`bk${b.dataset.bkgo}`);
+  nav.hidden = true; $('[data-bkmenu]').setAttribute('aria-expanded', 'false');
+  if (pg) window.scrollTo({ top: pg.getBoundingClientRect().top + window.scrollY - $('.bkbar').offsetHeight - 4 });
+});
 
 /** 大會台的廣播：只顯示最新一則，按「查看更多」再列出前 4 則 */
 let callsOpen = false;

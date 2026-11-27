@@ -667,4 +667,17 @@ td.tts-next { background: #fff; box-shadow: inset 0 0 0 2px var(--yellow); }
 .ckp.rc { white-space: normal; }
 .refdef h3 { margin: 14px 0 4px; font-size: 15px; } .refdef ul { margin: 0; padding-left: 20px; line-height: 1.7; } .refdef p { margin: 4px 0 0; line-height: 1.7; }
 
-#book { display: block; width: 100%; height: calc(100dvh - 200px); min-height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+/* 秩序冊：除了上方標題列，畫面全部給頁面 */
+main.bookmode { max-width: none; padding-left: 0; padding-right: 0; padding-top: 0; }
+.bkbar { position: sticky; top: 0; z-index: 20; display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(243,246,251,.94); border-bottom: 1px solid var(--line); }
+.bkcur { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bkmenu { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--blue); cursor: pointer; }
+.bknav { position: absolute; top: 100%; right: 12px; width: min(320px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px 0; }
+.bknav ul { list-style: none; margin: 0; padding: 0; }
+.bknav ul ul button { padding-left: 32px; font-weight: 400; }
+.bknav button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 16px; border: 0; background: none; text-align: left; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
+.bknav button:hover { background: var(--blue-soft, #eaf1fb); }
+.bkp { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.bkpages { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; background: #dfe3ea; }
+.bkpages img { display: block; width: min(100%, 1000px); height: auto; background: #fff; scroll-margin-top: 60px; }
+main.bookmode .sbox + div { display: none; }

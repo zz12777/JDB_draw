@@ -1298,8 +1298,7 @@ function viewSetup(s) {
       <label>屆數 <input type="text" data-set="edition" value="${esc(s.edition)}" style="width:120px"></label>
       <label>球桌數 <input type="number" min="2" max="60" data-set="tables" value="${s.tables}" style="width:80px"></label>
       <label>第一天 <input type="date" data-date="0" value="${esc((s.dates || [])[0] || '')}"></label>
-      <label>第二天 <input type="date" data-date="1" value="${esc((s.dates || [])[1] || '')}"></label>
-      <label>秩序冊 <input type="url" data-set="book" value="${esc(s.book || '')}" placeholder="雲端硬碟分享連結" style="width:260px"></label></div></div>
+      <label>第二天 <input type="date" data-date="1" value="${esc((s.dates || [])[1] || '')}"></label></div></div>
     <div class="panel"><div class="row"><h2 style="margin:0">匯入最終籤表（Excel 檔）</h2><span class="spacer"></span><label class="btn sm">${icon('upload')}一次選擇多個檔案<input type="file" accept=".xlsx" multiple hidden data-impall></label></div>
       <table class="list"><thead><tr><th>項目</th><th>目前資料</th><th></th></tr></thead><tbody>
       ${EVENT_ORDER.map(ev => { const e = D.events.find(x => x.name === ev); return `<tr><td><b>${ev}</b></td><td class="small">${e ? (e.team ? `${e.groups.length} 組，${e.groups.reduce((a, g) => a + g.teams.length, 0)} 隊` : `${e.matches.length + 1} 籤`) + `，共 ${e.matches.length} 場` + (fileOf(ev) ? `<div class="muted">${esc(fileOf(ev))}</div>` : '') : '<span class="muted">尚未匯入</span>'}</td>
@@ -1754,7 +1753,7 @@ document.addEventListener('change', async ev => {
   else if (d.set) update(s => {
     // 改屆數時，成績公告標題裡的舊屆數一起換掉
     if (d.set === 'edition' && s.edition && s.annTitle && s.annTitle.includes(s.edition)) s.annTitle = s.annTitle.split(s.edition).join(t.value);
-    s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : d.set === 'book' ? t.value.trim() : t.value;
+    s[d.set] = d.set === 'tables' ? Math.max(2, Number(t.value) || 24) : t.value;
   });
   else if (d.imp) { if (t.files[0]) await importBracket(d.imp, t.files[0]); }
   else if ('impall' in d) { if (t.files.length) await importAll([...t.files]); }
