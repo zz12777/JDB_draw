@@ -1,5 +1,5 @@
 // 參賽者系統原型：管理頁（報名回覆表格、名額、候補遞補、繳費對帳、修改紀錄、設定）
-import { GROUPS, EVENTS, KIND, UNIT_WORD, STATUS_TEXT, PAY_TEXT, TL_LABEL, phase, quotaOf, waitRank, stOf, isCapped, timelineFrom, feeOf, payState, paidSum, entryName, fmtMoney, fmtTime, fmtDT } from './model.js';
+import { GROUPS, EVENTS, KIND, UNIT_WORD, STATUS_TEXT, PAY_TEXT, TL_LABEL, phase, quotaOf, waitRank, stOf, isCapped, timelineFrom, feeOf, payState, paidSum, leadOf, batchRegs, entryName, fmtMoney, fmtTime, fmtDT } from './model.js';
 import { getState, update, subscribe, resetDemo } from './store.js';
 import { esc, $, $$, icon, toast, header, demoBar } from './ui.js';
 
@@ -16,7 +16,7 @@ const TABS = [['sheet', '報名回覆', 'table'], ['quota', '名額', 'bars'], [
 function render() {
   const st = getState();
   $('#top').innerHTML = header(st.settings, '報名管理', `<label class="rolesel">示範身分<select data-role><option value="finance" ${fin() ? 'selected' : ''}>總召、總務</option><option value="admin" ${fin() ? '' : 'selected'}>管理員</option></select></label>`);
-  const unpaid = Object.values(st.regs).filter(r => payState(r) === 'reported').length;
+  const unpaid = Object.values(st.regs).filter(r => leadOf(st, r) === r && payState(st, r) === 'reported').length;
   const badge = k => (k === 'pay' && unpaid && fin() ? `<span class="badge">${unpaid}</span>` : '');
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'pay' || fin()).map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(ic)}${t}${badge(k)}</button>`).join('');
   if (tab === 'pay' && !fin()) tab = 'sheet';
@@ -28,7 +28,7 @@ function render() {
 const evSum = r => EVENTS.map(ev => { const n = r.entries.filter(e => e.ev === ev && e.status !== 'out').length; return n ? `${ev}${n}` : ''; }).filter(Boolean).join(' ');
 const stText = (st, e) => { const k = stOf(st, e); return k === 'wait' ? `${isCapped(st, e) ? '備取' : '候補'} ${waitRank(st, e)}` : STATUS_TEXT[k]; };
 function sheetDef(st) {
-  const base = r => [['contact', '聯絡人', r.contact.name], ['email', 'email', r.contact.email], ['phone', '手機', r.contact.phone || ''], ['pay', '繳費狀態', PAY_TEXT[payState(r)]]];
+  const base = r => [['contact', '聯絡人', r.contact.name], ['email', 'email', r.contact.email], ['phone', '手機', r.contact.phone || ''], ['pay', '繳費狀態', PAY_TEXT[payState(st, r)]]];
   if (sheet.name === 'team') {
     return {
       rows: Object.values(st.regs).flatMap(r => r.entries.filter(e => KIND[e.ev] === 'team').map(e => ({ r, e, cells: [['ts', '時間戳記', fmtTime(e.ts), e.ts], ['ev', '項目', e.ev], ['unit', '單位', r.unit], ['name', '隊名', e.name], ['coach', '教練', e.coach], ['leader', '領隊', e.leader], ['captain', '隊長', e.captain],
@@ -40,7 +40,7 @@ function sheetDef(st) {
   }
   return {
     rows: Object.values(st.regs).map(r => { const f = feeOf(st, r); return { r, e: null, cells: [['ts', '時間戳記', fmtTime(r.createdAt), r.createdAt], ['grp', '組別', GROUPS[r.group].name], ['unit', '單位', r.unit], ['contact', '聯絡人', r.contact.name], ['email', 'email', r.contact.email], ['phone', '手機', r.contact.phone || ''],
-      ['eds', '共同管理', (r.editors || []).join('、')], ['sum', '報名項目', evSum(r)], ['park', '停車證', r.parking || 0, r.parking || 0], ...(fin() ? [['fee', '應繳', f.total, f.total], ['paid', '已回報', paidSum(r), paidSum(r)]] : []), ['pay', '繳費狀態', PAY_TEXT[payState(r)]], ['note', '備註', r.note || ''], ['upd', '最後修改', fmtTime(r.updatedAt), r.updatedAt]] }; }),
+      ['eds', '共同管理', (r.editors || []).join('、')], ['sum', '報名項目', evSum(r)], ['park', '停車證', r.parking || 0, r.parking || 0], ...(fin() ? (leadOf(st, r) === r ? [['fee', '應繳', f.total, f.total], ['paid', '已回報', paidSum(st, r), paidSum(st, r)]] : [['fee', '應繳', '併上筆'], ['paid', '已回報', '']]) : []), ['pay', '繳費狀態', PAY_TEXT[payState(st, r)]], ['note', '備註', r.note || ''], ['upd', '最後修改', fmtTime(r.updatedAt), r.updatedAt]] }; }),
   };
 }
 function sheetRows(st) {
@@ -104,7 +104,7 @@ function viewWait(st) {
       <table class="list"><thead><tr><th>順位</th><th>單位</th><th>隊名／選手</th><th>類別</th><th>完成報名</th><th></th></tr></thead><tbody>${q.waitList.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.r.unit)}</td><td>${esc(entryName(x.e))}</td><td class="small">${x.capped ? '備取' : '額滿候補'}</td><td class="small">${x.t ? fmtTime(x.t) : '<span class="muted">尚未匯款</span>'}</td><td class="r"><button class="btn sm" data-promote="${x.r.id}|${x.e.id}">${icon('check')}遞補</button></td></tr>`).join('')}</tbody></table></div>`; }).join('');
   return `<div class="panel"><h2>遞補流程</h2><ol class="small" style="margin:0;padding-left:20px;line-height:1.8"><li>報名與匯款確認截止（${fmtDT(t.close)}）後，有空出的名額時，按候補名單的「遞補」，該筆改為正取並設定繳費期限（${s.payDays} 天，可在設定修改）。</li><li>系統開啟一封寫好的候補成功信（應繳金額、匯款資訊、繳費期限），由總務確認後寄出。候補匯款期間：${fmtDT(t.waitPayStart)} 至 ${fmtDT(t.waitPayEnd)}。</li><li>沒有遞補到的，按「擬未遞補通知信」，用密件副本一次寄給同項目所有未遞補的聯絡人。候補信預計 ${fmtDT(t.waitMailStart)} 至 ${fmtDT(t.waitMailEnd)} 寄出。</li><li>期限內未回報匯款會在下方標示，由大會決定是否繼續往下遞補。</li></ol></div>
     ${blocks || '<div class="panel"><p class="muted">目前沒有候補。</p></div>'}
-    ${promoted.length ? `<div class="panel"><h2>已遞補</h2><table class="list"><thead><tr><th>項目</th><th>單位</th><th>隊名／選手</th><th>遞補時間</th><th>繳費期限</th><th>繳費狀態</th><th></th></tr></thead><tbody>${promoted.map(({ r, e }) => { const ps = payState(r), late = Date.parse(e.payDue) < now && (ps === 'none'); return `<tr class="${late ? 'late' : ''}"><td>${e.ev}</td><td>${esc(r.unit)}</td><td>${esc(entryName(e))}</td><td class="small">${fmtTime(e.promotedAt)}</td><td class="small">${esc(fmtDT(e.payDue))}${late ? ' <b style="color:var(--red)">已逾期</b>' : ''}</td><td><span class="pay ${ps}">${PAY_TEXT[ps]}</span></td><td class="r"><button class="btn ghost sm" data-pmail="${r.id}|${e.id}">${icon('mail')}再開一次信</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}`;
+    ${promoted.length ? `<div class="panel"><h2>已遞補</h2><table class="list"><thead><tr><th>項目</th><th>單位</th><th>隊名／選手</th><th>遞補時間</th><th>繳費期限</th><th>繳費狀態</th><th></th></tr></thead><tbody>${promoted.map(({ r, e }) => { const ps = payState(st, r), late = Date.parse(e.payDue) < now && (ps === 'none'); return `<tr class="${late ? 'late' : ''}"><td>${e.ev}</td><td>${esc(r.unit)}</td><td>${esc(entryName(e))}</td><td class="small">${fmtTime(e.promotedAt)}</td><td class="small">${esc(fmtDT(e.payDue))}${late ? ' <b style="color:var(--red)">已逾期</b>' : ''}</td><td><span class="pay ${ps}">${PAY_TEXT[ps]}</span></td><td class="r"><button class="btn ghost sm" data-pmail="${r.id}|${e.id}">${icon('mail')}再開一次信</button></td></tr>`; }).join('')}</tbody></table></div>` : ''}`;
 }
 function promoteMail(st, r, e) {
   const s = st.settings, f = feeOf(st, r);
@@ -128,15 +128,15 @@ function openMail(url) { window._lastMail = url; const a = document.createElemen
 // ---------------- 繳費對帳（總召、總務） ----------------
 let payFilter = 'reported';
 function viewPay(st) {
-  const regs = Object.values(st.regs).sort((a, b) => a.createdAt - b.createdAt);
-  const cnt = k => regs.filter(r => payState(r) === k).length;
-  const list = regs.filter(r => !payFilter || payState(r) === payFilter);
+  const regs = Object.values(st.regs).filter(r => leadOf(st, r) === r).sort((a, b) => a.createdAt - b.createdAt);
+  const cnt = k => regs.filter(r => payState(st, r) === k).length;
+  const list = regs.filter(r => !payFilter || payState(st, r) === payFilter);
   return `<div class="panel"><div class="row"><h2 style="margin:0">繳費對帳</h2><span class="small muted">只有總召、總務看得到匯款明細</span><span class="spacer"></span><button class="btn ghost sm" data-payx>${icon('download')}匯出 Excel</button></div>
     <div class="pills" style="margin:8px 0">${[['reported', '待對帳'], ['mismatch', '金額不符'], ['none', '尚未回報'], ['received', '已收到'], ['', '全部']].map(([k, t]) => `<button class="${payFilter === k ? 'on' : ''}" data-pf="${k}">${t}${k ? `（${cnt(k)}）` : ''}</button>`).join('')}</div>
     <table class="list payt"><thead><tr><th>單位</th><th class="r">應繳</th><th>匯款回報</th><th class="r">回報合計</th><th>狀態</th><th>對帳</th></tr></thead><tbody>
-    ${list.map(r => { const f = feeOf(st, r), ps = payState(r), diff = paidSum(r) - f.total; return `<tr><td><b>${esc(r.unit)}</b><div class="small muted">${GROUPS[r.group].name}　${esc(r.contact.name)}</div></td><td class="r">${f.total.toLocaleString('en-US')}</td>
-      <td class="small">${(r.pays || []).map(p => `${esc(fmtDT(p.time))}　${Number(p.amount).toLocaleString('en-US')} 元　後五碼 ${esc(p.last5)}`).join('<br>') || '<span class="muted">尚未回報</span>'}</td>
-      <td class="r">${paidSum(r).toLocaleString('en-US')}${(r.pays || []).length && diff ? `<div class="small" style="color:var(--red)">${diff > 0 ? '多' : '少'} ${Math.abs(diff).toLocaleString('en-US')}</div>` : ''}</td>
+    ${list.map(r => { const f = feeOf(st, r), ps = payState(st, r), diff = paidSum(st, r) - f.total; return `<tr><td><b>${[...new Set(batchRegs(st, r).map(x => x.unit))].map(esc).join('、')}</b><div class="small muted">${batchRegs(st, r).map(x => GROUPS[x.group].name).join('、')}　${esc(r.contact.name)}</div></td><td class="r">${f.total.toLocaleString('en-US')}</td>
+      <td class="small">${(r.pays || []).map(p => `${esc(fmtDT(p.time))}　${Number(p.amount).toLocaleString('en-US')} 元　末五碼 ${esc(p.last5)}`).join('<br>') || '<span class="muted">尚未回報</span>'}</td>
+      <td class="r">${paidSum(st, r).toLocaleString('en-US')}${(r.pays || []).length && diff ? `<div class="small" style="color:var(--red)">${diff > 0 ? '多' : '少'} ${Math.abs(diff).toLocaleString('en-US')}</div>` : ''}</td>
       <td><span class="pay ${ps}">${PAY_TEXT[ps]}</span>${r.fin && r.fin.at ? `<div class="small muted">${fmtTime(r.fin.at)}</div>` : ''}${ps === 'mismatch' && r.fin.note ? `<div class="small">${esc(r.fin.note)}</div>` : ''}</td>
       <td><div class="row" style="gap:6px"><button class="btn sm" data-recv="${r.id}">${icon('check')}已收到</button><input class="note-in" data-mnote="${r.id}" placeholder="不符原因（參賽者看得到）"><button class="btn ghost sm" data-mis="${r.id}">金額不符</button></div></td></tr>`; }).join('') || '<tr><td colspan="6" class="muted">沒有資料</td></tr>'}</tbody></table></div>`;
 }
@@ -144,7 +144,7 @@ async function exportPay(st) {
   if (!window.ExcelJS) { toast('Excel 元件載入中，請稍候再按一次'); return; }
   const wb = new window.ExcelJS.Workbook(), ws = wb.addWorksheet('繳費對帳');
   ws.addRow(['組別', '單位', '聯絡人', 'email', '應繳', '回報合計', '匯款紀錄', '狀態', '備註', '最後對帳']).font = { bold: true };
-  Object.values(st.regs).forEach(r => ws.addRow([GROUPS[r.group].name, r.unit, r.contact.name, r.contact.email, feeOf(st, r).total, paidSum(r), (r.pays || []).map(p => `${fmtDT(p.time)} ${p.amount} 後五碼${p.last5}`).join('\n'), PAY_TEXT[payState(r)], (r.fin && r.fin.note) || '', r.fin && r.fin.at ? new Date(r.fin.at) : '']));
+  Object.values(st.regs).filter(r => leadOf(st, r) === r).forEach(r => ws.addRow([batchRegs(st, r).map(x => GROUPS[x.group].name).join('、'), [...new Set(batchRegs(st, r).map(x => x.unit))].join('、'), r.contact.name, r.contact.email, feeOf(st, r).total, paidSum(st, r), (r.pays || []).map(p => `${fmtDT(p.time)} ${p.amount} 末五碼${p.last5}`).join('\n'), PAY_TEXT[payState(st, r)], (r.fin && r.fin.note) || '', r.fin && r.fin.at ? new Date(r.fin.at) : '']));
   ws.columns.forEach(c => { c.width = 16; });
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf])); a.download = '繳費對帳.xlsx'; a.click();
@@ -227,7 +227,7 @@ function drawDetail() {
   host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(760px,100%)"><div class="row"><span class="gtag">${GROUPS[r.group].name}</span><h2 style="margin:0">${esc(r.unit)}</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}</button></div>
     <p class="small">聯絡人 ${esc(r.contact.name)}　${esc(r.contact.email)}${r.contact.phone ? `　${esc(r.contact.phone)}` : ''}${(r.editors || []).length ? `<br>共同管理 ${esc(r.editors.join('、'))}` : ''}${r.note ? `<br>備註 ${esc(r.note)}` : ''}</p>
     <table class="list"><tbody>${r.entries.map(e => `<tr class="${e.status === 'out' ? 'dim' : ''}"><td><b>${e.ev}</b></td><td>${esc(entryName(e))}${e.members ? `<div class="small muted">教練 ${esc(e.coach || '－')}　領隊 ${esc(e.leader || '－')}　隊長 ${esc(e.captain || '－')}<br>${esc(e.members.join('、'))}</div>` : ''}</td><td class="nowrap">${stText(st, e)}</td></tr>`).join('')}</tbody></table>
-    <p class="small">停車證 ${r.parking || 0} 張　繳費狀態 ${PAY_TEXT[payState(r)]}${fin() ? `　應繳 ${fmtMoney(f.total)}　已回報 ${fmtMoney(paidSum(r))}` : ''}</p>
+    <p class="small">停車證 ${r.parking || 0} 張　繳費狀態 ${PAY_TEXT[payState(st, r)]}${fin() ? `　應繳 ${fmtMoney(f.total)}　已回報 ${fmtMoney(paidSum(st, r))}` : ''}</p>
     <h3>修改紀錄</h3><div class="small log">${r.log.slice().reverse().map(l => `<div>${fmtTime(l.ts)}　${esc(l.by)}　${esc(l.text)}</div>`).join('')}</div></div></div>`;
 }
 
@@ -257,7 +257,7 @@ document.addEventListener('click', ev => {
     if (q.left !== Infinity && !q.left && !confirm('目前沒有空出的名額，仍要遞補嗎？')) return;
     let url = '';
     update(n => { const r = n.regs[rid], e = r.entries.find(x => x.id === eid); const due = new Date(Date.now() + n.settings.payDays * 864e5 - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
-      Object.assign(e, { promotedAt: Date.now(), payDue: due }); if (r.fin && r.fin.state === 'received') r.fin = { ...r.fin, state: 'mismatch', note: '遞補後應繳金額增加，請補匯差額' };
+      Object.assign(e, { promotedAt: Date.now(), payDue: due }); const L = leadOf(n, r); if (L.fin && L.fin.state === 'received') L.fin = { ...L.fin, state: 'mismatch', note: '遞補後應繳金額增加，請補匯差額' };
       r.log.push({ ts: Date.now(), by: BY(), text: `${e.ev} ${entryName(e)} 由候補遞補為正取，繳費期限 ${fmtDT(due)}` }); url = promoteMail(n, r, e); });
     openMail(url); toast('已遞補，信件已開啟，確認內容後按寄出');
   }

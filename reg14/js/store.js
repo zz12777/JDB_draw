@@ -2,7 +2,7 @@
 // 同一台電腦開兩個分頁（報名頁、管理頁）會互相同步。之後接資料庫時只換這個檔案。
 import { defaultSettings, timelineFrom, uid, GROUPS, KIND } from './model.js';
 
-const KEY = 'jdb-reg14-demo4';
+const KEY = 'jdb-reg14-demo5';
 let state = null;
 const subs = new Set();
 
@@ -31,17 +31,16 @@ function seed() {
   const now = Date.now(), day = 864e5;
   const st = { settings: defaultSettings(), regs: {}, seq: 0 };
   const s = st.settings;
-  // 示範：比賽日期設在 37 天後，依第十三屆的間隔推算，今天剛好在報名期間內
-  const d1 = new Date(now + 37 * day - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-  s.dates = [d1, new Date(Date.parse(d1) + day).toISOString().slice(0, 10)];
-  s.timeline = timelineFrom(d1);
+  // 示範：第十四屆暫定 2027/12/4、12/5，期程照第十三屆的間隔推算；只有「開始報名」提前到今天以前，才能試用報名
+  s.timeline = timelineFrom(s.dates[0]);
+  s.timeline.open = new Date(now - 12 * day - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 11) + '12:00';
   // 示範名額縮小，才看得到額滿與候補（實際設定請看往年紀錄）
   Object.assign(s.events.男團, { quota: 16 }); Object.assign(s.events.社團, { quota: 4 }); Object.assign(s.events.男雙, { quota: 10 });
   let t = now - 11 * day;
-  const add = (g, unit, i, plan) => {
+  const add = (g, unit, i, plan, lead) => {
     t += rand(9) * 36e5 + 6e5;
-    const id = uid(), contact = { name: person(), email: `contact${i}@example.com`, phone: rand(3) ? `09${String(10000000 + rand(89999999)).slice(0, 8)}` : '' };
-    const r = { id, group: g, unit, contact, editors: rand(3) ? [] : [`coach${i}@example.com`], parking: rand(4), createdAt: t, updatedAt: t, entries: [], pays: [], log: [{ ts: t, by: contact.email, text: '送出報名' }], note: rand(5) ? '' : `要收據，抬頭 ${unit}桌球隊` };
+    const id = uid(), contact = lead ? { ...lead.contact } : { name: person(), email: `contact${i}@example.com`, phone: rand(3) ? `09${String(10000000 + rand(89999999)).slice(0, 8)}` : '' };
+    const r = { id, bid: lead ? lead.id : id, group: g, unit, contact, editors: rand(3) ? [] : [`coach${i}@example.com`], parking: lead ? 0 : rand(4), createdAt: t, updatedAt: t, entries: [], pays: [], log: [{ ts: t, by: contact.email, text: '送出報名' }], note: rand(5) ? '' : `要收據，抬頭 ${unit}桌球隊` };
     st.regs[id] = r;
     plan.forEach(([ev, n]) => {
       for (let k = 0; k < n; k++) {
@@ -52,19 +51,22 @@ function seed() {
         r.entries.push(e);
       }
     });
-    // 繳費：大約七成已回報匯款（完成報名），其中一部分總務已對帳
-    if (rand(10) < 7) {
-      const fee = { team: 2400, single: 300, double: 350 };
-      const cnt = {}; const sum = r.entries.reduce((a, e) => { cnt[e.ev] = (cnt[e.ev] || 0) + 1; return a + (e.ev === '男單' && cnt[e.ev] > 5 && unit !== '陽明交大' ? 0 : fee[KIND[e.ev]]); }, 0) + r.parking * s.parkingPrice;
-      const pt = t + day * (1 + rand(3));
-      r.pays.push({ amount: rand(8) ? sum : sum - 300, time: new Date(pt - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16), last5: String(10000 + rand(89999)), ts: pt });
-      if (rand(3)) r.fin = r.pays[0].amount === sum ? { state: 'received', at: pt + day, by: 'finance@example.com' } : { state: 'mismatch', note: '少 300 元，請補匯', at: pt + day, by: 'finance@example.com' };
-    }
     return r;
   };
   let i = 1;
-  UNITS.forEach((u, k) => { add('M', u, i++, [['男團', k % 4 === 0 ? 2 : 1], ['男單', k % 3 === 0 ? 7 : 1 + rand(3)], ['男雙', rand(2)]]); if (k % 2 === 0) add('W', u, i++, [['女團', 1], ['女單', 1 + rand(2)], ['女雙', rand(2)]]); });
+  // 同校男子組、女子組一起送出，合併成一筆繳費
+  UNITS.forEach((u, k) => { const m = add('M', u, i++, [['男團', k % 4 === 0 ? 2 : 1], ['男單', k % 3 === 0 ? 7 : 1 + rand(3)], ['男雙', rand(2)]]); if (k % 2 === 0) add('W', u, i, [['女團', 1], ['女單', 1 + rand(2)], ['女雙', rand(2)]], m); });
   CLUBS.forEach(c => add('S', c, i++, [['社團', 1]]));
+  // 繳費：大約七成已回報匯款（完成報名），其中一部分總務已對帳
+  const fee = { team: 2400, single: 300, double: 350 };
+  Object.values(st.regs).filter(r => r.bid === r.id).forEach(r => {
+    if (rand(10) >= 7) return;
+    const regs = Object.values(st.regs).filter(x => x.bid === r.id);
+    const sum = regs.reduce((a, x) => { const cnt = {}; return a + x.entries.reduce((b, e) => { cnt[e.ev] = (cnt[e.ev] || 0) + 1; return b + (e.ev === '男單' && cnt[e.ev] > 5 && x.unit !== '陽明交大' ? 0 : fee[KIND[e.ev]]); }, 0) + x.parking * s.parkingPrice; }, 0);
+    const pt = r.createdAt + day * (1 + rand(3));
+    r.pays.push({ amount: rand(8) ? sum : sum - 300, time: new Date(pt - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16), last5: String(10000 + rand(89999)), ts: pt });
+    if (rand(3)) r.fin = r.pays[0].amount === sum ? { state: 'received', at: pt + day, by: 'finance@example.com' } : { state: 'mismatch', note: '少 300 元，請補匯', at: pt + day, by: 'finance@example.com' };
+  });
   return st;
 }
 state = load();

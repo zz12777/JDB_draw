@@ -1,5 +1,5 @@
 // 參賽者系統原型：報名者頁面（報名、名單修改、繳費回報、候補順位、共同管理、Q&A）
-import { GROUPS, EVENTS, KIND, UNIT_WORD, PAY_TEXT, TL_LABEL, phase, quotaOf, waitRank, stOf, isCapped, feeOf, payState, paidSum, mine, entryName, nameWidth, fmtMoney, fmtTime, fmtDT, norm, uid } from './model.js';
+import { GROUPS, EVENTS, KIND, UNIT_WORD, PAY_TEXT, TL_LABEL, phase, quotaOf, waitRank, stOf, isCapped, feeOf, payState, paidSum, leadOf, batchRegs, mine, entryName, nameWidth, fmtMoney, fmtTime, fmtDT, norm, uid } from './model.js';
 import { getState, update, subscribe, resetDemo } from './store.js';
 import { applyChange } from './changes.js';
 import { esc, $, $$, icon, toast, header, demoBar } from './ui.js';
@@ -9,13 +9,14 @@ let me = (() => { try { return localStorage.getItem(ME_KEY) || ''; } catch (e) {
 let view = 'home';  // home | wiz（新增報名）| edit（修改一個組別）
 let wiz = null;     // 新增報名的步驟與內容
 let edit = null;    // 修改名單的內容
-const open = new Set(); // 展開修改紀錄的報名
+const open = new Set(); // 展開「共同管理與修改紀錄」的報名
+const payOpen = new Set(); // 已回報後再回報一筆
 let pop = '';       // 彈出視窗：info 賽務資訊 / qa 報名 Q&A
 let qaQ = '';
 const qaShow = new Set();
 
 const REQ = '<span class="req">*</span>';
-const NOTE_HINT = '要新增收據請備註抬頭與統編，收據僅提供<b>隊章</b>';
+const NOTE_LABEL = '<span>備註<span class="hint">（若需收據請備註抬頭與統編，收據僅提供隊章）</span></span>';
 
 function render() {
   const st = getState(), s = st.settings;
@@ -38,10 +39,10 @@ function afterLogin() { const st = getState(); if (phase(st) === 'open' && !mine
 
 // ---------------- 賽務資訊、Q&A ----------------
 const WD = '日一二三四五六';
-const dayText = d => { const x = new Date(`${d}T00:00`); return Number.isNaN(+x) ? d : `${x.getMonth() + 1}/${x.getDate()}（${WD[x.getDay()]}）`; };
+const dayText = d => { const x = new Date(`${d}T00:00`); return Number.isNaN(+x) ? d : `${x.getFullYear()}/${x.getMonth() + 1}/${x.getDate()}（${WD[x.getDay()]}）`; };
 function infoHtml(st) {
-  const s = st.settings, t = s.timeline || {}, y = (s.dates[0] || '').slice(0, 4);
-  const md = v => fmtDT(v).replace(`${y}/`, '');
+  const s = st.settings, t = s.timeline || {};
+  const md = v => fmtDT(v);
   const tl = [['open'], ['close'], ['waitPayStart', 'waitPayEnd', '候補匯款'], ['waitMailStart', 'waitMailEnd', '寄候補信'], ['editClose'], ['drawAt'], ['publish']];
   const lim = ev => { const c = s.events[ev], k = KIND[ev], a = []; if (k === 'team' && c.max) a.push(`每隊最多 ${c.max} 人`); if (c.nameMax) a.push(`隊名 ${c.nameMax} 字以內`); if (c.perUnitOk) a.push(`每校正取 ${c.perUnitOk} 名${s.hostUnit ? `（${esc(s.hostUnit)}不限）` : ''}`); if (c.perUnit) a.push(`每單位最多 ${c.perUnit} ${UNIT_WORD[k]}`); return a.join('、'); };
   return `<h2>${esc(s.edition)}${esc(s.title)}</h2>
@@ -62,60 +63,58 @@ function drawPop(st) {
     : `<h2>報名 Q&amp;A</h2><label class="sbox">${icon('search')}<input id="qaq" type="search" placeholder="搜尋問題" value="${esc(qaQ)}"></label><div class="qal">${qaItems(s)}</div><p class="small muted" style="margin:12px 0 0">${contact}</p>`}</div></div>`;
 }
 
-// ---------------- 首頁 ----------------
+// ---------------- 首頁：每次送出一張卡（同一筆繳費） ----------------
 function homeView(st) {
-  const s = st.settings, ph = phase(st);
-  const list = mine(st, me);
-  const t = s.timeline;
-  const period = `報名期間 ${fmtDT(t.open)} 至 ${fmtDT(t.close)}，名單修改截止 ${fmtDT(t.editClose)}`;
-  const banner = ph === 'open' ? `<div class="panel"><div class="row"><h2 style="margin:0">報名中</h2><span class="muted small">${period}</span><span class="spacer"></span><button class="btn" data-new>${icon('plus')}新增報名</button></div></div>`
-    : `<div class="panel"><h2 style="margin:0 0 4px">${ph === 'before' ? '尚未開放報名' : ph === 'closed' ? '名單修改已截止' : '報名已截止'}</h2><p class="muted small" style="margin:0">${period}</p></div>`;
-  return banner + (list.length ? list.map(r => regCard(st, r, ph)).join('') : `<div class="panel"><p class="muted">這個帳號還沒有報名資料。${ph === 'open' ? '按「新增報名」開始。' : ''}</p></div>`);
+  const s = st.settings, ph = phase(st), t = s.timeline;
+  const leads = [...new Set(mine(st, me).map(r => leadOf(st, r)))].sort((a, b) => b.createdAt - a.createdAt);
+  const title = { open: '報名中', before: '尚未開放報名', edit: '報名已截止', closed: '名單修改已截止' }[ph];
+  const head = `<div class="panel"><div class="row"><h2 style="margin:0">${title}</h2><span class="muted small">報名期間 ${fmtDT(t.open)} 至 ${fmtDT(t.close)}，名單修改截止 ${fmtDT(t.editClose)}</span><span class="spacer"></span>${ph === 'open' ? `<button class="btn" data-new>${icon('plus')}${leads.length ? '新增其他報名' : '新增報名'}</button>` : ''}</div></div>`;
+  return head + (leads.length ? leads.map(l => billCard(st, l, ph)).join('') : '<div class="panel"><p class="muted">這個帳號還沒有報名資料。</p></div>');
 }
-function statusCell(st, e) {
+/** 依項目列出名單；tagFn 回傳每筆後面的狀態標籤 */
+function roster(entries, tagFn = () => '') {
+  return EVENTS.filter(ev => entries.some(e => e.ev === ev)).map(ev => {
+    const list = entries.filter(e => e.ev === ev), team = KIND[ev] === 'team';
+    return `<div class="rv"><div><span class="evt k-${KIND[ev]}">${ev}</span></div><div class="rvl">${list.map(e => (team
+      ? `<div class="rvt"><b>${esc(e.name)}</b>${tagFn(e)}${e.coach || e.leader || e.captain ? `<div class="small muted">${[['教練', e.coach], ['領隊', e.leader], ['隊長', e.captain]].filter(x => x[1]).map(x => `${x[0]} ${esc(x[1])}`).join('　')}</div>` : ''}<div class="small">${esc((e.members || []).join('、'))}</div></div>`
+      : `<span class="rvp">${esc(entryName(e))}${tagFn(e)}</span>`)).join('')}</div></div>`;
+  }).join('');
+}
+function stTag(st, e) {
   const k = stOf(st, e);
-  if (k === 'wait') return `<span class="st wait">${isCapped(st, e) ? '備取' : '候補'}第 ${waitRank(st, e)} 位</span>${isCapped(st, e) ? `<div class="small muted">每校正取 ${st.settings.events[e.ev].perUnitOk} 名，其餘備取</div>` : ''}`;
-  if (k === 'out') return '<span class="st out">已退出</span>';
-  if (k === 'unpaid') return '<span class="st unpaid">待完成報名</span><div class="small muted">完成匯款回報才算報名成功</div>';
-  return `<span class="st ok">正取</span>${e.promotedAt ? `<div class="small" style="color:var(--red)">已遞補，請於 ${esc(fmtDT(e.payDue))} 前完成匯款</div>` : ''}`;
+  if (k === 'wait') return `<span class="st wait">${isCapped(st, e) ? '備取' : '候補'}第 ${waitRank(st, e)} 位</span>`;
+  if (k === 'ok') return '<span class="st ok">正取</span>';
+  return '';
 }
-function entryRow(st, e) {
-  const team = KIND[e.ev] === 'team';
-  return `<tr class="${e.status === 'out' ? 'dim' : ''}"><td class="nowrap"><b>${e.ev}</b></td><td>${esc(entryName(e))}${team ? `<div class="small muted">教練 ${esc(e.coach || '－')}　領隊 ${esc(e.leader || '－')}　隊長 ${esc(e.captain || '－')}</div><div class="small">${esc((e.members || []).join('、'))}</div>` : ''}</td>
-    <td class="nowrap">${statusCell(st, e)}</td></tr>`;
+const TIPS = `<ul class="tips"><li>請依<b>應匯款金額</b>匯款，再填寫上方的<b>匯款回報</b>。</li><li><b>提交報名表並完成匯款回報，才算報名成功</b>；有名額限制的項目依完成匯款回報的時間先後計算。</li><li>候補、備取的項目<b>不用先繳費</b>，遞補成功會寄信通知。</li></ul>`;
+function billCard(st, l, ph) {
+  const s = st.settings, regs = batchRegs(st, l), f = feeOf(st, l), ps = payState(st, l), paid = paidSum(st, l);
+  const stage = ps === 'received' ? 3 : ps === 'none' ? 1 : 2;
+  const prog = `<ol class="prog">${['送出報名', '完成匯款回報', '款項收到＆報名成功'].map((x, i) => `<li class="${i < stage ? 'done' : i === stage ? 'now' : ''}${i === 1 && ps === 'mismatch' ? ' warn' : ''}"><span>${i < stage ? icon('check') : i + 1}</span>${x}</li>`).join('')}</ol>`;
+  const promoted = regs.flatMap(r => r.entries.filter(e => e.promotedAt && e.status !== 'out'));
+  const form = `<div class="payform"><label>匯款金額<input type="number" min="1" data-pa="${l.id}" value="${ps === 'none' ? f.total : Math.max(0, f.total - paid) || ''}"></label><label>匯款時間<input type="datetime-local" data-pt="${l.id}"></label><label>帳號末五碼<input inputmode="numeric" maxlength="5" data-pl="${l.id}"></label><button class="btn" data-pay="${l.id}">送出匯款回報</button></div>`;
+  let pay;
+  if (ps === 'received') pay = `<p class="okmsg">${icon('check')}款項已收到，報名成功</p>`;
+  else if (ps === 'reported' && !payOpen.has(l.id)) pay = `<p>已回報匯款 <b>${fmtMoney(paid)}</b>，等待大會確認款項。<button class="lnk sm" data-payagain="${l.id}">再回報一筆</button></p>`;
+  else pay = `${ps === 'mismatch' ? `<p class="warnmsg">大會備註：${esc((l.fin && l.fin.note) || '金額不符')}</p>` : ''}
+      <div class="due"><span>應匯款金額</span><b>${fmtMoney(ps === 'none' ? f.total : f.total - paid)}</b>${ps !== 'none' ? `<span class="small muted">應繳 ${fmtMoney(f.total)}，已回報 ${fmtMoney(paid)}</span>` : ''}</div>
+      <p class="small muted" style="margin:2px 0 10px">${f.items.map(x => `${x.label} ${x.n} ${x.unit}`).join('、')}</p>
+      <p class="acct">收款帳號　${esc(s.bank.name)}（${esc(s.bank.code)}）<b>${esc(s.bank.account)}</b></p>${form}${ps === 'none' ? TIPS : ''}`;
+  const groups = regs.map(r => `<div class="grp"><div class="row"><span class="gtag">${GROUPS[r.group].name}</span><b>${esc(r.unit)}</b><span class="spacer"></span>${ph === 'open' || ph === 'edit' ? `<button class="btn ghost sm" data-edit="${r.id}">${icon('edit')}修改名單</button>` : ''}</div>
+      ${roster(r.entries.filter(e => e.status !== 'out'), e => stTag(st, e))}</div>`).join('');
+  const owner = norm(l.contact.email) === norm(me), eds = l.editors || [], logs = regs.flatMap(r => r.log).sort((a, b) => b.ts - a.ts);
+  const more = open.has(l.id) ? `<div class="cols"><div><h3>${icon('user')}共同管理</h3><p class="small muted" style="margin:0 0 6px">可以一起修改名單、回報匯款、填線上點單。</p>
+      <div class="chips">${eds.map(m => `<span class="chip">${esc(m)}${owner ? `<button class="x" data-ed-del="${l.id}|${esc(m)}" aria-label="移除">${icon('close')}</button>` : ''}</span>`).join('') || '<span class="small muted">尚未加入</span>'}</div>
+      <div class="row" style="margin-top:6px"><input type="email" placeholder="對方的 Google 帳號信箱" data-ed-new="${l.id}" style="flex:1;min-width:180px"><button class="btn ghost sm" data-ed-add="${l.id}">${icon('plus')}加入</button></div></div>
+      <div><h3>${icon('list')}修改紀錄</h3><div class="small log">${logs.map(x => `<div>${fmtTime(x.ts)}　${esc(x.by)}　${esc(x.text)}</div>`).join('')}</div></div></div>` : '';
+  return `<div class="panel bill">${prog}<div class="paybox">${pay}</div>
+    ${promoted.length && ps !== 'received' ? `<p class="warnmsg">${promoted.map(e => `${e.ev} ${esc(entryName(e))} 已遞補成功，請於 ${esc(fmtDT(e.payDue))} 前匯款`).join('<br>')}</p>` : ''}
+    <h3 class="sec">報名內容</h3>${groups}
+    <div class="row small foot">${icon('car')}停車證<button class="btn ghost sm" data-park="${l.id}|-1" ${l.parking ? '' : 'disabled'}>－</button><b>${l.parking || 0}</b> 張<button class="btn ghost sm" data-park="${l.id}|1">＋</button><span class="muted">${parkNote(s)}</span>
+      ${l.note ? `<span class="muted" style="margin-left:12px">備註</span>${esc(l.note)}` : ''}<span class="spacer"></span><button class="lnk sm" data-log="${l.id}">${icon(open.has(l.id) ? 'chevup' : 'chevdown')}共同管理與修改紀錄</button></div>
+    ${more}</div>`;
 }
-function regCard(st, r, ph) {
-  const s = st.settings, f = feeOf(st, r), ps = payState(r);
-  const owner = norm(r.contact.email) === norm(me);
-  const shown = r.entries.filter(e => e.status !== 'out' || open.has(r.id)).sort((p, q) => EVENTS.indexOf(p.ev) - EVENTS.indexOf(q.ev));
-  return `<div class="panel reg"><div class="row"><span class="gtag">${GROUPS[r.group].name}</span><h2 style="margin:0">${esc(r.unit)}</h2><span class="muted small">聯絡人 ${esc(r.contact.name)}　${esc(r.contact.email)}${r.contact.phone ? `　${esc(r.contact.phone)}` : ''}</span><span class="spacer"></span>
-      ${ph === 'open' || ph === 'edit' ? `<button class="btn ghost sm" data-edit="${r.id}">${icon('edit')}修改名單</button>` : ''}</div>
-    <table class="list ent"><thead><tr><th>項目</th><th>隊名／選手</th><th>狀態</th></tr></thead><tbody>${shown.map(e => entryRow(st, e)).join('')}</tbody></table>
-    ${r.note ? `<p class="small" style="margin:6px 0 0"><span class="muted">備註</span>　${esc(r.note)}</p>` : ''}
-    <div class="cols">
-      <div><h3>${icon('money')}應繳金額</h3>
-        <table class="list fee"><tbody>${f.items.map(x => `<tr><td>${x.label}</td><td class="r">${x.n} ${x.unit} × ${x.price.toLocaleString('en-US')}</td><td class="r">${x.sum.toLocaleString('en-US')}</td></tr>`).join('')}
-          <tr class="tot"><td>合計</td><td></td><td class="r">${fmtMoney(f.total)}</td></tr></tbody></table>
-        <div class="row small" style="margin-top:6px">${icon('car')}停車證<button class="btn ghost sm" data-park="${r.id}|-1" ${r.parking ? '' : 'disabled'}>－</button><b>${r.parking || 0}</b> 張<button class="btn ghost sm" data-park="${r.id}|1">＋</button><span class="muted">${parkNote(s)}，加購自動併入應繳</span></div>
-        ${r.entries.some(e => stOf(st, e) === 'wait') ? '<p class="small muted" style="margin:6px 0 0">候補、備取的項目不用先繳費，遞補成功會寄信通知。</p>' : ''}
-      </div>
-      <div><h3>${icon('check')}繳費與對帳</h3>
-        <div class="row"><span class="pay ${ps}">${PAY_TEXT[ps]}</span>${r.fin && r.fin.at ? `<span class="small muted">最後對帳 ${fmtTime(r.fin.at)}</span>` : ''}</div>
-        ${ps === 'mismatch' && r.fin.note ? `<p class="small" style="color:var(--red);margin:6px 0 0">大會備註：${esc(r.fin.note)}</p>` : ''}
-        ${(r.pays || []).length ? `<table class="list small" style="margin-top:6px"><tbody>${r.pays.map(p => `<tr><td>${esc(fmtDT(p.time))}</td><td class="r">${fmtMoney(p.amount)}</td><td>後五碼 ${esc(p.last5)}</td></tr>`).join('')}</tbody></table><p class="small muted" style="margin:4px 0">已回報合計 ${fmtMoney(paidSum(r))}${paidSum(r) !== f.total ? `，與應繳相差 ${fmtMoney(f.total - paidSum(r))}` : ''}</p>` : ''}
-        <p class="small muted" style="margin:6px 0">匯款帳號：${esc(s.bank.name)}（${esc(s.bank.code)}）${esc(s.bank.account)}</p>
-        <div class="payform"><input type="number" min="1" placeholder="匯款金額" data-pa="${r.id}"><input type="datetime-local" data-pt="${r.id}"><input inputmode="numeric" maxlength="5" placeholder="帳號後五碼" data-pl="${r.id}"><button class="btn sm" data-pay="${r.id}">回報匯款</button></div>
-      </div>
-    </div>
-    <div class="cols">
-      <div><h3>${icon('user')}共同管理</h3><p class="small muted" style="margin:0 0 6px">加入的帳號可以一起修改名單、回報匯款、填線上點單。</p>
-        <div class="chips">${(r.editors || []).map(m => `<span class="chip">${esc(m)}${owner ? `<button class="x" data-ed-del="${r.id}|${esc(m)}" aria-label="移除">${icon('close')}</button>` : ''}</span>`).join('') || '<span class="small muted">尚未加入</span>'}</div>
-        <div class="row" style="margin-top:6px"><input type="email" placeholder="對方的 Google 帳號信箱" data-ed-new="${r.id}" style="flex:1;min-width:180px"><button class="btn ghost sm" data-ed-add="${r.id}">${icon('plus')}加入</button></div></div>
-      <div><h3><button class="lnk" data-log="${r.id}">${icon(open.has(r.id) ? 'chevup' : 'chevdown')}修改紀錄（${r.log.length}）</button></h3>
-        ${open.has(r.id) ? `<div class="small log">${r.log.slice().reverse().map(l => `<div>${fmtTime(l.ts)}　${esc(l.by)}　${esc(l.text)}</div>`).join('')}</div>` : ''}</div>
-    </div></div>`;
-}
-const parkNote = s => `每張 ${s.parkingPrice} 元，可停一天`;
+const parkNote = s => `（每張 ${s.parkingPrice} 元，可停一天）`;
 
 // ---------------- 組別名單表單（新增報名與修改名單共用） ----------------
 const blankTeam = ev => ({ id: uid(), ev, name: '', coach: '', leader: '', captain: '', members: [''], lineup: 'online' });
@@ -192,49 +191,42 @@ function checkGroup(st, d) {
 }
 
 // ---------------- 新增報名（逐步） ----------------
-function startWiz() { wiz = { step: 'contact', contact: { name: '', email: me, phone: '' }, groups: [], cur: null, pick: null, parking: 0, note: '' }; view = 'wiz'; }
-const usedGroups = () => wiz.groups.map(x => x.group);
+function startWiz() { wiz = { step: 'contact', contact: { name: '', email: me, phone: '' }, groups: [], cur: null, parking: 0, note: '' }; view = 'wiz'; }
+const leftGroups = () => Object.keys(GROUPS).filter(g => !wiz.groups.some(x => x.group === g));
+const gCards = gs => gs.map(g => `<button class="gopt" data-gpick="${g}"><b>${GROUPS[g].name}</b><span class="small muted">${GROUPS[g].events.join('、')}</span></button>`).join('');
 function wizView(st) {
   const s = st.settings, w = wiz;
-  const steps = [['contact', '聯絡人'], ['group', '組別與名單'], ['review', '確認送出']];
-  const at = w.step === 'pick' || w.step === 'fill' || w.step === 'more' ? 'group' : w.step;
-  const bar = `<div class="steps">${steps.map(([k, t], i) => `<span class="${k === at ? 'on' : steps.findIndex(x => x[0] === at) > i ? 'done' : ''}">${i + 1}. ${t}</span>`).join('')}</div>`;
   let body = '';
   if (w.step === 'contact') {
     body = `<h3>聯絡人</h3><div class="grid4"><label><span>聯絡人姓名${REQ}</span><input data-c="name" value="${esc(w.contact.name)}"></label><label><span>聯絡人 email${REQ}</span><input value="${esc(w.contact.email)}" disabled></label><label>手機<input data-c="phone" value="${esc(w.contact.phone)}" inputmode="tel"></label></div>
       <p class="small muted"><b>聯絡人 email</b> 預設擁有隊伍<b>點單填寫權限</b>，也可以加入其他共同編輯的帳號。</p>
-      <div class="row"><span class="spacer"></span><button class="btn" data-wnext="contact">下一步</button></div>`;
+      <div class="row">${mine(st, me).length ? `<button class="btn ghost" data-wcancel>${icon('close')}取消</button>` : ''}<span class="spacer"></span><button class="btn" data-wnext="contact">下一步</button></div>`;
   } else if (w.step === 'pick') {
-    const left = Object.keys(GROUPS).filter(g => !usedGroups().includes(g));
-    body = `<h3>我要報名</h3><div class="gpick">${left.map(g => `<label class="gopt ${w.pick === g ? 'on' : ''}"><input type="radio" name="grp" value="${g}" data-grp ${w.pick === g ? 'checked' : ''}><b>${GROUPS[g].name}</b><span class="small muted">${GROUPS[g].events.join('、')}</span></label>`).join('')}</div>
-      <div class="row"><button class="btn ghost" data-wback>上一步</button><span class="spacer"></span><button class="btn" data-wnext="pick">下一步</button></div>`;
+    body = `<h3>我要報名</h3><div class="gpick">${gCards(leftGroups())}</div><div class="row"><button class="btn ghost" data-wback>上一步</button></div>`;
   } else if (w.step === 'fill') {
     body = `<h3>${GROUPS[w.cur.group].name}</h3>${groupForm(st, w.cur, null)}
       <div class="row" style="margin-top:12px"><button class="btn ghost" data-wback>上一步</button><span class="spacer"></span><button class="btn" data-wnext="fill">下一步</button></div>`;
   } else if (w.step === 'more') {
-    const left = Object.keys(GROUPS).filter(g => !usedGroups().includes(g));
-    body = `<h3>要報名其他組別嗎？</h3><p class="small muted">已填：${wiz.groups.map(x => `${GROUPS[x.group].name}（${esc(x.unit)}）`).join('、')}</p>
-      <div class="row">${left.length ? `<button class="btn ghost" data-wmore>${icon('plus')}報名其他組別</button>` : ''}<span class="spacer"></span><button class="btn" data-wnext="more">不用，下一步</button></div>`;
+    body = `<h3>還要報名其他組別嗎？</h3><div class="gpick">${gCards(leftGroups())}<button class="gopt" data-wnone><b>不用</b></button></div>`;
   } else if (w.step === 'review') {
     // 每校正取上限以外的直接備取，不計入應繳
     const capped = new Set();
     w.groups.forEach(x => { const n = {}; x.entries.forEach(e => { const c = s.events[e.ev]; n[e.ev] = (n[e.ev] || 0) + 1; if (c.perUnitOk && x.unit !== s.hostUnit && n[e.ev] > c.perUnitOk) capped.add(e.id); }); });
-    const tmp = { entries: [], parking: w.parking };
+    const tmp = { id: '_new', entries: [], parking: w.parking };
     w.groups.forEach(x => tmp.entries.push(...x.entries.map(e => ({ ...e, status: capped.has(e.id) ? 'out' : 'in' }))));
     const f = feeOf(st, tmp);
+    const tag = e => (capped.has(e.id) ? '<span class="st wait">備取</span>' : quotaOf(st, e.ev).full ? '<span class="st wait">已額滿，列入候補</span>' : '');
     const cnt = EVENTS.map(ev => { const n = tmp.entries.filter(e => e.ev === ev).length; return n ? `<span class="evt k-${KIND[ev]}">${ev} ${n} ${UNIT_WORD[KIND[ev]]}</span>` : ''; }).join('');
     body = `<h3>請確認報名內容</h3><div class="cnts">${cnt}</div>
       <p class="small">聯絡人 ${esc(w.contact.name)}　${esc(w.contact.email)}${w.contact.phone ? `　${esc(w.contact.phone)}` : ''}<button class="btn ghost sm" data-wgo="contact" style="margin-left:8px">${icon('edit')}修改</button></p>
-      ${w.groups.map((x, i) => `<div class="ebox"><div class="row"><span class="gtag">${GROUPS[x.group].name}</span><b>${esc(x.unit)}</b><span class="spacer"></span><button class="btn ghost sm" data-wedit="${i}">${icon('edit')}修改</button><button class="btn ghost sm danger" data-wdel="${i}">${icon('trash')}</button></div>
-        <table class="list small"><tbody>${x.entries.slice().sort((p, q) => EVENTS.indexOf(p.ev) - EVENTS.indexOf(q.ev)).map(e => `<tr><td class="nowrap"><b>${e.ev}</b></td><td>${esc(entryName(e))}${e.members ? `<div class="muted">${e.coach ? `教練 ${esc(e.coach)}　` : ''}${e.leader ? `領隊 ${esc(e.leader)}　` : ''}${e.captain ? `隊長 ${esc(e.captain)}` : ''}</div><div>${esc(e.members.join('、'))}</div>` : ''}</td><td class="nowrap">${capped.has(e.id) ? '<span class="st wait">備取</span>' : quotaOf(st, e.ev).full ? '<span class="st wait">目前已額滿，將列入候補</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`).join('')}
-      <div class="row" style="margin-top:10px">${icon('car')}停車證<input type="number" min="0" max="20" data-wpark value="${w.parking}" style="width:70px">張<span class="small muted">${parkNote(s)}</span></div>
-      <label style="margin-top:10px">備註<textarea data-wnote rows="2">${esc(w.note)}</textarea><span class="small muted">${NOTE_HINT}</span></label>
+      ${w.groups.map((x, i) => `<div class="grp"><div class="row"><span class="gtag">${GROUPS[x.group].name}</span><b>${esc(x.unit)}</b><span class="spacer"></span><button class="btn ghost sm" data-wedit="${i}">${icon('edit')}修改</button><button class="btn ghost sm danger" data-wdel="${i}" aria-label="刪除">${icon('trash')}</button></div>${roster(x.entries, tag)}</div>`).join('')}
+      ${leftGroups().length ? `<button class="btn ghost sm" data-wmore>${icon('plus')}報名其他組別</button>` : ''}
+      <div class="row" style="margin-top:14px">${icon('car')}停車證<input type="number" min="0" max="20" data-wpark value="${w.parking}" style="width:70px">張<span class="small muted">${parkNote(s)}</span></div>
+      <label style="margin-top:10px">${NOTE_LABEL}<textarea data-wnote rows="2">${esc(w.note)}</textarea></label>
       <table class="list fee" style="max-width:420px;margin-top:8px"><tbody>${f.items.map(x => `<tr><td>${x.label}</td><td class="r">${x.n} ${x.unit} × ${x.price.toLocaleString('en-US')}</td><td class="r">${x.sum.toLocaleString('en-US')}</td></tr>`).join('')}<tr class="tot"><td>應繳合計</td><td></td><td class="r">${fmtMoney(f.total)}</td></tr></tbody></table>
-      <p class="small">送出後請依應繳金額匯款，並回到報名頁按「回報匯款」。<b>提交報名表並完成匯款回報，才算報名成功</b>；有名額限制的項目依完成匯款回報的時間先後計算。</p>
-      <p class="small muted">候補、備取的項目不用先繳費，遞補成功會寄信通知。</p>
-      <div class="row"><button class="btn ghost" data-wback>上一步</button><span class="spacer"></span><button class="btn" data-wsubmit>${icon('check')}確認送出</button></div>`;
+      <div class="row" style="margin-top:12px"><button class="btn ghost" data-wback>上一步</button><span class="spacer"></span><button class="btn" data-wsubmit>${icon('check')}確認送出</button></div>`;
   }
-  return `<div class="panel"><h2 style="margin:0 0 8px">新增報名</h2>${bar}${body}</div>`;
+  return `<div class="panel">${body}</div>`;
 }
 function wizNext(step) {
   const st = getState(), w = wiz;
@@ -242,40 +234,42 @@ function wizNext(step) {
     w.contact.name = $('[data-c="name"]').value.trim(); w.contact.phone = $('[data-c="phone"]').value.trim();
     if (!w.contact.name) return toast('請填寫聯絡人姓名');
     w.step = w.groups.length ? 'review' : 'pick';
-  } else if (step === 'pick') {
-    if (!w.pick) return toast('請選擇組別');
-    const prevUnit = (w.groups.find(x => x.group !== 'S') || {}).unit || '';
-    w.cur = blankGroup(w.pick, w.pick === 'S' ? '' : prevUnit); w.curIdx = -1; w.step = 'fill';
   } else if (step === 'fill') {
     readGroup(w.cur);
     const err = checkGroup(st, w.cur); if (err) return toast(err);
     const g = { group: w.cur.group, unit: w.cur.unit, entries: cleaned(w.cur) };
     if (w.curIdx >= 0) w.groups[w.curIdx] = g; else w.groups.push(g);
-    w.cur = null; w.pick = null;
-    w.step = w.curIdx >= 0 ? 'review' : 'more';
-  } else if (step === 'more') w.step = 'review';
+    const back = w.curIdx >= 0; w.cur = null;
+    w.step = back || !leftGroups().length ? 'review' : 'more';
+  }
+  render(); scrollTo(0, 0);
+}
+function pickGroup(g) {
+  const w = wiz, prevUnit = (w.groups.find(x => x.group !== 'S') || {}).unit || '';
+  w.cur = blankGroup(g, g === 'S' ? '' : prevUnit); w.curIdx = -1; w.step = 'fill';
   render(); scrollTo(0, 0);
 }
 function wizBack() {
   const w = wiz;
-  if (w.step === 'pick') w.step = w.groups.length ? 'more' : 'contact';
-  else if (w.step === 'fill') { readGroup(w.cur); w.step = w.curIdx >= 0 ? 'review' : 'pick'; }
-  else if (w.step === 'review') w.step = 'more';
+  if (w.step === 'pick') w.step = w.groups.length ? 'review' : 'contact';
+  else if (w.step === 'fill') { readGroup(w.cur); w.step = w.curIdx >= 0 ? 'review' : w.groups.length ? 'more' : 'pick'; }
+  else if (w.step === 'review') w.step = leftGroups().length ? 'more' : 'contact';
   render(); scrollTo(0, 0);
 }
 function wizSubmit() {
   const w = wiz, p = $('[data-wpark]'); if (p) w.parking = Math.max(0, Number(p.value) || 0);
   if (!w.groups.length) return toast('還沒有填任何組別');
   update(n => {
+    let bid = '';
     w.groups.forEach((g, i) => {
-      const id = uid(), now = Date.now();
-      n.regs[id] = { id, group: g.group, unit: g.unit, contact: { ...w.contact }, editors: [], parking: 0, note: w.note.trim(), createdAt: now, updatedAt: now, entries: [], pays: [], log: [] };
+      const id = uid(), now = Date.now(); bid = bid || id;
+      n.regs[id] = { id, bid, group: g.group, unit: g.unit, contact: { ...w.contact }, editors: [], parking: 0, note: w.note.trim(), createdAt: now + i, updatedAt: now, entries: [], pays: [], log: [] };
       applyChange(n, id, { entries: g.entries, parking: i === 0 ? w.parking : 0 }, me);
-      n.regs[id].log = [{ ts: now, by: me, text: '送出報名' }];
+      n.regs[id].log = [{ ts: now, by: me, text: `送出報名（${GROUPS[g.group].name}）` }];
     });
   });
   wiz = null; view = 'home'; render(); scrollTo(0, 0);
-  toast('已送出報名，請依應繳金額匯款後回報');
+  toast('已送出報名');
 }
 
 // ---------------- 修改名單（一個組別） ----------------
@@ -289,7 +283,7 @@ function editView(st) {
   const r = st.regs[edit.rid];
   return `<div class="panel"><div class="row"><span class="gtag">${GROUPS[r.group].name}</span><h2 style="margin:0">修改名單</h2><span class="spacer"></span><button class="btn ghost sm" data-ecancel>${icon('close')}取消</button></div>
     ${groupForm(st, edit, r)}
-    <label style="margin-top:12px">備註<textarea data-enote rows="2">${esc(edit.note)}</textarea><span class="small muted">${NOTE_HINT}</span></label>
+    <label style="margin-top:12px">${NOTE_LABEL}<textarea data-enote rows="2">${esc(edit.note)}</textarea></label>
     <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn" data-esave>${icon('check')}儲存修改</button></div></div>`;
 }
 function editSave() {
@@ -318,6 +312,10 @@ document.addEventListener('click', ev => {
   else if (d.wnext) wizNext(d.wnext);
   else if ('wback' in d) wizBack();
   else if ('wmore' in d) { wiz.step = 'pick'; render(); scrollTo(0, 0); }
+  else if (d.gpick) pickGroup(d.gpick);
+  else if ('wnone' in d) { wiz.step = 'review'; render(); scrollTo(0, 0); }
+  else if ('wcancel' in d) { wiz = null; view = 'home'; render(); }
+  else if (d.payagain) { payOpen.add(d.payagain); render(); }
   else if (d.wgo) { wiz.step = d.wgo; render(); scrollTo(0, 0); }
   else if (d.wedit) { const i = Number(d.wedit), g = wiz.groups[i]; wiz.cur = { ...g, entries: JSON.parse(JSON.stringify(g.entries)) }; wiz.curIdx = i; wiz.step = 'fill'; render(); scrollTo(0, 0); }
   else if (d.wdel) { if (confirm('刪除這個組別的報名內容？')) { wiz.groups.splice(Number(d.wdel), 1); wiz.step = wiz.groups.length ? 'review' : 'pick'; render(); } }
@@ -331,12 +329,13 @@ document.addEventListener('click', ev => {
   else if (d.park) { const [rid, k] = d.park.split('|'); update(n => { const r = n.regs[rid]; const v = Math.max(0, (r.parking || 0) + Number(k)); r.log.push({ ts: Date.now(), by: me, text: `停車證 ${r.parking || 0} 張改為 ${v} 張` }); r.parking = v; if (r.fin && r.fin.state === 'received') r.fin = { ...r.fin, state: 'mismatch', note: '停車證張數變更，請補匯差額' }; }); }
   else if (d.pay) {
     const rid = d.pay, a = Number($(`[data-pa="${rid}"]`).value), t = $(`[data-pt="${rid}"]`).value, l5 = $(`[data-pl="${rid}"]`).value.trim();
-    if (!a || !t || !/^\d{5}$/.test(l5)) { toast('請填寫匯款金額、匯款時間與帳號後五碼'); return; }
+    if (!a || !t || !/^\d{5}$/.test(l5)) { toast('請填寫匯款金額、匯款時間與帳號末五碼'); return; }
+    payOpen.delete(rid);
     update(n => { const r = n.regs[rid]; r.pays.push({ amount: a, time: t, last5: l5, ts: Date.now() }); if (r.fin && r.fin.state === 'mismatch') r.fin = { ...r.fin, state: '' }; r.log.push({ ts: Date.now(), by: me, text: `回報匯款 ${a} 元` }); });
     toast('已回報匯款，等待總務對帳');
   }
-  else if (d.edAdd) { const inp = $(`[data-ed-new="${d.edAdd}"]`), v = inp.value.trim(); if (!/^\S+@\S+\.\S+$/.test(v)) { toast('請輸入信箱'); return; } update(n => { const r = n.regs[d.edAdd]; if (!r.editors.some(x => norm(x) === norm(v))) { r.editors.push(v); r.log.push({ ts: Date.now(), by: me, text: `加入共同管理 ${v}` }); } }); }
-  else if (d.edDel) { const [rid, m] = d.edDel.split('|'); update(n => { const r = n.regs[rid]; r.editors = r.editors.filter(x => x !== m); r.log.push({ ts: Date.now(), by: me, text: `移除共同管理 ${m}` }); }); }
+  else if (d.edAdd) { const inp = $(`[data-ed-new="${d.edAdd}"]`), v = inp.value.trim(); if (!/^\S+@\S+\.\S+$/.test(v)) { toast('請輸入信箱'); return; } update(n => { batchRegs(n, n.regs[d.edAdd]).forEach((r, i) => { if (!r.editors.some(x => norm(x) === norm(v))) { r.editors.push(v); if (!i) r.log.push({ ts: Date.now(), by: me, text: `加入共同管理 ${v}` }); } }); }); }
+  else if (d.edDel) { const [rid, m] = d.edDel.split('|'); update(n => { batchRegs(n, n.regs[rid]).forEach((r, i) => { r.editors = r.editors.filter(x => x !== m); if (!i) r.log.push({ ts: Date.now(), by: me, text: `移除共同管理 ${m}` }); }); }); }
   else if (d.log) { open.has(d.log) ? open.delete(d.log) : open.add(d.log); render(); }
 });
 document.addEventListener('input', ev => {
@@ -346,7 +345,6 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   if (ev.target.matches('[data-f="captain"]') && cur()) { readGroup(cur()); render(); return; }
-  if (ev.target.matches('[data-grp]') && wiz) { wiz.pick = ev.target.value; render(); }
   if (ev.target.matches('[data-wpark]') && wiz) { wiz.parking = Math.max(0, Number(ev.target.value) || 0); render(); }
 });
 document.addEventListener('keydown', ev => {

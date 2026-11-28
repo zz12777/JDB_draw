@@ -124,3 +124,42 @@ tr.late td { background: var(--red-soft); }
 .modal.pop .sbox { margin-top: 10px; }
 .top .btn.ghost .icon { margin-right: 3px; }
 @media (max-width: 640px) { .top .who { display: none; } .top { gap: 8px; } }
+/* 送出後：進度軸與繳費 */
+.prog { list-style: none; display: flex; gap: 0; margin: 0 0 14px; padding: 0; counter-reset: s; }
+.prog li { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); position: relative; padding-right: 10px; }
+.prog li:not(:last-child)::after { content: ''; flex: 1; height: 2px; background: var(--line); margin-left: 4px; min-width: 12px; }
+.prog li span { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #eef0f3; font-weight: 700; flex: none; }
+.prog li.done { color: var(--blue); }
+.prog li.done span { background: var(--blue); color: #fff; }
+.prog li.done:not(:last-child)::after { background: var(--blue); }
+.prog li.now { color: var(--ink); font-weight: 700; }
+.prog li.now span { background: var(--yellow); color: var(--ink); }
+.prog li.warn span { background: var(--red); color: #fff; }
+@media (max-width: 640px) { .prog li { flex-direction: column; text-align: center; font-size: 12px; gap: 4px; padding: 0 2px; } .prog li:not(:last-child)::after { display: none; } }
+.paybox { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fbfcfe; }
+.paybox > p { margin: 0; }
+.due { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.due > span:first-child { color: var(--muted); font-size: 14px; }
+.due b { font-size: 24px; color: var(--blue); }
+.acct { margin: 0 0 10px !important; }
+.payform label { flex: 0 1 auto; }
+.payform .btn { align-self: flex-end; }
+.okmsg { color: var(--green); font-weight: 700; display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.warnmsg { color: var(--red); background: var(--red-soft); border-radius: 6px; padding: 6px 10px; margin: 10px 0 6px !important; font-size: 14px; }
+.tips { margin: 12px 0 0; padding-left: 20px; line-height: 1.8; font-size: 14px; }
+.lnk.sm { font-size: 13px; font-weight: 500; margin-left: 8px; }
+h3.sec { margin: 16px 0 4px; }
+.grp { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 8px 0; background: #fff; }
+.grp > .row { margin-bottom: 4px; }
+.rv { display: grid; grid-template-columns: 5.5em 1fr; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); align-items: start; }
+.rvl { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.rvt { flex-basis: 100%; }
+.rvt + .rvt { border-top: 1px dashed var(--line); padding-top: 6px; }
+.rvp { display: inline-flex; gap: 6px; align-items: center; }
+.rvt .st, .rvp .st { margin-left: 6px; }
+.foot { margin-top: 10px; gap: 6px; }
+.hint { color: var(--muted); font-weight: 400; }
+button.gopt { text-align: left; font: inherit; width: 100%; }
+button.gopt:hover { border-color: var(--blue); background: var(--blue-soft); }
+.panel > h3:first-child { margin-top: 0; }
+button.gopt { display: flex; }

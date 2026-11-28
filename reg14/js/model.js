@@ -65,10 +65,10 @@ export function defaultSettings() {
   };
 }
 const QA = [
-  { id: 'q1', q: '怎樣才算報名成功？', a: '送出報名表，並在報名頁按「回報匯款」完成匯款確認，兩個都完成才算報名成功。有名額限制的項目，依完成匯款確認的時間先後計算。' },
-  { id: 'q2', q: '報名費怎麼繳？', a: '送出報名後，報名頁會顯示應繳金額與匯款帳號。匯款後請按「回報匯款」，填寫金額、時間與帳號後五碼，總務對帳後會顯示「已收到款項」。' },
-  { id: 'q3', q: '額滿了還可以報名嗎？', a: '可以，額滿後送出的報名會列入候補，報名頁看得到候補順位。候補不用先繳費，遞補成功會寄信通知繳費。' },
-  { id: 'q4', q: '報名後要改名單怎麼辦？', a: '名單修改截止前，登入報名頁按「修改名單」自己修改。截止後無法修改。' },
+  { id: 'q1', q: '怎樣才算報名成功？', a: '送出報名表，並在報名頁送出「匯款回報」，兩個都完成才算報名成功。有名額限制的項目，依完成匯款確認的時間先後計算。' },
+  { id: 'q2', q: '報名費怎麼繳？', a: '送出報名後，報名頁會顯示應繳金額與匯款帳號。匯款後填寫匯款金額、時間與帳號末五碼並送出，總務對帳後會顯示「已收到款項」。' },
+  { id: 'q3', q: '額滿了還可以報名嗎？', a: '可以，額滿後送出的報名會列入候補。候補先不用繳費，遞補成功會寄信通知繳費。' },
+  { id: 'q4', q: '報名後要改名單怎麼辦？', a: '名單修改截止期限前，登入報名頁按「修改名單」可以進行修改。' },
   { id: 'q5', q: '停車證怎麼申請？', a: '開車進入陽明交大校園需要停車證，一車一張、可停一日，每張 50 元。報名時填寫張數，隨報名費一起匯款。' },
   { id: 'q6', q: '可以開收據嗎？', a: '可以，請在報名表的備註寫收據抬頭與統編。收據僅提供隊章。' },
   { id: 'q7', q: '誰可以報名大專組？', a: '大專組以大專運動會桌球項目最新規定之一般組參賽資格者為限，體保、體資生不得報名參賽。大專組不得跨生理性別報名。' },
@@ -104,7 +104,7 @@ export function entriesOf(st, ev) {
  */
 const cache = new WeakMap();
 export function doneAt(st, r, e) {
-  const b = st.settings.basis;
+  const b = st.settings.basis; r = leadOf(st, r);
   if (b === 'submit') return e.ts;
   if (b === 'received') return r.fin && r.fin.state === 'received' ? r.fin.at : null;
   return (r.pays || []).length ? r.pays[0].ts : null;
@@ -118,7 +118,7 @@ function calc(st) {
     const capped = new Set();
     if (c.perUnitOk) {
       const by = new Map();
-      list.forEach(x => { if (x.r.unit === st.settings.hostUnit) return; const k = x.r.id; by.set(k, (by.get(k) || 0) + 1); if (by.get(k) > c.perUnitOk) capped.add(x.e.id); });
+      list.forEach(x => { if (x.r.unit === st.settings.hostUnit) return; const k = x.r.unit; by.set(k, (by.get(k) || 0) + 1); if (by.get(k) > c.perUnitOk) capped.add(x.e.id); });
     }
     let ok = 0;
     list.filter(x => x.e.promotedAt).forEach(x => { out.st.set(x.e.id, 'ok'); ok++; });
@@ -151,23 +151,33 @@ export const quotaOf = (st, ev) => calc(st).q[ev];
 export const waitRank = (st, e) => calc(st).rank.get(e.id) || 0;
 export const isCapped = (st, e) => !!(calc(st).q[e.ev].waitList.find(x => x.e.id === e.id) || {}).capped;
 
-/** 應繳金額：正取與待完成的項目加上停車證；候補（含備取）不計，遞補後再繳 */
+/** 同一次送出的報名（多個組別）合併成一筆繳費：匯款回報、對帳都記在第一筆（lead） */
+export const leadOf = (st, r) => (r.bid && st.regs && st.regs[r.bid]) || r;
+export function batchRegs(st, r) {
+  if (!st.regs || !st.regs[r.id]) return [r];
+  const l = leadOf(st, r);
+  return Object.values(st.regs).filter(x => leadOf(st, x) === l).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** 應繳金額（整筆送出合計）：正取與待完成的項目加上停車證；候補（含備取）不計，遞補後再繳 */
 export function feeOf(st, r) {
-  const items = [];
+  const regs = batchRegs(st, r), items = [];
   EVENTS.forEach(ev => {
-    const n = (r.entries || []).filter(e => e.ev === ev && ['ok', 'unpaid'].includes(stOf(st, e))).length;
+    const n = regs.reduce((a, x) => a + (x.entries || []).filter(e => e.ev === ev && ['ok', 'unpaid'].includes(stOf(st, e))).length, 0);
     if (n) items.push({ label: ev, n, unit: UNIT_WORD[KIND[ev]], price: st.settings.events[ev].fee, sum: n * st.settings.events[ev].fee });
   });
-  if (r.parking) items.push({ label: '停車證', n: r.parking, unit: '張', price: st.settings.parkingPrice, sum: r.parking * st.settings.parkingPrice });
+  const park = regs.reduce((a, x) => a + (x.parking || 0), 0);
+  if (park) items.push({ label: '停車證', n: park, unit: '張', price: st.settings.parkingPrice, sum: park * st.settings.parkingPrice });
   return { items, total: items.reduce((a, x) => a + x.sum, 0) };
 }
 
-/** 繳費狀態 */
-export function payState(r) {
+/** 繳費狀態（整筆送出） */
+export function payState(st, r) {
+  r = leadOf(st, r);
   if (r.fin && r.fin.state) return r.fin.state;
   return (r.pays || []).length ? 'reported' : 'none';
 }
-export const paidSum = r => (r.pays || []).reduce((a, p) => a + Number(p.amount || 0), 0);
+export const paidSum = (st, r) => (leadOf(st, r).pays || []).reduce((a, p) => a + Number(p.amount || 0), 0);
 
 /** 報名者能管理的報名 */
 export function mine(st, email) {
@@ -187,6 +197,6 @@ export const fmtMoney = n => `NT$ ${Number(n || 0).toLocaleString('en-US')}`;
 export function fmtTime(ts) {
   if (!ts) return '';
   const d = new Date(ts), p = n => String(n).padStart(2, '0');
-  return `${d.getMonth() + 1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 export function fmtDT(s) { if (/^\d{4}-\d{2}-\d{2}$/.test(s || '')) { const [y, m, dd] = s.split('-'); return `${y}/${Number(m)}/${Number(dd)}`; } const d = new Date(s); return Number.isNaN(+d) ? s : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
