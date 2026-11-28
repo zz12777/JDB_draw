@@ -20,6 +20,7 @@ const P = {
   gear: '<circle cx="8" cy="8" r="2.2" fill="none"/><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M3.6 12.4L5 11M11 5l1.4-1.4" fill="none"/>',
   list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8" fill="none"/><circle cx="2.8" cy="4" r=".8"/><circle cx="2.8" cy="8" r=".8"/><circle cx="2.8" cy="12" r=".8"/>',
   bars: '<path d="M3 13V8M8 13V3M13 13V6" fill="none"/>',
+  help: '<circle cx="8" cy="8" r="6" fill="none"/><path d="M6.3 6.2a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1v.4" fill="none"/><circle cx="8" cy="11.6" r=".7"/>',
   swap: '<path d="M3 5.5h9.5L10 3M13 10.5H3.5L6 13" fill="none"/>',
 };
 export const icon = k => `<svg class="icon" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="currentColor" aria-hidden="true">${P[k] || ''}</svg>`;

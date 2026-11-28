@@ -12,7 +12,7 @@ let detail = null; // 打開明細的報名 id
 const fin = () => role === 'finance';
 const BY = () => (fin() ? 'finance@example.com' : 'admin@example.com');
 
-const TABS = [['sheet', '報名回覆', 'table'], ['quota', '名額', 'bars'], ['wait', '候補遞補', 'list'], ['pay', '繳費對帳', 'money'], ['req', '異動申請', 'swap'], ['set', '設定', 'gear']];
+const TABS = [['sheet', '報名回覆', 'table'], ['quota', '名額', 'bars'], ['wait', '候補遞補', 'list'], ['pay', '繳費對帳', 'money'], ['req', '異動申請', 'swap'], ['qa', 'Q&A', 'help'], ['set', '設定', 'gear']];
 
 function render() {
   const st = getState();
@@ -22,7 +22,7 @@ function render() {
   const badge = k => (k === 'req' && pend ? `<span class="badge">${pend}</span>` : k === 'pay' && unpaid && fin() ? `<span class="badge">${unpaid}</span>` : '');
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'pay' || fin()).map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(ic)}${t}${badge(k)}</button>`).join('');
   if (tab === 'pay' && !fin()) tab = 'sheet';
-  $('#main').innerHTML = demoBar('<button class="btn ghost sm" data-reset>重設示範資料</button>') + ({ sheet: viewSheet, quota: viewQuota, wait: viewWait, pay: viewPay, req: viewReq, set: viewSet }[tab])(st);
+  $('#main').innerHTML = demoBar('<button class="btn ghost sm" data-reset>重設示範資料</button>') + ({ sheet: viewSheet, quota: viewQuota, wait: viewWait, pay: viewPay, req: viewReq, qa: viewQa, set: viewSet }[tab])(st);
   drawDetail();
 }
 
@@ -34,7 +34,7 @@ function sheetDef(st) {
   if (sheet.name === 'team') {
     return {
       rows: Object.values(st.regs).flatMap(r => r.entries.filter(e => KIND[e.ev] === 'team').map(e => ({ r, e, cells: [['ts', '時間戳記', fmtTime(e.ts), e.ts], ['ev', '項目', e.ev], ['unit', '單位', r.unit], ['name', '隊名', e.name], ['coach', '教練', e.coach], ['leader', '領隊', e.leader], ['captain', '隊長', e.captain],
-        ['members', '隊員', (e.members || []).join('、')], ['n', '人數', (e.members || []).length, (e.members || []).length], ['lineup', '點單', e.lineup === 'paper' ? '紙本' : '線上'], ['st', '狀態', stText(st, e)], ...base(r)] }))),
+        ['members', '隊員', (e.members || []).join('、')], ['n', '人數', (e.members || []).length, (e.members || []).length], ['st', '狀態', stText(st, e)], ...base(r)] }))),
     };
   }
   if (sheet.name === 'ind') {
@@ -155,11 +155,28 @@ function viewReq(st) {
     <div class="panel"><h2>最近修改</h2><table class="list small"><tbody>${logs.map(({ r, l }) => `<tr><td class="nowrap">${fmtTime(l.ts)}</td><td class="nowrap">${esc(r.unit)}</td><td>${esc(l.text)}</td><td class="muted">${esc(l.by)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
+// ---------------- Q&A ----------------
+const MAILS = [['nctuttc@gmail.com', '交大盃信箱'], ['nctugtt@gmail.com', '女桌帳號']];
+let qaDraft = null; // 編輯中的 Q&A
+function viewQa(st) {
+  const s = st.settings;
+  if (!qaDraft) qaDraft = JSON.parse(JSON.stringify(s.qa || []));
+  return `<div class="panel"><h2>報名 Q&amp;A</h2><p class="small muted" style="margin:0 0 10px">顯示在報名頁下方，預設收合；報名者點問題才看到回答。</p>
+    ${qaDraft.map((x, i) => `<div class="ebox" data-qi="${i}"><div class="row"><b>Q${i + 1}</b><span class="spacer"></span><button class="btn ghost sm" data-qup="${i}" ${i ? '' : 'disabled'} aria-label="上移">${icon('chevup')}</button><button class="btn ghost sm" data-qdown="${i}" ${i < qaDraft.length - 1 ? '' : 'disabled'} aria-label="下移">${icon('chevdown')}</button><button class="btn ghost sm danger" data-qdel="${i}">${icon('trash')}刪除</button></div>
+      <label>問題<input data-qf="q" value="${esc(x.q)}"></label><label style="margin-top:6px">回答<textarea data-qf="a" rows="3">${esc(x.a)}</textarea></label></div>`).join('')}
+    <button class="btn ghost sm" data-qadd>${icon('plus')}新增問題</button>
+    <h3>其他問題的聯絡方式</h3>
+    <div class="grid4"><label>聯絡信箱<select data-qmail>${MAILS.map(([m, t]) => `<option value="${m}" ${s.contactMail === m ? 'selected' : ''}>${t}（${m}）</option>`).join('')}</select></label><label>臉書粉專網址<input data-qfb value="${esc(s.fbUrl)}"></label></div>
+    <p class="small muted">報名頁會顯示：還有其他問題歡迎來信 ${esc(s.contactMail)}，或私訊臉書粉專。</p>
+    <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn" data-qsave>${icon('check')}儲存 Q&amp;A</button></div></div>`;
+}
+function readQa() { $$('[data-qi]').forEach(box => { const x = qaDraft[Number(box.dataset.qi)]; x.q = $('[data-qf="q"]', box).value.trim(); x.a = $('[data-qf="a"]', box).value.trim(); }); }
+
 // ---------------- 設定 ----------------
 function viewSet(st) {
   const s = st.settings;
   const f = (k, v, t = 'text', w = 180) => `<input data-s="${k}" type="${t}" value="${esc(v)}" style="width:${w}px">`;
-  return `<div class="panel"><h2>每年要改的設定</h2><p class="small muted" style="margin:0 0 10px">在這裡改，不必改程式。</p>
+  return `<div class="panel"><h2>細項設定</h2>
     <div class="grid4"><label>名稱${f('title', s.title)}</label><label>屆數${f('edition', s.edition)}</label><label>比賽第一天${f('d0', s.dates[0], 'date')}</label><label>比賽第二天${f('d1', s.dates[1], 'date')}</label>
       <label>報名開始${f('open', s.open, 'datetime-local', 210)}</label><label>報名截止${f('close', s.close, 'datetime-local', 210)}</label><label>停車證每張（元）${f('parkingPrice', s.parkingPrice, 'number', 100)}</label><label>遞補繳費期限（天）${f('payDays', s.payDays, 'number', 100)}</label>
       <label>匯款銀行${f('bankName', s.bank.name, 'text', 220)}</label><label>銀行代碼${f('bankCode', s.bank.code, 'text', 80)}</label><label>帳號${f('bankAcc', s.bank.account, 'text', 200)}</label>
@@ -204,7 +221,7 @@ document.addEventListener('click', ev => {
   if (th) { const k = th.dataset.sort; if (sheet.sort === k) sheet.dir = -sheet.dir; else { sheet.sort = k; sheet.dir = 1; } render(); return; }
   const b = ev.target.closest('button'); if (!b) return;
   const d = b.dataset, st = getState();
-  if (d.tab) { tab = d.tab; render(); }
+  if (d.tab) { tab = d.tab; qaDraft = null; render(); }
   else if ('reset' in d) { if (confirm('重設示範資料？')) { resetDemo(); toast('已重設示範資料'); } }
   else if ('close' in d) { detail = null; drawDetail(); }
   else if (d.sheet) { sheet.name = d.sheet; sheet.ev = ''; sheet.st = ''; sheet.sort = null; render(); }
@@ -239,6 +256,10 @@ document.addEventListener('click', ev => {
     toast(d.rok ? '已核准並更新名單' : '已標示為不核准');
   }
   else if ('save' in d) saveSet();
+  else if ('qadd' in d) { readQa(); qaDraft.push({ id: Math.random().toString(36).slice(2, 8), q: '', a: '' }); render(); }
+  else if (d.qdel) { readQa(); qaDraft.splice(Number(d.qdel), 1); render(); }
+  else if (d.qup || d.qdown) { readQa(); const i = Number(d.qup || d.qdown), j = d.qup ? i - 1 : i + 1; [qaDraft[i], qaDraft[j]] = [qaDraft[j], qaDraft[i]]; render(); }
+  else if ('qsave' in d) { readQa(); const list = qaDraft.filter(x => x.q); update(n => { n.settings.qa = list; n.settings.contactMail = $('[data-qmail]').value; n.settings.fbUrl = $('[data-qfb]').value.trim(); }); qaDraft = null; toast('已儲存 Q&A'); }
 });
 document.addEventListener('change', ev => { if (ev.target.matches('[data-role]')) { role = ev.target.value; try { localStorage.setItem(ROLE_KEY, role); } catch (e) { /* 無痕 */ } render(); } });
 let composing = false;

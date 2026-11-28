@@ -2,7 +2,7 @@
 // 同一台電腦開兩個分頁（報名頁、管理頁）會互相同步。之後接資料庫時只換這個檔案。
 import { defaultSettings, uid, GROUPS, KIND, newStatus } from './model.js';
 
-const KEY = 'jdb-reg14-demo';
+const KEY = 'jdb-reg14-demo2';
 let state = null;
 const subs = new Set();
 
