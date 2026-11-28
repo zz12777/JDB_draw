@@ -2,7 +2,7 @@
 // 同一台電腦開兩個分頁（報名頁、管理頁）會互相同步。之後接資料庫時只換這個檔案。
 import { defaultSettings, timelineFrom, uid, GROUPS, KIND } from './model.js';
 
-const KEY = 'jdb-reg14-demo3';
+const KEY = 'jdb-reg14-demo4';
 let state = null;
 const subs = new Set();
 
@@ -41,7 +41,7 @@ function seed() {
   const add = (g, unit, i, plan) => {
     t += rand(9) * 36e5 + 6e5;
     const id = uid(), contact = { name: person(), email: `contact${i}@example.com`, phone: rand(3) ? `09${String(10000000 + rand(89999999)).slice(0, 8)}` : '' };
-    const r = { id, group: g, unit, contact, editors: rand(3) ? [] : [`coach${i}@example.com`], parking: rand(4), createdAt: t, updatedAt: t, entries: [], pays: [], log: [{ ts: t, by: contact.email, text: '送出報名' }], reqs: [] };
+    const r = { id, group: g, unit, contact, editors: rand(3) ? [] : [`coach${i}@example.com`], parking: rand(4), createdAt: t, updatedAt: t, entries: [], pays: [], log: [{ ts: t, by: contact.email, text: '送出報名' }], note: rand(5) ? '' : `要收據，抬頭 ${unit}桌球隊` };
     st.regs[id] = r;
     plan.forEach(([ev, n]) => {
       for (let k = 0; k < n; k++) {
@@ -65,10 +65,6 @@ function seed() {
   let i = 1;
   UNITS.forEach((u, k) => { add('M', u, i++, [['男團', k % 4 === 0 ? 2 : 1], ['男單', k % 3 === 0 ? 7 : 1 + rand(3)], ['男雙', rand(2)]]); if (k % 2 === 0) add('W', u, i++, [['女團', 1], ['女單', 1 + rand(2)], ['女雙', rand(2)]]); });
   CLUBS.forEach(c => add('S', c, i++, [['社團', 1]]));
-  // 一筆截止後的異動申請（示範用）
-  const r0 = Object.values(st.regs)[2], e0 = r0.entries.find(e => e.members);
-  if (e0) { const nm = person(), members = e0.members.slice(); const old = members[1]; members[1] = nm;
-    r0.reqs.push({ id: uid(), ts: now - 36e5, by: r0.contact.email, status: 'pending', text: `${e0.ev} ${e0.name}：隊員 ${old} 改為 ${nm}`, entryId: e0.id, patch: { members } }); }
   return st;
 }
 state = load();

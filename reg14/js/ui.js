@@ -4,6 +4,8 @@ export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const P = {
   plus: '<path d="M8 3v10M3 8h10" fill="none"/>',
+  minus: '<path d="M3 8h10" fill="none"/>',
+  info: '<circle cx="8" cy="8" r="6" fill="none"/><path d="M8 7.2v4" fill="none"/><circle cx="8" cy="4.9" r=".7"/>',
   edit: '<path d="M3 13l1-3.5L11 2.5l2.5 2.5L6.5 12z" fill="none"/>',
   trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" fill="none"/>',
   check: '<path d="M3 8.5l3.2 3.2L13 4.8" fill="none"/>',

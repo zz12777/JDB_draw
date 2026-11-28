@@ -1,7 +1,6 @@
-// 參賽者系統原型：管理頁（報名回覆表格、名額、候補遞補、繳費對帳、異動申請、設定）
+// 參賽者系統原型：管理頁（報名回覆表格、名額、候補遞補、繳費對帳、修改紀錄、設定）
 import { GROUPS, EVENTS, KIND, UNIT_WORD, STATUS_TEXT, PAY_TEXT, TL_LABEL, phase, quotaOf, waitRank, stOf, isCapped, timelineFrom, feeOf, payState, paidSum, entryName, fmtMoney, fmtTime, fmtDT } from './model.js';
 import { getState, update, subscribe, resetDemo } from './store.js';
-import { applyChange } from './changes.js';
 import { esc, $, $$, icon, toast, header, demoBar } from './ui.js';
 
 const ROLE_KEY = 'jdb-reg14-role';
@@ -12,14 +11,13 @@ let detail = null; // 打開明細的報名 id
 const fin = () => role === 'finance';
 const BY = () => (fin() ? 'finance@example.com' : 'admin@example.com');
 
-const TABS = [['sheet', '報名回覆', 'table'], ['quota', '名額', 'bars'], ['wait', '候補遞補', 'list'], ['pay', '繳費對帳', 'money'], ['req', '異動申請', 'swap'], ['qa', 'Q&A', 'help'], ['set', '設定', 'gear']];
+const TABS = [['sheet', '報名回覆', 'table'], ['quota', '名額', 'bars'], ['wait', '候補遞補', 'list'], ['pay', '繳費對帳', 'money'], ['req', '修改紀錄', 'swap'], ['qa', 'Q&A', 'help'], ['set', '設定', 'gear']];
 
 function render() {
   const st = getState();
   $('#top').innerHTML = header(st.settings, '報名管理', `<label class="rolesel">示範身分<select data-role><option value="finance" ${fin() ? 'selected' : ''}>總召、總務</option><option value="admin" ${fin() ? '' : 'selected'}>管理員</option></select></label>`);
-  const pend = Object.values(st.regs).reduce((a, r) => a + (r.reqs || []).filter(q => q.status === 'pending').length, 0);
   const unpaid = Object.values(st.regs).filter(r => payState(r) === 'reported').length;
-  const badge = k => (k === 'req' && pend ? `<span class="badge">${pend}</span>` : k === 'pay' && unpaid && fin() ? `<span class="badge">${unpaid}</span>` : '');
+  const badge = k => (k === 'pay' && unpaid && fin() ? `<span class="badge">${unpaid}</span>` : '');
   $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'pay' || fin()).map(([k, t, ic]) => `<button class="${tab === k ? 'on' : ''}" data-tab="${k}">${icon(ic)}${t}${badge(k)}</button>`).join('');
   if (tab === 'pay' && !fin()) tab = 'sheet';
   $('#main').innerHTML = demoBar('<button class="btn ghost sm" data-reset>重設示範資料</button>') + ({ sheet: viewSheet, quota: viewQuota, wait: viewWait, pay: viewPay, req: viewReq, qa: viewQa, set: viewSet }[tab])(st);
@@ -42,7 +40,7 @@ function sheetDef(st) {
   }
   return {
     rows: Object.values(st.regs).map(r => { const f = feeOf(st, r); return { r, e: null, cells: [['ts', '時間戳記', fmtTime(r.createdAt), r.createdAt], ['grp', '組別', GROUPS[r.group].name], ['unit', '單位', r.unit], ['contact', '聯絡人', r.contact.name], ['email', 'email', r.contact.email], ['phone', '手機', r.contact.phone || ''],
-      ['eds', '共同管理', (r.editors || []).join('、')], ['sum', '報名項目', evSum(r)], ['park', '停車證', r.parking || 0, r.parking || 0], ...(fin() ? [['fee', '應繳', f.total, f.total], ['paid', '已回報', paidSum(r), paidSum(r)]] : []), ['pay', '繳費狀態', PAY_TEXT[payState(r)]], ['upd', '最後修改', fmtTime(r.updatedAt), r.updatedAt]] }; }),
+      ['eds', '共同管理', (r.editors || []).join('、')], ['sum', '報名項目', evSum(r)], ['park', '停車證', r.parking || 0, r.parking || 0], ...(fin() ? [['fee', '應繳', f.total, f.total], ['paid', '已回報', paidSum(r), paidSum(r)]] : []), ['pay', '繳費狀態', PAY_TEXT[payState(r)]], ['note', '備註', r.note || ''], ['upd', '最後修改', fmtTime(r.updatedAt), r.updatedAt]] }; }),
   };
 }
 function sheetRows(st) {
@@ -120,7 +118,7 @@ function failMail(st, ev) {
   const s = st.settings, q = quotaOf(st, ev);
   const bcc = [...new Set(q.waitList.flatMap(x => [x.r.contact.email, ...(x.r.editors || [])]))].join(',');
   const subj = `【${s.title}】${ev} 候補結果通知`;
-  const body = `各位您好：\n\n感謝報名${s.edition}${s.title}。${ev} 名額已滿，很抱歉這次未能遞補成功。\n已匯款的費用將全額退還，我們會另外與您聯繫退款事宜。\n\n期待明年再見！\n\n${s.edition}${s.title}大會 敬上`;
+  const body = `各位您好：\n\n感謝報名${s.edition}${s.title}。${ev} 名額已滿，很抱歉這次未能遞補成功。\n\n期待明年再見！\n\n${s.edition}${s.title}大會 敬上`;
   return `mailto:${s.contactMail}?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -152,16 +150,10 @@ async function exportPay(st) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf])); a.download = '繳費對帳.xlsx'; a.click();
 }
 
-// ---------------- 異動申請 ----------------
+// ---------------- 修改紀錄 ----------------
 function viewReq(st) {
-  const all = Object.values(st.regs).flatMap(r => (r.reqs || []).map(q => ({ r, q }))).sort((a, b) => b.q.ts - a.q.ts);
-  const pend = all.filter(x => x.q.status === 'pending'), done = all.filter(x => x.q.status !== 'pending');
-  const logs = Object.values(st.regs).flatMap(r => r.log.map(l => ({ r, l }))).sort((a, b) => b.l.ts - a.l.ts).slice(0, 40);
-  return `<div class="panel"><h2>待審核的異動申請（${pend.length}）</h2><p class="small muted" style="margin:0 0 8px">報名截止後的名單修改要經大會核准才會更新。截止前報名者可以自己修改，紀錄在下方「最近修改」。</p>
-    ${pend.length ? `<table class="list"><tbody>${pend.map(({ r, q }) => `<tr><td class="nowrap small">${fmtTime(q.ts)}</td><td><b>${esc(r.unit)}</b><div class="small muted">${esc(q.by)}</div></td><td>${esc(q.text)}</td>
-      <td class="r"><div class="row" style="gap:6px;justify-content:flex-end"><input class="note-in" data-rnote="${r.id}|${q.id}" placeholder="回覆（選填）"><button class="btn sm" data-rok="${r.id}|${q.id}">${icon('check')}核准</button><button class="btn ghost sm" data-rno="${r.id}|${q.id}">不核准</button></div></td></tr>`).join('')}</tbody></table>` : '<p class="muted small">目前沒有待審核的申請。</p>'}</div>
-    ${done.length ? `<div class="panel"><h2>已處理</h2><table class="list small"><tbody>${done.map(({ r, q }) => `<tr><td class="nowrap">${fmtTime(q.decidedAt)}</td><td>${esc(r.unit)}</td><td>${esc(q.text)}</td><td class="nowrap">${q.status === 'approved' ? '已核准' : '未核准'}${q.reply ? `：${esc(q.reply)}` : ''}</td><td class="muted">${esc(q.decidedBy || '')}</td></tr>`).join('')}</tbody></table></div>` : ''}
-    <div class="panel"><h2>最近修改</h2><table class="list small"><tbody>${logs.map(({ r, l }) => `<tr><td class="nowrap">${fmtTime(l.ts)}</td><td class="nowrap">${esc(r.unit)}</td><td>${esc(l.text)}</td><td class="muted">${esc(l.by)}</td></tr>`).join('')}</tbody></table></div>`;
+  const logs = Object.values(st.regs).flatMap(r => r.log.map(l => ({ r, l }))).sort((a, b) => b.l.ts - a.l.ts).slice(0, 100);
+  return `<div class="panel"><h2>最近修改</h2><table class="list small"><tbody>${logs.map(({ r, l }) => `<tr><td class="nowrap">${fmtTime(l.ts)}</td><td class="nowrap">${esc(r.unit)}</td><td>${esc(l.text)}</td><td class="muted">${esc(l.by)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 // ---------------- Q&A ----------------
@@ -176,7 +168,7 @@ function viewQa(st) {
     <button class="btn ghost sm" data-qadd>${icon('plus')}新增問題</button>
     <h3>其他問題的聯絡方式</h3>
     <div class="grid4"><label>聯絡信箱<select data-qmail>${MAILS.map(([m, t]) => `<option value="${m}" ${s.contactMail === m ? 'selected' : ''}>${t}（${m}）</option>`).join('')}</select></label><label>臉書粉專網址<input data-qfb value="${esc(s.fbUrl)}"></label></div>
-    <p class="small muted">報名頁會顯示：還有其他問題歡迎來信 ${esc(s.contactMail)}，或私訊臉書粉專。</p>
+    <p class="small muted">報名頁會顯示：其他問題請來信 ${esc(s.contactMail)}，或私訊臉書粉專。</p>
     <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn" data-qsave>${icon('check')}儲存 Q&amp;A</button></div></div>`;
 }
 function readQa() { $$('[data-qi]').forEach(box => { const x = qaDraft[Number(box.dataset.qi)]; x.q = $('[data-qf="q"]', box).value.trim(); x.a = $('[data-qf="a"]', box).value.trim(); }); }
@@ -194,9 +186,9 @@ function viewSet(st) {
     <h3>繳費</h3><div class="grid4"><label>停車證每張（元）${f('parkingPrice', s.parkingPrice, 'number', 100)}</label><label>遞補繳費期限（天）${f('payDays', s.payDays, 'number', 100)}</label>
       <label>匯款銀行${f('bankName', s.bank.name, 'text', 220)}</label><label>銀行代碼${f('bankCode', s.bank.code, 'text', 80)}</label><label>帳號${f('bankAcc', s.bank.account, 'text', 200)}</label>
       <label>完成報名的條件<select data-s="basis">${Object.entries(BASIS).map(([k, x]) => `<option value="${k}" ${s.basis === k ? 'selected' : ''}>提交報名表＋${x}</option>`).join('')}</select></label></div>
-    <h3>各項目</h3><p class="small muted" style="margin:0 0 6px">上限填 0 為不限。每校正取：超過的直接備取，候補每輪每校一位。</p>
-    <table class="list"><thead><tr><th>項目</th><th>上限</th><th>主辦預留</th><th>報名費</th><th>團體賽人數</th><th>每單位上限</th><th>每校正取</th></tr></thead><tbody>
-    ${EVENTS.map(ev => { const c = s.events[ev]; const n = (k, v, w = 70) => `<input type="number" min="0" data-ev="${ev}|${k}" value="${v ?? ''}" style="width:${w}px">`; return `<tr><td><b>${ev}</b></td><td>${n('quota', c.quota)}</td><td>${n('reserved', c.reserved)}</td><td>${n('fee', c.fee, 90)}</td><td>${KIND[ev] === 'team' ? `${n('min', c.min, 56)} ～ ${n('max', c.max, 56)} 人` : ''}</td><td>${KIND[ev] !== 'team' ? `${n('perUnit', c.perUnit, 56)} ${UNIT_WORD[KIND[ev]]}` : ''}</td><td>${KIND[ev] !== 'team' ? `${n('perUnitOk', c.perUnitOk, 56)} ${UNIT_WORD[KIND[ev]]}` : ''}</td></tr>`; }).join('')}</tbody></table>
+    <h3>各項目</h3><p class="small muted" style="margin:0 0 6px">上限、人數、字數填 0 為不限。</p>
+    <table class="list"><thead><tr><th>項目</th><th>上限</th><th>主辦預留</th><th>報名費</th><th>每隊人數</th><th>隊名字數</th><th>每單位上限</th><th>每校正取</th></tr></thead><tbody>
+    ${EVENTS.map(ev => { const c = s.events[ev]; const n = (k, v, w = 70) => `<input type="number" min="0" data-ev="${ev}|${k}" value="${v ?? ''}" style="width:${w}px">`; return `<tr><td><b>${ev}</b></td><td>${n('quota', c.quota)}</td><td>${n('reserved', c.reserved)}</td><td>${n('fee', c.fee, 90)}</td><td>${KIND[ev] === 'team' ? `${n('min', c.min, 56)} ～ ${n('max', c.max, 56)} 人` : ''}</td><td>${ev === '社團' ? `${n('nameMax', c.nameMax, 56)} 字` : ''}</td><td>${KIND[ev] !== 'team' ? `${n('perUnit', c.perUnit, 56)} ${UNIT_WORD[KIND[ev]]}` : ''}</td><td>${KIND[ev] !== 'team' ? `${n('perUnitOk', c.perUnitOk, 56)} ${UNIT_WORD[KIND[ev]]}` : ''}</td></tr>`; }).join('')}</tbody></table>
     <div class="grid4"><label>不受每校正取限制的單位${f('hostUnit', s.hostUnit, 'text', 160)}</label></div>
     <h3>角色</h3><div class="grid4"><label>管理員（一行一個 Google 帳號）<textarea data-s="admins" rows="3">${esc(s.admins.join('\n'))}</textarea></label><label>總召、總務（看得到匯款明細）<textarea data-s="finance" rows="3">${esc(s.finance.join('\n'))}</textarea></label></div>
     <div class="row" style="margin-top:12px"><button class="btn ghost" data-archive>${icon('download')}把今年設定存到往年紀錄</button><span class="spacer"></span><button class="btn" data-save>${icon('check')}儲存設定</button></div></div>
@@ -207,7 +199,7 @@ function histModal(s) {
   const q = (c, ev) => (c ? `${c.quota ? `${c.quota} ${UNIT_WORD[KIND[ev]]}` : '不限'}` : '');
   return `<div class="modal-bg"><div class="modal" style="width:min(860px,100%)"><div class="row"><h2 style="margin:0">往年紀錄</h2><span class="spacer"></span><button class="btn ghost sm" data-hist>${icon('close')}</button></div>
     ${hs.map(h => `<div class="ebox"><div class="row"><b>${esc(h.edition)}</b><span class="small muted">${esc((h.dates || []).join('、'))}</span><span class="spacer"></span><button class="btn ghost sm" data-usehist="${esc(h.edition)}">套用名額與費用到今年</button></div>
-      <table class="list small"><thead><tr><th>項目</th><th>名額</th><th>報名費</th><th>其他</th></tr></thead><tbody>${EVENTS.map(ev => { const c = (h.events || {})[ev] || {}; return `<tr><td>${ev}</td><td>${q(c, ev)}</td><td>${c.fee ?? ''}</td><td>${KIND[ev] === 'team' ? `${c.min || ''}～${c.max || ''} 人` : c.perUnitOk ? `每校正取 ${c.perUnitOk}` : ''}</td></tr>`; }).join('')}</tbody></table>
+      <table class="list small"><thead><tr><th>項目</th><th>名額</th><th>報名費</th><th>其他</th></tr></thead><tbody>${EVENTS.map(ev => { const c = (h.events || {})[ev] || {}; return `<tr><td>${ev}</td><td>${q(c, ev)}</td><td>${c.fee ?? ''}</td><td>${KIND[ev] === 'team' ? `每隊最多 ${c.max || ''} 人${c.nameMax ? `、隊名 ${c.nameMax} 字` : ''}` : c.perUnitOk ? `每校正取 ${c.perUnitOk}` : ''}</td></tr>`; }).join('')}</tbody></table>
       <p class="small">停車證每張 ${h.parkingPrice ?? ''} 元</p>
       ${h.timeline ? `<div class="small" style="line-height:1.8">${Object.keys(TL_LABEL).filter(k => h.timeline[k]).map(k => `${TL_LABEL[k]} ${esc(fmtDT(h.timeline[k]))}`).join('　')}</div>` : ''}
       ${(h.notes || []).length ? `<ul class="small" style="margin:6px 0 0;padding-left:20px;line-height:1.7">${h.notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>`).join('') || '<p class="muted">還沒有紀錄。</p>'}</div></div>`;
@@ -233,7 +225,7 @@ function drawDetail() {
   const f = feeOf(st, r);
   host.hidden = false;
   host.innerHTML = `<div class="modal-bg"><div class="modal" style="width:min(760px,100%)"><div class="row"><span class="gtag">${GROUPS[r.group].name}</span><h2 style="margin:0">${esc(r.unit)}</h2><span class="spacer"></span><button class="btn ghost sm" data-close>${icon('close')}</button></div>
-    <p class="small">聯絡人 ${esc(r.contact.name)}　${esc(r.contact.email)}${r.contact.phone ? `　${esc(r.contact.phone)}` : ''}${(r.editors || []).length ? `<br>共同管理 ${esc(r.editors.join('、'))}` : ''}</p>
+    <p class="small">聯絡人 ${esc(r.contact.name)}　${esc(r.contact.email)}${r.contact.phone ? `　${esc(r.contact.phone)}` : ''}${(r.editors || []).length ? `<br>共同管理 ${esc(r.editors.join('、'))}` : ''}${r.note ? `<br>備註 ${esc(r.note)}` : ''}</p>
     <table class="list"><tbody>${r.entries.map(e => `<tr class="${e.status === 'out' ? 'dim' : ''}"><td><b>${e.ev}</b></td><td>${esc(entryName(e))}${e.members ? `<div class="small muted">教練 ${esc(e.coach || '－')}　領隊 ${esc(e.leader || '－')}　隊長 ${esc(e.captain || '－')}<br>${esc(e.members.join('、'))}</div>` : ''}</td><td class="nowrap">${stText(st, e)}</td></tr>`).join('')}</tbody></table>
     <p class="small">停車證 ${r.parking || 0} 張　繳費狀態 ${PAY_TEXT[payState(r)]}${fin() ? `　應繳 ${fmtMoney(f.total)}　已回報 ${fmtMoney(paidSum(r))}` : ''}</p>
     <h3>修改紀錄</h3><div class="small log">${r.log.slice().reverse().map(l => `<div>${fmtTime(l.ts)}　${esc(l.by)}　${esc(l.text)}</div>`).join('')}</div></div></div>`;
@@ -271,18 +263,6 @@ document.addEventListener('click', ev => {
   }
   else if (d.failall) openMail(failMail(st, d.failall));
   else if (d.pmail) { const [rid, eid] = d.pmail.split('|'); const r = st.regs[rid]; openMail(promoteMail(st, r, r.entries.find(e => e.id === eid))); }
-  else if (d.rok || d.rno) {
-    const [rid, qid] = (d.rok || d.rno).split('|'), reply = ($(`[data-rnote="${rid}|${qid}"]`) || {}).value || '';
-    update(n => { const r = n.regs[rid], q = r.reqs.find(x => x.id === qid);
-      Object.assign(q, { status: d.rok ? 'approved' : 'rejected', decidedAt: Date.now(), decidedBy: BY(), reply: reply.trim() });
-      if (d.rok) {
-        if (q.change) applyChange(n, rid, q.change, BY(), q.contact ? { contact: q.contact } : {});
-        else if (q.patch) { const e = r.entries.find(x => x.id === q.entryId); if (e) Object.assign(e, q.patch); }
-        r.log.push({ ts: Date.now(), by: BY(), text: `核准異動申請：${q.text}` });
-      } else r.log.push({ ts: Date.now(), by: BY(), text: `未核准異動申請：${q.text}${q.reply ? `（${q.reply}）` : ''}` });
-    });
-    toast(d.rok ? '已核准並更新名單' : '已標示為不核准');
-  }
   else if ('save' in d) saveSet();
   else if ('hist' in d) { showHist = !showHist; render(); }
   else if ('autotl' in d) { const tl = timelineFrom($('[data-s="d0"]').value); if (!tl) { toast('請先填比賽第一天'); return; } Object.entries(tl).forEach(([k, x]) => { const el = $(`[data-tl="${k}"]`); if (el) el.value = x; }); toast('已依比賽日期推算，確認後按「儲存設定」'); }

@@ -1,4 +1,4 @@
-// 名單修改：比較修改前後、套用修改（截止前報名者自己改；截止後由大會審核異動申請後套用）
+// 名單修改：比較修改前後、套用修改（名單修改截止前由報名者自己改）
 import { KIND, entryName, uid } from './model.js';
 
 const listText = a => (a || []).filter(Boolean).join('、');

@@ -17,7 +17,7 @@ export const PAY_TEXT = { none: '尚未回報', reported: '已回報，待對帳
 export const T13 = {
   edition: '第十三屆', year: 2026, dates: ['2026-12-05', '2026-12-06'],
   events: {
-    男團: { quota: 48, fee: 2400, min: 4, max: 9 }, 女團: { quota: 0, fee: 2400, min: 4, max: 9 }, 社團: { quota: 32, fee: 2400, min: 4, max: 9 },
+    男團: { quota: 48, fee: 2400, max: 9 }, 女團: { quota: 0, fee: 2400, max: 9 }, 社團: { quota: 32, fee: 2400, max: 9, nameMax: 6 },
     男單: { quota: 128, fee: 300, perUnit: 0, perUnitOk: 5 }, 女單: { quota: 0, fee: 300, perUnit: 0 },
     男雙: { quota: 64, fee: 350, perUnit: 0 }, 女雙: { quota: 0, fee: 350, perUnit: 0 },
   },
@@ -67,15 +67,21 @@ export function defaultSettings() {
 const QA = [
   { id: 'q1', q: '怎樣才算報名成功？', a: '送出報名表，並在報名頁按「回報匯款」完成匯款確認，兩個都完成才算報名成功。有名額限制的項目，依完成匯款確認的時間先後計算。' },
   { id: 'q2', q: '報名費怎麼繳？', a: '送出報名後，報名頁會顯示應繳金額與匯款帳號。匯款後請按「回報匯款」，填寫金額、時間與帳號後五碼，總務對帳後會顯示「已收到款項」。' },
-  { id: 'q3', q: '額滿了還可以報名嗎？', a: '可以，額滿後會列入候補，報名頁看得到候補順位。候補成功會寄信通知，遞補後再匯款；未報名成功的隊伍全額退費。' },
-  { id: 'q4', q: '報名截止後要改名單怎麼辦？', a: '名單修改截止前可以自己修改。截止後請在報名頁按「申請異動」，大會審核通過後才會更新。' },
+  { id: 'q3', q: '額滿了還可以報名嗎？', a: '可以，額滿後送出的報名會列入候補，報名頁看得到候補順位。候補不用先繳費，遞補成功會寄信通知繳費。' },
+  { id: 'q4', q: '報名後要改名單怎麼辦？', a: '名單修改截止前，登入報名頁按「修改名單」自己修改。截止後無法修改。' },
   { id: 'q5', q: '停車證怎麼申請？', a: '開車進入陽明交大校園需要停車證，一車一張、可停一日，每張 50 元。報名時填寫張數，隨報名費一起匯款。' },
+  { id: 'q6', q: '可以開收據嗎？', a: '可以，請在報名表的備註寫收據抬頭與統編。收據僅提供隊章。' },
+  { id: 'q7', q: '誰可以報名大專組？', a: '大專組以大專運動會桌球項目最新規定之一般組參賽資格者為限，體保、體資生不得報名參賽。大專組不得跨生理性別報名。' },
+  { id: 'q8', q: '報名後辦理休學還能參賽嗎？', a: '比賽當下如果沒有學籍，就不能參賽。' },
+  { id: 'q9', q: '團體賽每隊可以報幾人？', a: '團體賽每隊報名人數以九人為上限。' },
+  { id: 'q10', q: '單打和雙打可以都報嗎？', a: '不行。個人賽項目，單、雙打每人限報一項，不可重複報名。' },
+  { id: 'q11', q: '隊名有什麼規定？', a: '大專組團體隊名為學校名稱加上一個字，例如陽明交大A、陽明交大紅。社會組隊名限 6 個中文字以內，英文字母、數字兩個算一個字。' },
 ];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 export const norm = e => String(e || '').trim().toLowerCase();
 
-/** 報名期間：before 尚未開始 / open 報名中 / edit 報名截止但還能改名單 / closed 名單修改也截止 */
+/** 報名期間：before 尚未開始 / open 報名中 / edit 報名截止但還能改名單 / closed 名單修改也截止，不能再改 */
 export function phase(st, now = Date.now()) {
   const t = st.settings.timeline || {};
   const o = Date.parse(t.open), c = Date.parse(t.close), e = Date.parse(t.editClose || t.close);
@@ -93,7 +99,7 @@ export function entriesOf(st, ev) {
  * 正取、候補：每次依目前資料算出來（不存在資料裡），規則：
  * 1. 完成報名的時間：依設定的計算方式（送出報名／回報匯款／總務確認），還沒完成的是「待完成」。
  * 2. 每校正取上限（例如男單 5 名，主辦學校不適用）：超過的直接備取。
- * 3. 已遞補的先占名額，其餘依完成時間先後，額滿的列入候補。
+ * 3. 已遞補的先占名額，其餘依完成時間先後，額滿的列入候補；額滿後還沒完成的也是候補，不用先繳費。
  * 4. 有每校正取上限的項目，候補順序每輪每校一位；其他依完成時間。
  */
 const cache = new WeakMap();
@@ -121,7 +127,8 @@ function calc(st) {
     rest.filter(x => x.t != null && !capped.has(x.e.id)).sort((a, b) => a.t - b.t || a.e.ts - b.e.ts).forEach(x => {
       if (ok < open) { out.st.set(x.e.id, 'ok'); ok++; } else { out.st.set(x.e.id, 'wait'); wait.push(x); }
     });
-    rest.filter(x => x.t == null && !capped.has(x.e.id)).forEach(x => out.st.set(x.e.id, 'unpaid'));
+    // 還沒完成的：名額還沒滿是「待完成報名」（要繳費）；已經滿了就是候補，不用先繳費
+    rest.filter(x => x.t == null && !capped.has(x.e.id)).forEach(x => { if (ok < open) out.st.set(x.e.id, 'unpaid'); else { out.st.set(x.e.id, 'wait'); wait.push(x); } });
     rest.filter(x => capped.has(x.e.id)).forEach(x => { out.st.set(x.e.id, 'wait'); x.capped = true; wait.push(x); });
     // 候補順序
     let order;
@@ -171,6 +178,9 @@ export function mine(st, email) {
 /** 單位每項目已報名數（個人賽每單位上限用；不含退出） */
 export const unitCount = (r, ev) => (r.entries || []).filter(e => e.ev === ev && e.status !== 'out').length;
 
+
+/** 隊名字數：中文、全形算 1，英文字母、數字等半形算 0.5 */
+export const nameWidth = t => [...String(t || '')].reduce((a, ch) => a + (/[\x20-\x7e]/.test(ch) ? 0.5 : 1), 0);
 
 export const entryName = e => (KIND[e.ev] === 'team' ? e.name : (e.players || []).filter(Boolean).join('/'));
 export const fmtMoney = n => `NT$ ${Number(n || 0).toLocaleString('en-US')}`;
