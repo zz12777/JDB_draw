@@ -80,6 +80,14 @@ function emit(local) { listeners.forEach(fn => fn(state, local)); }
 function emitAuth() { authListeners.forEach(fn => fn(auth)); }
 
 const bumpV = () => { try { remote.write({ 'pub/v': remote.stamp() }).catch(() => {}); } catch (e) { /* 公開頁不寫 */ } };
+/** 版本標記：時間表等設定（meta）、廣播（calls）有變才更新；即時賽程看到沒變就不重抓。分開寫，規則還沒貼也不影響其他資料 */
+const bumpVer = up => {
+  const w = {};
+  if ('pub/meta' in up) w['pub/ver/mv'] = remote.stamp();
+  if ('pub/calls' in up) w['pub/ver/cv'] = remote.stamp();
+  if (!Object.keys(w).length) return Promise.resolve();
+  try { return remote.write(w).catch(() => {}); } catch (e) { return Promise.resolve(); }
+};
 /** 修改資料：fn 直接改傳入的 state；只把有變動的部分寫回去 */
 export function update(fn) {
   const before = state, next = clone(state);
@@ -106,7 +114,7 @@ export function update(fn) {
   emit(true);
   // 公開資料有變動時，另外更新「變動標記」：即時賽程只要問這個小標記，有變才下載內容（分開寫，規則還沒更新也不影響主要資料）
   const pubChanged = Object.keys(up).some(k => k.startsWith('pub/'));
-  if (Object.keys(up).length) remote.write(up).then(() => { if (pubChanged) bumpV(); }).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
+  if (Object.keys(up).length) remote.write(up).then(() => bumpVer(up)).then(() => { if (pubChanged) bumpV(); }).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
 export function updateMatch(id, fn) {
   update(s => { s.m[id] = s.m[id] || {}; fn(s.m[id], s); });
@@ -121,7 +129,7 @@ export function replaceState(s) {
   remote.write({ 'pub/meta': metaOf(next), 'pub/events': JSON.stringify(next.events || []), 'pub/m': Object.keys(tree).length ? tree : null,
     'desk/calls': JSON.stringify(next.calls || []), 'pub/calls': pubCalls(next.calls), 'desk/staff': JSON.stringify(next.staff || []), 'desk/staffOrg': JSON.stringify(next.staffOrg || {}), 'desk/refOpt': JSON.stringify(next.refOpt || {}), 'desk/lu': JSON.stringify(next.dlu || {}), 'desk/receipt': JSON.stringify(next.receipt || {}),
     'desk/notices': JSON.stringify(next.notices || {}), checkin: null, parking: JSON.stringify(next.parking || {}) })
-    .then(bumpV).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
+    .then(() => bumpVer({ 'pub/meta': 1, 'pub/calls': 1 })).then(bumpV).catch(err => { auth.error = `寫入失敗：${err && err.message ? err.message : err}`; emitAuth(); });
 }
 /** 裁判密碼：裁判頁輸入密碼（正確才會成功）；本機測試直接比對 */
 let refUnlockImpl = null;
@@ -169,7 +177,7 @@ function receive(part, value) {
   // 大會台：即時賽程的廣播和大會台不一致時補寫一次（例如規則更新前的廣播）
   if (ROLE === 'desk' && auth.isAdmin && (part === 'calls' || part === 'pcalls') && raw.calls != null && raw.pcalls != null) {
     const want = pubCalls(parse(raw.calls, []));
-    if (want !== raw.pcalls) remote.write({ 'pub/calls': want }).then(bumpV).catch(() => {});
+    if (want !== raw.pcalls) remote.write({ 'pub/calls': want }).then(() => bumpVer({ 'pub/calls': 1 })).then(bumpV).catch(() => {});
   }
   auth.loaded = true;
   assemble();
@@ -270,7 +278,7 @@ function pollRemote() {
     maxU = 0; seen(raw.m); rev = parse(raw.meta, {}).rev ?? null;
     auth.loaded = true; assemble(); emit(false);
   }
-  let lastV, sinceFull = 0;
+  let lastV, sinceFull = 0, lastMv = null, lastCv = null;
   async function tick() {
     if (busy || document.hidden) return;
     busy = true;
@@ -280,11 +288,20 @@ function pollRemote() {
       const v = await get('/v.json').catch(() => null);
       sinceFull++;
       if (v != null && v === lastV && sinceFull < 40) { auth.error = ''; return; }
+      const forced = sinceFull >= 40;
       lastV = v; sinceFull = 0;
-      const meta = await get('/meta.json');
-      if ((parse(meta, {}).rev ?? null) !== rev) { await full(); return; }
-      if (meta !== raw.meta) { raw.meta = meta; assemble(); emit(false); }
-      try { const c = await get('/calls.json'); if (c !== raw.pcalls) { raw.pcalls = c; assemble(); emit(false); } } catch (e) { /* 廣播讀不到不影響其他資料 */ }
+      // 時間表等設定、廣播有自己的版本標記：沒變就不下載（比賽中大多只有比分在變，省下大部分流量）
+      const ver = await get('/ver.json').catch(() => null);
+      const mv = ver && ver.mv, cv = ver && ver.cv;
+      if (forced || !mv || mv !== lastMv) {
+        const meta = await get('/meta.json');
+        lastMv = mv;
+        if ((parse(meta, {}).rev ?? null) !== rev) { await full(); return; }
+        if (meta !== raw.meta) { raw.meta = meta; assemble(); emit(false); }
+      }
+      if (forced || !cv || cv !== lastCv) {
+        try { const c = await get('/calls.json'); lastCv = cv; if (c !== raw.pcalls) { raw.pcalls = c; assemble(); emit(false); } } catch (e) { /* 廣播讀不到不影響其他資料 */ }
+      }
       let changed;
       try { changed = await get(`/m.json?orderBy=%22u%22&startAt=${maxU + 1}`); } catch (e) { await full(); return; }
       if (changed && Object.keys(changed).length) { Object.assign(raw.m, changed); seen(changed); assemble(); emit(false); }
