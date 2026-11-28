@@ -1,5 +1,5 @@
 // 名單修改：比較修改前後、套用修改（截止前報名者自己改；截止後由大會審核異動申請後套用）
-import { KIND, entryName, newStatus, uid } from './model.js';
+import { KIND, entryName, uid } from './model.js';
 
 const listText = a => (a || []).filter(Boolean).join('、');
 const FIELDS = [['name', '隊名'], ['coach', '教練'], ['leader', '領隊'], ['captain', '隊長']];
@@ -27,7 +27,7 @@ export function diffText(r, chg) {
 }
 
 /**
- * chg = { entries: 修改後還在的項目, parking: 停車證張數 }，套用到 st.regs[rid]：新增的項目依名額正取或候補；拿掉的項目標為退出（保留紀錄）。
+ * chg = { entries: 修改後還在的項目, parking: 停車證張數 }，套用到 st.regs[rid]：拿掉的項目標為退出（保留紀錄）；正取或候補由 model.js 依規則計算。
  * 回傳說明文字，並寫進報名的修改紀錄。
  */
 export function applyChange(st, rid, chg, by, extra = {}) {
@@ -38,7 +38,7 @@ export function applyChange(st, rid, chg, by, extra = {}) {
   next.forEach(n => {
     const o = r.entries.find(e => e.id === n.id);
     if (o) { Object.assign(o, n, { status: o.status, ts: o.ts }); return; }
-    r.entries.push({ ...n, id: n.id || uid(), ts: Date.now(), status: newStatus(st, n.ev) });
+    r.entries.push({ ...n, id: n.id || uid(), ts: Date.now(), status: 'in' });
   });
   if (chg.parking != null) r.parking = chg.parking;
   Object.assign(r, extra);

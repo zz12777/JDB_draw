@@ -1,8 +1,8 @@
 // 參賽者系統原型的資料存取。目前是示範模式：資料存在這個瀏覽器的 localStorage，
 // 同一台電腦開兩個分頁（報名頁、管理頁）會互相同步。之後接資料庫時只換這個檔案。
-import { defaultSettings, uid, GROUPS, KIND, newStatus } from './model.js';
+import { defaultSettings, timelineFrom, uid, GROUPS, KIND } from './model.js';
 
-const KEY = 'jdb-reg14-demo2';
+const KEY = 'jdb-reg14-demo3';
 let state = null;
 const subs = new Set();
 
@@ -31,12 +31,12 @@ function seed() {
   const now = Date.now(), day = 864e5;
   const st = { settings: defaultSettings(), regs: {}, seq: 0 };
   const s = st.settings;
-  // 示範：報名期間包含今天，名額設小一點才看得到額滿與候補
-  const iso = t => new Date(t - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
-  s.open = iso(now - 12 * day); s.close = iso(now + 16 * day);
-  Object.assign(s.events.男團, { quota: 22, reserved: 1 }); Object.assign(s.events.女團, { quota: 6, reserved: 1 }); Object.assign(s.events.社團, { quota: 4, reserved: 0 });
-  Object.assign(s.events.男單, { quota: 32, reserved: 2 }); Object.assign(s.events.女單, { quota: 14, reserved: 1 });
-  Object.assign(s.events.男雙, { quota: 10, reserved: 1 }); Object.assign(s.events.女雙, { quota: 6, reserved: 1 });
+  // 示範：比賽日期設在 37 天後，依第十三屆的間隔推算，今天剛好在報名期間內
+  const d1 = new Date(now + 37 * day - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  s.dates = [d1, new Date(Date.parse(d1) + day).toISOString().slice(0, 10)];
+  s.timeline = timelineFrom(d1);
+  // 示範名額縮小，才看得到額滿與候補（實際設定請看往年紀錄）
+  Object.assign(s.events.男團, { quota: 16 }); Object.assign(s.events.社團, { quota: 4 }); Object.assign(s.events.男雙, { quota: 10 });
   let t = now - 11 * day;
   const add = (g, unit, i, plan) => {
     t += rand(9) * 36e5 + 6e5;
@@ -45,27 +45,25 @@ function seed() {
     st.regs[id] = r;
     plan.forEach(([ev, n]) => {
       for (let k = 0; k < n; k++) {
-        const e = { id: uid(), ev, ts: t + k, status: 'ok', lineup: 'online' };
+        const e = { id: uid(), ev, ts: t + k, status: 'in', lineup: 'online' };
         if (KIND[ev] === 'team') Object.assign(e, { name: n > 1 || rand(2) ? `${unit}${'ABC'[k]}` : unit, coach: person(), leader: person(), captain: '', members: Array.from({ length: 5 + rand(3) }, person), lineup: rand(6) ? 'online' : 'paper' });
         else e.players = KIND[ev] === 'double' ? [person(), person()] : [person()];
         if (e.members) e.captain = e.members[0];
-        e.status = newStatus(st, ev);
         r.entries.push(e);
       }
     });
-    // 繳費：大約一半已回報，其中一部分總務已對帳
-    if (rand(10) < 6) {
-      const pays = r.entries.filter(e => e.status === 'ok');
-      if (pays.length) {
-        const sum = pays.reduce((a, e) => a + s.events[e.ev].fee, 0) + r.parking * s.parkingPrice;
-        r.pays.push({ amount: rand(8) ? sum : sum - 400, time: new Date(t + day).toISOString().slice(0, 16), last5: String(10000 + rand(89999)), ts: t + day });
-        if (rand(3)) r.fin = r.pays[0].amount === sum ? { state: 'received', at: t + 2 * day, by: 'finance@example.com' } : { state: 'mismatch', note: '少 400 元，請補匯', at: t + 2 * day, by: 'finance@example.com' };
-      }
+    // 繳費：大約七成已回報匯款（完成報名），其中一部分總務已對帳
+    if (rand(10) < 7) {
+      const fee = { team: 2400, single: 300, double: 350 };
+      const cnt = {}; const sum = r.entries.reduce((a, e) => { cnt[e.ev] = (cnt[e.ev] || 0) + 1; return a + (e.ev === '男單' && cnt[e.ev] > 5 && unit !== '陽明交大' ? 0 : fee[KIND[e.ev]]); }, 0) + r.parking * s.parkingPrice;
+      const pt = t + day * (1 + rand(3));
+      r.pays.push({ amount: rand(8) ? sum : sum - 300, time: new Date(pt - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16), last5: String(10000 + rand(89999)), ts: pt });
+      if (rand(3)) r.fin = r.pays[0].amount === sum ? { state: 'received', at: pt + day, by: 'finance@example.com' } : { state: 'mismatch', note: '少 300 元，請補匯', at: pt + day, by: 'finance@example.com' };
     }
     return r;
   };
   let i = 1;
-  UNITS.forEach((u, k) => { add('M', u, i++, [['男團', k % 4 === 0 ? 2 : 1], ['男單', 1 + rand(3)], ['男雙', rand(2)]]); if (k % 2 === 0) add('W', u, i++, [['女團', 1], ['女單', 1 + rand(2)], ['女雙', rand(2)]]); });
+  UNITS.forEach((u, k) => { add('M', u, i++, [['男團', k % 4 === 0 ? 2 : 1], ['男單', k % 3 === 0 ? 7 : 1 + rand(3)], ['男雙', rand(2)]]); if (k % 2 === 0) add('W', u, i++, [['女團', 1], ['女單', 1 + rand(2)], ['女雙', rand(2)]]); });
   CLUBS.forEach(c => add('S', c, i++, [['社團', 1]]));
   // 一筆截止後的異動申請（示範用）
   const r0 = Object.values(st.regs)[2], e0 = r0.entries.find(e => e.members);
